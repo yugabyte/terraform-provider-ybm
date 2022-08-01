@@ -10,9 +10,9 @@ import (
 	"time"
 
 	"github.com/hashicorp/terraform-plugin-framework/diag"
+	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
 	"github.com/hashicorp/terraform-plugin-framework/types"
-	"github.com/hashicorp/terraform-plugin-go/tftypes"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
 	retry "github.com/sethvargo/go-retry"
 	openapiclient "github.com/yugabyte/yugabytedb-managed-go-client-internal"
@@ -342,32 +342,32 @@ func getPlan(ctx context.Context, plan tfsdk.Plan, cluster *Cluster) diag.Diagno
 	// I tried implementing Unknownable instead but could not get it to work.
 	var diags diag.Diagnostics
 
-	diags.Append(plan.GetAttribute(ctx, tftypes.NewAttributePath().WithAttributeName("account_id"), &cluster.AccountID)...)
-	diags.Append(plan.GetAttribute(ctx, tftypes.NewAttributePath().WithAttributeName("cluster_id"), &cluster.ClusterID)...)
-	diags.Append(plan.GetAttribute(ctx, tftypes.NewAttributePath().WithAttributeName("cluster_name"), &cluster.ClusterName)...)
-	diags.Append(plan.GetAttribute(ctx, tftypes.NewAttributePath().WithAttributeName("cloud_type"), &cluster.CloudType)...)
-	diags.Append(plan.GetAttribute(ctx, tftypes.NewAttributePath().WithAttributeName("cluster_type"), &cluster.ClusterType)...)
-	diags.Append(plan.GetAttribute(ctx, tftypes.NewAttributePath().WithAttributeName("cluster_region_info"), &cluster.ClusterRegionInfo)...)
-	diags.Append(plan.GetAttribute(ctx, tftypes.NewAttributePath().WithAttributeName("fault_tolerance"), &cluster.FaultTolerance)...)
-	diags.Append(plan.GetAttribute(ctx, tftypes.NewAttributePath().WithAttributeName("cluster_tier"), &cluster.ClusterTier)...)
-	diags.Append(plan.GetAttribute(ctx, tftypes.NewAttributePath().WithAttributeName("cluster_allow_list_ids"), &cluster.ClusterAllowListIDs)...)
-	diags.Append(plan.GetAttribute(ctx, tftypes.NewAttributePath().WithAttributeName("restore_backup_id"), &cluster.RestoreBackupID)...)
-	diags.Append(plan.GetAttribute(ctx, tftypes.NewAttributePath().WithAttributeName("node_config"), &cluster.NodeConfig)...)
-	diags.Append(plan.GetAttribute(ctx, tftypes.NewAttributePath().WithAttributeName("is_production"), &cluster.IsProduction)...)
-	diags.Append(plan.GetAttribute(ctx, tftypes.NewAttributePath().WithAttributeName("credentials"), &cluster.Credentials)...)
-	diags.Append(plan.GetAttribute(ctx, tftypes.NewAttributePath().WithAttributeName("backup_schedule"), &cluster.BackupSchedule)...)
+	diags.Append(plan.GetAttribute(ctx, path.Root("account_id"), &cluster.AccountID)...)
+	diags.Append(plan.GetAttribute(ctx, path.Root("cluster_id"), &cluster.ClusterID)...)
+	diags.Append(plan.GetAttribute(ctx, path.Root("cluster_name"), &cluster.ClusterName)...)
+	diags.Append(plan.GetAttribute(ctx, path.Root("cloud_type"), &cluster.CloudType)...)
+	diags.Append(plan.GetAttribute(ctx, path.Root("cluster_type"), &cluster.ClusterType)...)
+	diags.Append(plan.GetAttribute(ctx, path.Root("cluster_region_info"), &cluster.ClusterRegionInfo)...)
+	diags.Append(plan.GetAttribute(ctx, path.Root("fault_tolerance"), &cluster.FaultTolerance)...)
+	diags.Append(plan.GetAttribute(ctx, path.Root("cluster_tier"), &cluster.ClusterTier)...)
+	diags.Append(plan.GetAttribute(ctx, path.Root("cluster_allow_list_ids"), &cluster.ClusterAllowListIDs)...)
+	diags.Append(plan.GetAttribute(ctx, path.Root("restore_backup_id"), &cluster.RestoreBackupID)...)
+	diags.Append(plan.GetAttribute(ctx, path.Root("node_config"), &cluster.NodeConfig)...)
+	diags.Append(plan.GetAttribute(ctx, path.Root("is_production"), &cluster.IsProduction)...)
+	diags.Append(plan.GetAttribute(ctx, path.Root("credentials"), &cluster.Credentials)...)
+	diags.Append(plan.GetAttribute(ctx, path.Root("backup_schedule"), &cluster.BackupSchedule)...)
 
 	return diags
 }
 
 // fills account, project, cluster ID from state
 func getIDsFromState(ctx context.Context, state tfsdk.State, cluster *Cluster) {
-	state.GetAttribute(ctx, tftypes.NewAttributePath().WithAttributeName("account_id"), &cluster.AccountID)
-	state.GetAttribute(ctx, tftypes.NewAttributePath().WithAttributeName("project_id"), &cluster.ProjectID)
-	state.GetAttribute(ctx, tftypes.NewAttributePath().WithAttributeName("cluster_id"), &cluster.ClusterID)
-	state.GetAttribute(ctx, tftypes.NewAttributePath().WithAttributeName("cluster_allow_list_ids"), &cluster.ClusterAllowListIDs)
-	state.GetAttribute(ctx, tftypes.NewAttributePath().WithAttributeName("cluster_region_info"), &cluster.ClusterRegionInfo)
-	state.GetAttribute(ctx, tftypes.NewAttributePath().WithAttributeName("backup_schedule"), &cluster.BackupSchedule)
+	state.GetAttribute(ctx, path.Root("account_id"), &cluster.AccountID)
+	state.GetAttribute(ctx, path.Root("project_id"), &cluster.ProjectID)
+	state.GetAttribute(ctx, path.Root("cluster_id"), &cluster.ClusterID)
+	state.GetAttribute(ctx, path.Root("cluster_allow_list_ids"), &cluster.ClusterAllowListIDs)
+	state.GetAttribute(ctx, path.Root("cluster_region_info"), &cluster.ClusterRegionInfo)
+	state.GetAttribute(ctx, path.Root("backup_schedule"), &cluster.BackupSchedule)
 
 }
 
@@ -585,10 +585,10 @@ func (r resourceCluster) Read(ctx context.Context, req tfsdk.ReadResourceRequest
 		"Allow List IDs": cluster.ClusterAllowListIDs})
 
 	// set credentials for cluster (not returned by read api)
-	req.State.GetAttribute(ctx, tftypes.NewAttributePath().WithAttributeName("credentials"), &cluster.Credentials)
+	req.State.GetAttribute(ctx, path.Root("credentials"), &cluster.Credentials)
 	// set restore backup id for cluster (not returned by read api)
 	if !state.RestoreBackupID.Null {
-		req.State.GetAttribute(ctx, tftypes.NewAttributePath().WithAttributeName("restore_backup_id"), &cluster.RestoreBackupID)
+		req.State.GetAttribute(ctx, path.Root("restore_backup_id"), &cluster.RestoreBackupID)
 	}
 
 	diags := resp.State.Set(ctx, &cluster)
@@ -884,7 +884,7 @@ func (r resourceCluster) Update(ctx context.Context, req tfsdk.UpdateResourceReq
 		"Allow List IDs": cluster.ClusterAllowListIDs})
 
 	// set credentials for cluster (not returned by read api)
-	req.State.GetAttribute(ctx, tftypes.NewAttributePath().WithAttributeName("credentials"), &cluster.Credentials)
+	req.State.GetAttribute(ctx, path.Root("credentials"), &cluster.Credentials)
 	// set restore backup id for cluster (not returned by read api)
 	if restoreRequired {
 		cluster.RestoreBackupID.Value = plan.RestoreBackupID.Value
@@ -931,5 +931,5 @@ func (r resourceCluster) Delete(ctx context.Context, req tfsdk.DeleteResourceReq
 // Import resource
 func (r resourceCluster) ImportState(ctx context.Context, req tfsdk.ImportResourceStateRequest, resp *tfsdk.ImportResourceStateResponse) {
 	// Save the import identifier in the id attribute
-	tfsdk.ResourceImportStatePassthroughID(ctx, tftypes.NewAttributePath().WithAttributeName("id"), req, resp)
+	tfsdk.ResourceImportStatePassthroughID(ctx, path.Root("id"), req, resp)
 }

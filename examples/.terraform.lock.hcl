@@ -1,10 +1,10 @@
 # This file is maintained automatically by "terraform init".
 # Manual edits may be lost in future updates.
 
-provider "yugabyte/managed/yugabytedb-managed" {
-  version     = "0.3.1"
-  constraints = "~> 0.3.1"
+provider "registry.terraform.io/yugabyte/ybm" {
+  version     = "0.1.0"
+  constraints = "0.1.0"
   hashes = [
-    "h1:jkh2pgE8fdZcpX/W6v7Z5W8sAkU+fab9Bqff22esYvY=",
+    "h1:5IH5wMAfsDUAlpfWc7rLcoryX8dmmt3PxG/Mluer0kE=",
   ]
 }

@@ -4,8 +4,8 @@ import (
 	"context"
 	"net/http"
 	"reflect"
+	mocks "terraform-provider-ybm/mock_yugabytedb_managed_go_client_internal"
 	"testing"
-	"yugabytedb-managed-terraform-provider/mocks"
 
 	gomock "github.com/golang/mock/gomock"
 	"github.com/hashicorp/terraform-plugin-framework/diag"

@@ -7,9 +7,9 @@ import (
 	"time"
 
 	"github.com/hashicorp/terraform-plugin-framework/diag"
+	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
 	"github.com/hashicorp/terraform-plugin-framework/types"
-	"github.com/hashicorp/terraform-plugin-go/tftypes"
 
 	//"github.com/hashicorp/terraform-plugin-log/tflog"
 	retry "github.com/sethvargo/go-retry"
@@ -87,12 +87,12 @@ func getVPCPlan(ctx context.Context, plan tfsdk.Plan, vpc *VPC) diag.Diagnostics
 	// I tried implementing Unknownable instead but could not get it to work.
 	var diags diag.Diagnostics
 
-	diags.Append(plan.GetAttribute(ctx, tftypes.NewAttributePath().WithAttributeName("account_id"), &vpc.AccountID)...)
-	diags.Append(plan.GetAttribute(ctx, tftypes.NewAttributePath().WithAttributeName("vpc_id"), &vpc.VPCID)...)
-	diags.Append(plan.GetAttribute(ctx, tftypes.NewAttributePath().WithAttributeName("name"), &vpc.Name)...)
-	diags.Append(plan.GetAttribute(ctx, tftypes.NewAttributePath().WithAttributeName("cloud"), &vpc.Cloud)...)
-	diags.Append(plan.GetAttribute(ctx, tftypes.NewAttributePath().WithAttributeName("global_cidr"), &vpc.GlobalCIDR)...)
-	diags.Append(plan.GetAttribute(ctx, tftypes.NewAttributePath().WithAttributeName("region_cidr_info"), &vpc.RegionCIDRInfo)...)
+	diags.Append(plan.GetAttribute(ctx, path.Root("account_id"), &vpc.AccountID)...)
+	diags.Append(plan.GetAttribute(ctx, path.Root("vpc_id"), &vpc.VPCID)...)
+	diags.Append(plan.GetAttribute(ctx, path.Root("name"), &vpc.Name)...)
+	diags.Append(plan.GetAttribute(ctx, path.Root("cloud"), &vpc.Cloud)...)
+	diags.Append(plan.GetAttribute(ctx, path.Root("global_cidr"), &vpc.GlobalCIDR)...)
+	diags.Append(plan.GetAttribute(ctx, path.Root("region_cidr_info"), &vpc.RegionCIDRInfo)...)
 
 	return diags
 }
@@ -236,9 +236,9 @@ func (r resourceVPC) Create(ctx context.Context, req tfsdk.CreateResourceRequest
 }
 
 func getIDsFromVPCState(ctx context.Context, state tfsdk.State, vpc *VPC) {
-	state.GetAttribute(ctx, tftypes.NewAttributePath().WithAttributeName("account_id"), &vpc.AccountID)
-	state.GetAttribute(ctx, tftypes.NewAttributePath().WithAttributeName("project_id"), &vpc.ProjectID)
-	state.GetAttribute(ctx, tftypes.NewAttributePath().WithAttributeName("vpc_id"), &vpc.VPCID)
+	state.GetAttribute(ctx, path.Root("account_id"), &vpc.AccountID)
+	state.GetAttribute(ctx, path.Root("project_id"), &vpc.ProjectID)
+	state.GetAttribute(ctx, path.Root("vpc_id"), &vpc.VPCID)
 }
 
 func resourceVPCRead(accountId string, projectId string, vpcId string, regionMap map[string]int, apiClient *openapiclient.APIClient) (vpc VPC, readOK bool, errorMessage string) {
@@ -352,5 +352,5 @@ func (r resourceVPC) Delete(ctx context.Context, req tfsdk.DeleteResourceRequest
 // Import vpc
 func (r resourceVPC) ImportState(ctx context.Context, req tfsdk.ImportResourceStateRequest, resp *tfsdk.ImportResourceStateResponse) {
 	// Save the import identifier in the id attribute
-	tfsdk.ResourceImportStatePassthroughID(ctx, tftypes.NewAttributePath().WithAttributeName("id"), req, resp)
+	tfsdk.ResourceImportStatePassthroughID(ctx, path.Root("id"), req, resp)
 }

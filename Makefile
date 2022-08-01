@@ -1,9 +1,9 @@
-HOSTNAME=yugabyte
-NAMESPACE=managed
-NAME=yugabytedb-managed
-BINARY=terraform-provider-${NAME}
-VERSION=0.1.1
+HOSTNAME=registry.terraform.io
+NAMESPACE=yugabyte
+NAME=ybm
+VERSION=0.1.0
 OS_ARCH=darwin_arm64
+BINARY=terraform-provider-${NAME}
 
 default: install
 
@@ -25,8 +25,8 @@ release:
 	GOOS=windows GOARCH=amd64 go build -o ./bin/${BINARY}_${VERSION}_windows_amd64
 
 install: build
-	mkdir -p ~/.terraform.d/plugins/${HOSTNAME}/${NAMESPACE}/${NAME}/${VERSION}/${OS_ARCH}
-	mv ${BINARY} ~/.terraform.d/plugins/${HOSTNAME}/${NAMESPACE}/${NAME}/${VERSION}/${OS_ARCH}
+	mkdir -p ~/.terraform.d/plugins/${HOSTNAME}/${NAMESPACE}/${NAME}/${VERSION}/${OS_ARCH}/
+	mv ${BINARY} ~/.terraform.d/plugins/${HOSTNAME}/${NAMESPACE}/${NAME}/${VERSION}/${OS_ARCH}/
 
 test:
 	go test -v -cover ./... -timeout 120m
@@ -36,7 +36,7 @@ testacc:
 
 doc:
 	./install_tfplugindocs.sh ${OS_ARCH}
-	tfplugindocs generate --provider-name yb --rendered-provider-name yugabytedb-managed
+	tfplugindocs generate --provider-name ybm --rendered-provider-name ybm
 
 clean:
-	rm -rf terraform-provider-yugabytedb-managed
+	rm -rf terraform-provider-ybm

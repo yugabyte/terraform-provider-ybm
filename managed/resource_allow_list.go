@@ -5,9 +5,9 @@ import (
 	"net/http/httputil"
 
 	"github.com/hashicorp/terraform-plugin-framework/diag"
+	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
 	"github.com/hashicorp/terraform-plugin-framework/types"
-	"github.com/hashicorp/terraform-plugin-go/tftypes"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
 	openapiclient "github.com/yugabyte/yugabytedb-managed-go-client-internal"
 )
@@ -78,11 +78,11 @@ func getAllowListPlan(ctx context.Context, plan tfsdk.Plan, allowList *AllowList
 	// I tried implementing Unknownable instead but could not get it to work.
 	var diags diag.Diagnostics
 
-	diags.Append(plan.GetAttribute(ctx, tftypes.NewAttributePath().WithAttributeName("account_id"), &allowList.AccountID)...)
-	diags.Append(plan.GetAttribute(ctx, tftypes.NewAttributePath().WithAttributeName("allow_list_id"), &allowList.AllowListID)...)
-	diags.Append(plan.GetAttribute(ctx, tftypes.NewAttributePath().WithAttributeName("allow_list_description"), &allowList.AllowListDescription)...)
-	diags.Append(plan.GetAttribute(ctx, tftypes.NewAttributePath().WithAttributeName("allow_list_name"), &allowList.AllowListName)...)
-	diags.Append(plan.GetAttribute(ctx, tftypes.NewAttributePath().WithAttributeName("cidr_list"), &allowList.CIDRList)...)
+	diags.Append(plan.GetAttribute(ctx, path.Root("account_id"), &allowList.AccountID)...)
+	diags.Append(plan.GetAttribute(ctx, path.Root("allow_list_id"), &allowList.AllowListID)...)
+	diags.Append(plan.GetAttribute(ctx, path.Root("allow_list_description"), &allowList.AllowListDescription)...)
+	diags.Append(plan.GetAttribute(ctx, path.Root("allow_list_name"), &allowList.AllowListName)...)
+	diags.Append(plan.GetAttribute(ctx, path.Root("cidr_list"), &allowList.CIDRList)...)
 
 	return diags
 }
@@ -156,10 +156,10 @@ func (r resourceAllowList) Create(ctx context.Context, req tfsdk.CreateResourceR
 }
 
 func getIDsFromAllowListState(ctx context.Context, state tfsdk.State, allowList *AllowList) {
-	state.GetAttribute(ctx, tftypes.NewAttributePath().WithAttributeName("account_id"), &allowList.AccountID)
-	state.GetAttribute(ctx, tftypes.NewAttributePath().WithAttributeName("project_id"), &allowList.ProjectID)
-	state.GetAttribute(ctx, tftypes.NewAttributePath().WithAttributeName("cidr_list"), &allowList.CIDRList)
-	state.GetAttribute(ctx, tftypes.NewAttributePath().WithAttributeName("allow_list_id"), &allowList.AllowListID)
+	state.GetAttribute(ctx, path.Root("account_id"), &allowList.AccountID)
+	state.GetAttribute(ctx, path.Root("project_id"), &allowList.ProjectID)
+	state.GetAttribute(ctx, path.Root("cidr_list"), &allowList.CIDRList)
+	state.GetAttribute(ctx, path.Root("allow_list_id"), &allowList.AllowListID)
 }
 
 func resourceAllowListRead(accountId string, projectId string, allowListId string, apiClient *openapiclient.APIClient) (allowList AllowList, readOK bool, errorMessage string) {
@@ -251,5 +251,5 @@ func (r resourceAllowList) Delete(ctx context.Context, req tfsdk.DeleteResourceR
 // Import allow list
 func (r resourceAllowList) ImportState(ctx context.Context, req tfsdk.ImportResourceStateRequest, resp *tfsdk.ImportResourceStateResponse) {
 	// Save the import identifier in the id attribute
-	tfsdk.ResourceImportStatePassthroughID(ctx, tftypes.NewAttributePath().WithAttributeName("id"), req, resp)
+	tfsdk.ResourceImportStatePassthroughID(ctx, path.Root("id"), req, resp)
 }

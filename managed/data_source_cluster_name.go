@@ -5,9 +5,9 @@ import (
 	"net/http/httputil"
 
 	"github.com/hashicorp/terraform-plugin-framework/diag"
+	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
 	"github.com/hashicorp/terraform-plugin-framework/types"
-	"github.com/hashicorp/terraform-plugin-go/tftypes"
 	//"github.com/hashicorp/terraform-plugin-log/tflog"
 	//"fmt"
 )
@@ -232,8 +232,8 @@ func (r dataClusterName) Read(ctx context.Context, req tfsdk.ReadDataSourceReque
 	var attr inputClusterDetails
 
 	attr1 := &attr
-	req.Config.GetAttribute(ctx, tftypes.NewAttributePath().WithAttributeName("account_id"), &attr1.account_id)
-	req.Config.GetAttribute(ctx, tftypes.NewAttributePath().WithAttributeName("cluster_name"), &attr1.cluster_name)
+	req.Config.GetAttribute(ctx, path.Root("account_id"), &attr1.account_id)
+	req.Config.GetAttribute(ctx, path.Root("cluster_name"), &attr1.cluster_name)
 	apiClient := r.p.client
 	projectId, getProjectOK, message := getProjectId(attr.account_id, apiClient)
 	if !getProjectOK {

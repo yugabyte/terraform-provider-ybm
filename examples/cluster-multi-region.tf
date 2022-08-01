@@ -1,4 +1,4 @@
-resource "yb_cluster" "multi_region" {
+resource "ybm_cluster" "multi_region" {
   account_id = var.account_id
   cluster_name = "terraform-test-posriniv-3"
   cloud_type = "GCP"
@@ -7,21 +7,22 @@ resource "yb_cluster" "multi_region" {
     {
       region = "us-west2"
       num_nodes = 1
-      vpc_id = yb_vpc.newvpc.vpc_id
+      vpc_id = ybm_vpc.newvpc.vpc_id
+    },
     {
       region = "asia-east1"
       num_nodes = 1
-      vpc_id = yb_vpc.newvpc.vpc_id
+      vpc_id = ybm_vpc.newvpc.vpc_id
     },
     {
       region = "europe-central2"
       num_nodes = 1
-      vpc_id = yb_vpc.newvpc.vpc_id
+      vpc_id = ybm_vpc.newvpc.vpc_id
     }
   ]
   cluster_tier = "PAID"
-  cluster_allow_list_ids = [yb_allow_list.mylist.allow_list_id]
-  restore_backup_id = yb_backup.mybackup.backup_id
+  cluster_allow_list_ids = [ybm_allow_list.mylist.allow_list_id]
+  restore_backup_id = ybm_backup.mybackup.backup_id
   node_config = {
     fault_tolerance = "REGION"
     num_cores = 2

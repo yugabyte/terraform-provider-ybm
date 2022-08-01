@@ -5,7 +5,7 @@
         "os": "OS",
         "arch": "ARCH",
         "shasum": "SHASUM",
-        "filename": "terraform-provider-yugabytedb-managed_VERSION_OS_ARCH.zip"
+        "filename": "terraform-provider-ybm_VERSION_OS_ARCH.zip"
       }
     }
 }

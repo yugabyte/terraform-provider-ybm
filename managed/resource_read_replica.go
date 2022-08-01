@@ -8,9 +8,9 @@ import (
 	"time"
 
 	"github.com/hashicorp/terraform-plugin-framework/diag"
+	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
 	"github.com/hashicorp/terraform-plugin-framework/types"
-	"github.com/hashicorp/terraform-plugin-go/tftypes"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
 	retry "github.com/sethvargo/go-retry"
 	openapiclient "github.com/yugabyte/yugabytedb-managed-go-client-internal"
@@ -140,19 +140,19 @@ func getReadReplicasPlan(ctx context.Context, plan tfsdk.Plan, readReplicas *Rea
 	// I tried implementing Unknownable instead but could not get it to work.
 	var diags diag.Diagnostics
 
-	diags.Append(plan.GetAttribute(ctx, tftypes.NewAttributePath().WithAttributeName("account_id"), &readReplicas.AccountID)...)
-	diags.Append(plan.GetAttribute(ctx, tftypes.NewAttributePath().WithAttributeName("read_replicas_info"), &readReplicas.ReadReplicasInfo)...)
-	diags.Append(plan.GetAttribute(ctx, tftypes.NewAttributePath().WithAttributeName("primary_cluster_id"), &readReplicas.PrimaryClusterID)...)
+	diags.Append(plan.GetAttribute(ctx, path.Root("account_id"), &readReplicas.AccountID)...)
+	diags.Append(plan.GetAttribute(ctx, path.Root("read_replicas_info"), &readReplicas.ReadReplicasInfo)...)
+	diags.Append(plan.GetAttribute(ctx, path.Root("primary_cluster_id"), &readReplicas.PrimaryClusterID)...)
 
 	return diags
 }
 
 // fills account, project, read replica info from state
 func getIDsFromReadReplicasState(ctx context.Context, state tfsdk.State, readReplicas *ReadReplicas) {
-	state.GetAttribute(ctx, tftypes.NewAttributePath().WithAttributeName("account_id"), &readReplicas.AccountID)
-	state.GetAttribute(ctx, tftypes.NewAttributePath().WithAttributeName("project_id"), &readReplicas.ProjectID)
-	state.GetAttribute(ctx, tftypes.NewAttributePath().WithAttributeName("primary_cluster_id"), &readReplicas.PrimaryClusterID)
-	state.GetAttribute(ctx, tftypes.NewAttributePath().WithAttributeName("read_replicas_info"), &readReplicas.ReadReplicasInfo)
+	state.GetAttribute(ctx, path.Root("account_id"), &readReplicas.AccountID)
+	state.GetAttribute(ctx, path.Root("project_id"), &readReplicas.ProjectID)
+	state.GetAttribute(ctx, path.Root("primary_cluster_id"), &readReplicas.PrimaryClusterID)
+	state.GetAttribute(ctx, path.Root("read_replicas_info"), &readReplicas.ReadReplicasInfo)
 }
 
 // Create a new resource
@@ -354,5 +354,5 @@ func (r resourceReadReplicas) Delete(ctx context.Context, req tfsdk.DeleteResour
 // Import a read replica
 func (r resourceReadReplicas) ImportState(ctx context.Context, req tfsdk.ImportResourceStateRequest, resp *tfsdk.ImportResourceStateResponse) {
 	// Save the import identifier in the id attribute
-	tfsdk.ResourceImportStatePassthroughID(ctx, tftypes.NewAttributePath().WithAttributeName("id"), req, resp)
+	tfsdk.ResourceImportStatePassthroughID(ctx, path.Root("id"), req, resp)
 }

@@ -1,13 +1,13 @@
 terraform {
   required_providers {
-    yb = {
-      version = "0.1.1"
-      source = "app.terraform.io/yugabytedb-managed/yugabytedb-managed"
+    ybm = {
+      version = "0.1.0"
+      source = "app.terraform.io/yugabyte/ybm"
     }
   }
 }
 
-provider "yb" {
+provider "ybm" {
   host = "devcloud.yugabyte.com"
   use_secure_host = true
   auth_token = var.auth_token
@@ -24,7 +24,7 @@ variable "account_id" {
   description = "The account ID."
 }
 
-resource "yb_cluster" "single_region" {
+resource "ybm_cluster" "single_region" {
   account_id = var.account_id
   cluster_name = "terraform-cluster"
   cloud_type = "GCP"
@@ -33,7 +33,7 @@ resource "yb_cluster" "single_region" {
     {
       region = "us-west3"
       num_nodes = 1
-      vpc_id = yb_vpc.rrvpc.vpc_id
+      vpc_id = ybm_vpc.rrvpc.vpc_id
     }
   ]
   cluster_tier = "PAID"
@@ -61,7 +61,7 @@ resource "yb_cluster" "single_region" {
  
 }
 
-resource "yb_vpc" "rrvpc" {
+resource "ybm_vpc" "rrvpc" {
   account_id = var.account_id
   name = "read-replica-vpc"
   cloud = "GCP"
@@ -70,7 +70,7 @@ resource "yb_vpc" "rrvpc" {
 }
 
 
-resource "yb_read_replicas" "rr" {
+resource "ybm_read_replicas" "rr" {
   account_id = var.account_id
   read_replicas_info = [ 
     {
@@ -78,7 +78,7 @@ resource "yb_read_replicas" "rr" {
       num_replicas = 1
       num_nodes = 1
       region = "us-east4"
-      vpc_id = yb_vpc.rrvpc.vpc_id
+      vpc_id = ybm_vpc.rrvpc.vpc_id
       node_config = {
         num_cores = 2
         memory_mb = 8192
@@ -86,5 +86,5 @@ resource "yb_read_replicas" "rr" {
       }
     }
   ]
-  primary_cluster_id = yb_cluster.single_region.cluster_id
+  primary_cluster_id = ybm_cluster.single_region.cluster_id
 }

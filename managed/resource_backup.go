@@ -7,9 +7,9 @@ import (
 	"time"
 
 	"github.com/hashicorp/terraform-plugin-framework/diag"
+	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
 	"github.com/hashicorp/terraform-plugin-framework/types"
-	"github.com/hashicorp/terraform-plugin-go/tftypes"
 
 	//"github.com/hashicorp/terraform-plugin-log/tflog"
 	retry "github.com/sethvargo/go-retry"
@@ -83,11 +83,11 @@ func getBackupPlan(ctx context.Context, plan tfsdk.Plan, backup *Backup) diag.Di
 	// I tried implementing Unknownable instead but could not get it to work.
 	var diags diag.Diagnostics
 
-	diags.Append(plan.GetAttribute(ctx, tftypes.NewAttributePath().WithAttributeName("account_id"), &backup.AccountID)...)
-	diags.Append(plan.GetAttribute(ctx, tftypes.NewAttributePath().WithAttributeName("cluster_id"), &backup.ClusterID)...)
-	diags.Append(plan.GetAttribute(ctx, tftypes.NewAttributePath().WithAttributeName("backup_id"), &backup.BackupID)...)
-	diags.Append(plan.GetAttribute(ctx, tftypes.NewAttributePath().WithAttributeName("backup_description"), &backup.BackupDescription)...)
-	diags.Append(plan.GetAttribute(ctx, tftypes.NewAttributePath().WithAttributeName("retention_period_in_days"), &backup.RetentionPeriodInDays)...)
+	diags.Append(plan.GetAttribute(ctx, path.Root("account_id"), &backup.AccountID)...)
+	diags.Append(plan.GetAttribute(ctx, path.Root("cluster_id"), &backup.ClusterID)...)
+	diags.Append(plan.GetAttribute(ctx, path.Root("backup_id"), &backup.BackupID)...)
+	diags.Append(plan.GetAttribute(ctx, path.Root("backup_description"), &backup.BackupDescription)...)
+	diags.Append(plan.GetAttribute(ctx, path.Root("retention_period_in_days"), &backup.RetentionPeriodInDays)...)
 
 	return diags
 }
@@ -175,9 +175,9 @@ func (r resourceBackup) Create(ctx context.Context, req tfsdk.CreateResourceRequ
 }
 
 func getIDsFromBackupState(ctx context.Context, state tfsdk.State, backup *Backup) {
-	state.GetAttribute(ctx, tftypes.NewAttributePath().WithAttributeName("account_id"), &backup.AccountID)
-	state.GetAttribute(ctx, tftypes.NewAttributePath().WithAttributeName("project_id"), &backup.ProjectID)
-	state.GetAttribute(ctx, tftypes.NewAttributePath().WithAttributeName("backup_id"), &backup.BackupID)
+	state.GetAttribute(ctx, path.Root("account_id"), &backup.AccountID)
+	state.GetAttribute(ctx, path.Root("project_id"), &backup.ProjectID)
+	state.GetAttribute(ctx, path.Root("backup_id"), &backup.BackupID)
 }
 
 func resourceBackupRead(accountId string, projectId string, backupId string, apiClient *openapiclient.APIClient) (backup Backup, readOK bool, errorMessage string) {
@@ -266,5 +266,5 @@ func (r resourceBackup) Delete(ctx context.Context, req tfsdk.DeleteResourceRequ
 // Import backup
 func (r resourceBackup) ImportState(ctx context.Context, req tfsdk.ImportResourceStateRequest, resp *tfsdk.ImportResourceStateResponse) {
 	// Save the import identifier in the id attribute
-	tfsdk.ResourceImportStatePassthroughID(ctx, tftypes.NewAttributePath().WithAttributeName("id"), req, resp)
+	tfsdk.ResourceImportStatePassthroughID(ctx, path.Root("id"), req, resp)
 }
