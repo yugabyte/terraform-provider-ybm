@@ -1,0 +1,11 @@
+{
+    "data": {
+      "type": "registry-provider-version-platforms",
+      "attributes": {
+        "os": "OS",
+        "arch": "ARCH",
+        "shasum": "SHASUM",
+        "filename": "terraform-provider-yugabytedb-managed_VERSION_OS_ARCH.zip"
+      }
+    }
+}

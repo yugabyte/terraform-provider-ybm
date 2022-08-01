@@ -1,0 +1,64 @@
+name: YB Manged Terraform Provider Tests
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  # Permission for checking out code
+  contents: read
+
+jobs:
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    env:
+      GOPRIVATE: "github.com/yugabyte/yugabytedb-managed-go-client-internal"
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions/setup-go@v2
+        with:
+          go-version: '1.18'
+      - uses: hashicorp/setup-terraform@v1
+        with:
+          terraform_version: '1.1.*'
+          terraform_wrapper: false
+      - run: |
+          eval `ssh-agent -s`
+          ssh-add - <<< '${{ secrets.GO_CLIENT_SECRET }}'
+          git config --global url."git@github.com:".insteadOf https://github.com/
+          make build
+          make clean
+        name: Build provider
+      - run: |
+          make doc OS_ARCH=linux_amd64
+          git status -s
+          if [[ -n $(git status -s) ]]; then
+            echo "The documentation is not proper. Please ensure that your run 'make doc'"                                                                   
+            exit 1                                                                          
+          fi                                                                                                 
+        name: Check documentation
+  unit:
+    name: Unit Tests
+    runs-on: ubuntu-latest
+    env:
+      GOPRIVATE: "github.com/yugabyte/yugabytedb-managed-go-client-internal"
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions/setup-go@v2
+        with:
+          go-version: '1.18'
+      - uses: hashicorp/setup-terraform@v1
+        with:
+          terraform_version: '1.1.*'
+          terraform_wrapper: false
+      - run: |
+          eval `ssh-agent -s`
+          ssh-add - <<< '${{ secrets.GO_CLIENT_SECRET }}'
+          git config --global url."git@github.com:".insteadOf https://github.com/
+          make test
+        name: Test provider
