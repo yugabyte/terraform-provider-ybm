@@ -2,7 +2,7 @@
 // Source: github.com/yugabyte/yugabytedb-managed-go-client-internal (interfaces: NetworkApi)
 
 // Package mock_yugabytedb_managed_go_client_internal is a generated GoMock package.
-package mocks
+package mock_yugabytedb_managed_go_client_internal
 
 import (
 	context "context"
