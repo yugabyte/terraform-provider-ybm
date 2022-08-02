@@ -31,7 +31,7 @@ func (p *provider) GetSchema(_ context.Context) (tfsdk.Schema, diag.Diagnostics)
 				Sensitive:   true,
 			},
 			"host": {
-				Description: "The environment this cluster is being created in, i.e. devcloud.yugabyte.com, localhost:9000, etc.",
+				Description: "The environment this cluster is being created in, e.g. cloud.yugabyte.com ",
 				Type:        types.StringType,
 				Optional:    true,
 			},

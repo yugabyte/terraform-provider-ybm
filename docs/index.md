@@ -18,5 +18,5 @@ description: |-
 ### Optional
 
 - `auth_token` (String, Sensitive) The authentication token of the account this cluster belongs to.
-- `host` (String) The environment this cluster is being created in, i.e. devcloud.yugabyte.com, localhost:9000, etc.
+- `host` (String) The environment this cluster is being created in, e.g. cloud.yugabyte.com
 - `use_secure_host` (Boolean) Whether or not the host requires a secure connection (HTTPS).
