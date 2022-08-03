@@ -23,17 +23,18 @@ type provider struct {
 
 func (p *provider) GetSchema(_ context.Context) (tfsdk.Schema, diag.Diagnostics) {
 	return tfsdk.Schema{
+		Description: "Terraform provider for YugabyteDB Managed",
 		Attributes: map[string]tfsdk.Attribute{
 			"auth_token": {
 				Description: "The authentication token of the account this cluster belongs to.",
 				Type:        types.StringType,
-				Optional:    true,
+				Required:    true,
 				Sensitive:   true,
 			},
 			"host": {
 				Description: "The environment this cluster is being created in, e.g. cloud.yugabyte.com ",
 				Type:        types.StringType,
-				Optional:    true,
+				Required:    true,
 			},
 			"use_secure_host": {
 				Description: "Whether or not the host requires a secure connection (HTTPS).",
@@ -93,7 +94,7 @@ func (p *provider) Configure(ctx context.Context, req tfsdk.ConfigureProviderReq
 		host = "localhost:9000"
 	}
 
-	use_secure_host := false
+	use_secure_host := true
 	if config.UseSecureHost.Unknown {
 		resp.Diagnostics.AddWarning(
 			"Unable to create client", "Cannot use unknown value as use_secure_host",
