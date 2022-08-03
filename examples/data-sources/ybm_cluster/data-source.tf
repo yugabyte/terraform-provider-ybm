@@ -5,6 +5,6 @@ variable "account_id" {
 
 data "ybm_cluster" "clustername"{
 
-  cluster_name= "terraform-test-posriniv-1"
+  cluster_name= "example-terraform-cluster"
   account_id= var.account_id
 } 
