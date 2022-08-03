@@ -36,7 +36,7 @@ resource "ybm_cluster" "single_region_cluster" {
 
 # Multi Region Cluster
 resource "ybm_cluster" "multi_region_cluster" {
-  account_id = var.account_id
+  account_id = "example-account-id"
   cluster_name = "multi-region-cluster"
   cloud_type = "GCP"
   cluster_type = "SYNCHRONOUS"
@@ -79,3 +79,4 @@ resource "ybm_cluster" "multi_region_cluster" {
     ycql_password = "Password1"
   }
 }
+
