@@ -13,15 +13,11 @@ description: |-
 ## Example Usage
 
 ```terraform
-variable "auth_token" {
-  type        = string
-  description = "The authentication token."
-  sensitive = true
-}
-
-variable "account_id" {
-  type        = string
-  description = "The account ID."
+resource "ybm_backup" "example_backup" {
+  account_id = "example-account-id"
+  cluster_id = "example-cluster-id"
+  backup_description = "example-backup-description"
+  retention_period_in_days = 2  
 }
 ```
 
