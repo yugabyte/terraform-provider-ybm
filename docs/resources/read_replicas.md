@@ -3,12 +3,14 @@
 page_title: "ybm_read_replicas Resource - ybm"
 subcategory: ""
 description: |-
-  
+  The resource to create read replicas of a particular cluster. Multiple read replicas
+          in different regions can be created using a single resource of this kind.
 ---
 
 # ybm_read_replicas (Resource)
 
-
+The resource to create read replicas of a particular cluster. Multiple read replicas
+		in different regions can be created using a single resource of this kind.
 
 ## Example Usage
 

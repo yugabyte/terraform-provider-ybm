@@ -3,12 +3,18 @@
 page_title: "ybm_cluster Resource - ybm"
 subcategory: ""
 description: |-
-  
+  The resource to create a YugabyteDB cluster. This resource can be used to create both
+          single and multi-region clusters. The resource can also be used to bind allow lists to the cluster
+          being created and restore previously taken backups to the cluster being created. The resource can
+          also be used to modify the backup schedule of the cluster being created.
 ---
 
 # ybm_cluster (Resource)
 
-
+The resource to create a YugabyteDB cluster. This resource can be used to create both 
+		single and multi-region clusters. The resource can also be used to bind allow lists to the cluster 
+		being created and restore previously taken backups to the cluster being created. The resource can 
+		also be used to modify the backup schedule of the cluster being created.
 
 ## Example Usage
 

@@ -16,6 +16,7 @@ type resourceAllowListType struct{}
 
 func (r resourceAllowListType) GetSchema(_ context.Context) (tfsdk.Schema, diag.Diagnostics) {
 	return tfsdk.Schema{
+		Description: `The resource to create an allow list in YugabyteDB Managed.`,
 		Attributes: map[string]tfsdk.Attribute{
 			"account_id": {
 				Description: "The ID of the account this allow list belongs to.",

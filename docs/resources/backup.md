@@ -3,12 +3,14 @@
 page_title: "ybm_backup Resource - ybm"
 subcategory: ""
 description: |-
-  
+  The resource to create a manual backup of tables in a particular cluster.
+          Please ensure that the cluster for which the backup is being taken has some data populated.
 ---
 
 # ybm_backup (Resource)
 
-
+The resource to create a manual backup of tables in a particular cluster. 
+		Please ensure that the cluster for which the backup is being taken has some data populated.
 
 ## Example Usage
 

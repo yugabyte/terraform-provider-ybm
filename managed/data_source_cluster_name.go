@@ -17,6 +17,7 @@ type dataClusterNameType struct{}
 func (r dataClusterNameType) GetSchema(_ context.Context) (tfsdk.Schema, diag.Diagnostics) {
 
 	return tfsdk.Schema{
+		Description: "The data source to fetch the cluster ID and other informtion about a cluster given the cluster name.",
 		Attributes: map[string]tfsdk.Attribute{
 			"account_id": {
 				Description: "The ID of the account this cluster belongs to.",

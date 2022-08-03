@@ -3,12 +3,12 @@
 page_title: "ybm_backup Data Source - ybm"
 subcategory: ""
 description: |-
-  
+  The data source to fetch the backup ID and other information about the most recent backup.
 ---
 
 # ybm_backup (Data Source)
 
-
+The data source to fetch the backup ID and other information about the most recent backup.
 
 ## Example Usage
 

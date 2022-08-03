@@ -17,6 +17,7 @@ type dataSourceBackupType struct{}
 
 func (r dataSourceBackupType) GetSchema(_ context.Context) (tfsdk.Schema, diag.Diagnostics) {
 	return tfsdk.Schema{
+		Description: "The data source to fetch the backup ID and other information about the most recent backup.",
 		Attributes: map[string]tfsdk.Attribute{
 			"account_id": {
 				Description: "The ID of the account this backup belongs to.",

@@ -3,12 +3,12 @@
 page_title: "ybm_allow_list Resource - ybm"
 subcategory: ""
 description: |-
-  
+  The resource to create an allow list in YugabyteDB Managed.
 ---
 
 # ybm_allow_list (Resource)
 
-
+The resource to create an allow list in YugabyteDB Managed.
 
 ## Example Usage
 

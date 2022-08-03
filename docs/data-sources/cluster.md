@@ -3,12 +3,12 @@
 page_title: "ybm_cluster Data Source - ybm"
 subcategory: ""
 description: |-
-  
+  The data source to fetch the cluster ID and other informtion about a cluster given the cluster name.
 ---
 
 # ybm_cluster (Data Source)
 
-
+The data source to fetch the cluster ID and other informtion about a cluster given the cluster name.
 
 ## Example Usage
 
