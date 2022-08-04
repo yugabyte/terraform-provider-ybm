@@ -171,12 +171,6 @@ func (r resourceClusterType) GetSchema(_ context.Context) (tfsdk.Schema, diag.Di
 					},
 				}),
 			},
-			"is_production": {
-				Description: "If the cluster is a production cluster. Default false.",
-				Type:        types.BoolType,
-				Optional:    true,
-				Computed:    true,
-			},
 			"credentials": {
 				Required: true,
 				Attributes: tfsdk.SingleNestedAttributes(map[string]tfsdk.Attribute{
@@ -309,10 +303,14 @@ func createClusterSpec(ctx context.Context, plan Cluster, clusterExists bool) (c
 		}
 	}
 
+	// This is to support a redundant value in the API.
+	// Needs to be removed once API cleans it up.
+	isProduction := true
+
 	clusterInfo := *openapiclient.NewClusterInfo(
 		openapiclient.ClusterTier(plan.ClusterTier.Value),
 		openapiclient.ClusterFaultTolerance(plan.FaultTolerance.Value),
-		plan.IsProduction.Value,
+		isProduction,
 		*openapiclient.NewClusterNodeInfo(
 			int32(plan.NodeConfig.DiskSizeGb.Value),
 			int32(plan.NodeConfig.MemoryMb.Value),
@@ -357,7 +355,6 @@ func getPlan(ctx context.Context, plan tfsdk.Plan, cluster *Cluster) diag.Diagno
 	diags.Append(plan.GetAttribute(ctx, path.Root("cluster_allow_list_ids"), &cluster.ClusterAllowListIDs)...)
 	diags.Append(plan.GetAttribute(ctx, path.Root("restore_backup_id"), &cluster.RestoreBackupID)...)
 	diags.Append(plan.GetAttribute(ctx, path.Root("node_config"), &cluster.NodeConfig)...)
-	diags.Append(plan.GetAttribute(ctx, path.Root("is_production"), &cluster.IsProduction)...)
 	diags.Append(plan.GetAttribute(ctx, path.Root("credentials"), &cluster.Credentials)...)
 	diags.Append(plan.GetAttribute(ctx, path.Root("backup_schedule"), &cluster.BackupSchedule)...)
 
@@ -639,7 +636,6 @@ func resourceClusterRead(accountId string, projectId string, clusterId string, s
 	cluster.CloudType.Value = string(clusterResp.Data.Spec.CloudInfo.Code)
 	cluster.ClusterType.Value = string(*clusterResp.Data.Spec.ClusterInfo.ClusterType)
 	cluster.ClusterTier.Value = string(clusterResp.Data.Spec.ClusterInfo.ClusterTier)
-	cluster.IsProduction.Value = clusterResp.Data.Spec.ClusterInfo.IsProduction
 	cluster.ClusterVersion.Value = strconv.Itoa(int(clusterResp.Data.Spec.ClusterInfo.GetVersion()))
 
 	cluster.FaultTolerance.Value = string(clusterResp.Data.Spec.ClusterInfo.FaultTolerance)

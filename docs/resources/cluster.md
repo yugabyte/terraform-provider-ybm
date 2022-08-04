@@ -90,7 +90,6 @@ resource "ybm_cluster" "multi_region_cluster" {
     retention_period_in_days = 10
     time_interval_in_days = 10
   } 
-  is_production = false
   credentials = {
     ysql_username = "ysql_user"
     ysql_password = "Password1"
@@ -120,7 +119,6 @@ resource "ybm_cluster" "multi_region_cluster" {
 - `cluster_allow_list_ids` (List of String) The list of IDs of allow lists associated with the cluster.
 - `cluster_id` (String) The id of the cluster. Filled automatically on creating a cluster. Use to get a specific cluster.
 - `fault_tolerance` (String) The fault tolerance of the cluster.
-- `is_production` (Boolean) If the cluster is a production cluster. Default false.
 - `restore_backup_id` (String) The backup ID to be restored to the cluster.
 
 ### Read-Only

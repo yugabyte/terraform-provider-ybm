@@ -29,7 +29,6 @@ resource "ybm_cluster" "multi_region" {
     memory_mb = 8192
     disk_size_gb = 10
   }
-  is_production = false
   credentials = {
     ysql_username = "ysql_user"
     ysql_password = "Password1"
