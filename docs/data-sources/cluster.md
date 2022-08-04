@@ -29,6 +29,10 @@ data "ybm_cluster" "example_cluster"{
 
 ### Optional
 
+- `project_id` (String) The ID of the project this cluster belongs to.
+
+### Read-Only
+
 - `backup_schedule` (Attributes) (see [below for nested schema](#nestedatt--backup_schedule))
 - `cloud_type` (String) Which cloud the cluster is deployed in: AWS or GCP. Default GCP.
 - `cluster_allow_list_ids` (List of String) The list of IDs of allow lists associated with the cluster.
@@ -40,15 +44,13 @@ data "ybm_cluster" "example_cluster"{
 - `cluster_version` (String)
 - `credentials` (Attributes) (see [below for nested schema](#nestedatt--credentials))
 - `fault_tolerance` (String) The fault tolerance of the cluster.
-- `is_production` (Boolean) If the cluster is a production cluster. Default false.
 - `node_config` (Attributes) (see [below for nested schema](#nestedatt--node_config))
-- `project_id` (String) The ID of the project this cluster belongs to.
 - `restore_backup_id` (String) The backup ID to be restored to the cluster.
 
 <a id="nestedatt--backup_schedule"></a>
 ### Nested Schema for `backup_schedule`
 
-Optional:
+Read-Only:
 
 - `backup_description` (String) The description of the backup schedule.
 - `cron_expression` (String) The cron expression for  backup schedule
@@ -61,7 +63,7 @@ Optional:
 <a id="nestedatt--cluster_info"></a>
 ### Nested Schema for `cluster_info`
 
-Optional:
+Read-Only:
 
 - `created_time` (String)
 - `software_version` (String)
@@ -72,7 +74,7 @@ Optional:
 <a id="nestedatt--cluster_region_info"></a>
 ### Nested Schema for `cluster_region_info`
 
-Optional:
+Read-Only:
 
 - `num_nodes` (Number)
 - `region` (String)
@@ -82,7 +84,7 @@ Optional:
 <a id="nestedatt--credentials"></a>
 ### Nested Schema for `credentials`
 
-Optional:
+Read-Only:
 
 - `ycql_password` (String)
 - `ycql_username` (String)
@@ -93,7 +95,7 @@ Optional:
 <a id="nestedatt--node_config"></a>
 ### Nested Schema for `node_config`
 
-Optional:
+Read-Only:
 
 - `disk_size_gb` (Number)
 - `memory_mb` (Number)
