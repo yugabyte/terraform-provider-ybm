@@ -7,15 +7,8 @@ terraform {
   }
 }
 
-variable "auth_token" {
-  type        = string
-  description = "The authentication token."
-  sensitive = true
-}
-
 provider "ybm" {
-  host = "devcloud.yugabyte.com"
-  use_secure_host = true
-  auth_token = var.auth_token
+  host = "cloud.yugabyte.com"
+  use_secure_host = false # True by default
+  auth_token = "authentication-token"
 }
-

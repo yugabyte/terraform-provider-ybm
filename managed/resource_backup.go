@@ -20,6 +20,8 @@ type resourceBackupType struct{}
 
 func (r resourceBackupType) GetSchema(_ context.Context) (tfsdk.Schema, diag.Diagnostics) {
 	return tfsdk.Schema{
+		Description: `The resource to create a manual backup of tables in a particular cluster. 
+		Please ensure that the cluster for which the backup is being taken has some data populated.`,
 		Attributes: map[string]tfsdk.Attribute{
 			"account_id": {
 				Description: "The ID of the account this backup belongs to.",

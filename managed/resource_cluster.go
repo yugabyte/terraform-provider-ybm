@@ -22,6 +22,10 @@ type resourceClusterType struct{}
 
 func (r resourceClusterType) GetSchema(_ context.Context) (tfsdk.Schema, diag.Diagnostics) {
 	return tfsdk.Schema{
+		Description: `The resource to create a YugabyteDB cluster. This resource can be used to create both 
+		single and multi-region clusters. The resource can also be used to bind allow lists to the cluster 
+		being created and restore previously taken backups to the cluster being created. The resource can 
+		also be used to modify the backup schedule of the cluster being created.`,
 		Attributes: map[string]tfsdk.Attribute{
 			"account_id": {
 				Description: "The ID of the account this cluster belongs to.",

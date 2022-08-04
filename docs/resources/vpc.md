@@ -3,12 +3,12 @@
 page_title: "ybm_vpc Resource - ybm"
 subcategory: ""
 description: |-
-  
+  The resource to create a VPC in YugabyteDB Managed.
 ---
 
 # ybm_vpc (Resource)
 
-
+The resource to create a VPC in YugabyteDB Managed.
 
 
 

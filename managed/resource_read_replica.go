@@ -20,6 +20,8 @@ type resourceReadReplicasType struct{}
 
 func (r resourceReadReplicasType) GetSchema(_ context.Context) (tfsdk.Schema, diag.Diagnostics) {
 	return tfsdk.Schema{
+		Description: `The resource to create read replicas of a particular cluster. Multiple read replicas
+		in different regions can be created using a single resource of this kind.`,
 		Attributes: map[string]tfsdk.Attribute{
 			"account_id": {
 				Description: "The ID of the account this read replica belongs to.",
