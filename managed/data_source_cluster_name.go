@@ -34,7 +34,7 @@ func (r dataClusterNameType) GetSchema(_ context.Context) (tfsdk.Schema, diag.Di
 			"cluster_id": {
 				Description: "The id of the cluster. Filled automatically on creating a cluster. Use to get a specific cluster.",
 				Type:        types.StringType,
-				Optional:    true,
+				Computed:    true,
 			},
 			"cluster_name": {
 				Description: "The name of the cluster.",
@@ -44,70 +44,70 @@ func (r dataClusterNameType) GetSchema(_ context.Context) (tfsdk.Schema, diag.Di
 			"cluster_type": {
 				Description: "The type of the cluster.",
 				Type:        types.StringType,
-				Optional:    true,
+				Computed:    true,
 			},
 			"cloud_type": {
 				Description: "Which cloud the cluster is deployed in: AWS or GCP. Default GCP.",
 				Type:        types.StringType,
-				Optional:    true,
+				Computed:    true,
 			},
 			"cluster_region_info": {
-				Optional: true,
+				Computed: true,
 				Attributes: tfsdk.ListNestedAttributes(map[string]tfsdk.Attribute{
 					"num_nodes": {
 						Type:     types.Int64Type,
-						Optional: true,
+						Computed: true,
 					},
 					"region": {
 						Type:     types.StringType,
-						Optional: true,
+						Computed: true,
 					},
 					"vpc_id": {
 						Type:     types.StringType,
-						Optional: true,
+						Computed: true,
 					},
 				}),
 			},
 
 			"backup_schedule": {
-				Optional: true,
+				Computed: true,
 				Attributes: tfsdk.SingleNestedAttributes(map[string]tfsdk.Attribute{
 
 					"state": {
 
 						Description: "The state for  backup schedule. It is use to pause or resume the backup schedule. It can have value ACTIVE or PAUSED only.",
 						Type:        types.StringType,
-						Optional:    true,
+						Computed:    true,
 					},
 
 					"cron_expression": {
 						Description: "The cron expression for  backup schedule",
 						Type:        types.StringType,
-						Optional:    true,
+						Computed:    true,
 					},
 
 					"time_interval_in_days": {
 						Description: "The time interval in days for backup schedule.",
 						Type:        types.Int64Type,
-						Optional:    true,
+						Computed:    true,
 					},
 
 					"retention_period_in_days": {
 						Description: "The retention period of the backup schedule.",
 						Type:        types.Int64Type,
-						Optional:    true,
+						Computed:    true,
 					},
 
 					"backup_description": {
 						Description: "The description of the backup schedule.",
 						Type:        types.StringType,
-						Optional:    true,
+						Computed:    true,
 					},
 
 					"schedule_id": {
 						Description: "The id of the backup schedule. Filled automatically on creating a backup schedule. Used to get a specific backup schedule.",
 						Type:        types.StringType,
-						Optional:    true,
+						Computed:    true,
 					},
 				}),
 			},
@@ -115,92 +115,87 @@ func (r dataClusterNameType) GetSchema(_ context.Context) (tfsdk.Schema, diag.Di
 			"cluster_tier": {
 				Description: "FREE or PAID.",
 				Type:        types.StringType,
-				Optional:    true,
+				Computed:    true,
 			},
 			"fault_tolerance": {
 				Description: "The fault tolerance of the cluster.",
 				Type:        types.StringType,
-				Optional:    true,
+				Computed:    true,
 			},
 			"cluster_allow_list_ids": {
 				Description: "The list of IDs of allow lists associated with the cluster.",
 				Type: types.ListType{
 					ElemType: types.StringType,
 				},
-				Optional: true,
+				Computed: true,
 			},
 			"restore_backup_id": {
 				Description: "The backup ID to be restored to the cluster.",
 				Type:        types.StringType,
-				Optional:    true,
+				Computed:    true,
 			},
 			"node_config": {
-				Optional: true,
+				Computed: true,
 				Attributes: tfsdk.SingleNestedAttributes(map[string]tfsdk.Attribute{
 					"num_cores": {
 						Type:     types.Int64Type,
-						Optional: true,
+						Computed: true,
 					},
 					"memory_mb": {
 						Type:     types.Int64Type,
-						Optional: true,
+						Computed: true,
 					},
 					"disk_size_gb": {
 						Type:     types.Int64Type,
-						Optional: true,
+						Computed: true,
 					},
 				}),
 			},
-			"is_production": {
-				Description: "If the cluster is a production cluster. Default false.",
-				Type:        types.BoolType,
-				Optional:    true,
-			},
 			"credentials": {
-				Optional: true,
+				Computed: true,
 				Attributes: tfsdk.SingleNestedAttributes(map[string]tfsdk.Attribute{
 					"ysql_username": {
 						Type:     types.StringType,
-						Optional: true,
+						Computed: true,
 					},
 					"ysql_password": {
 						Type:     types.StringType,
-						Optional: true,
+						Computed: true,
 					},
 					"ycql_username": {
 						Type:     types.StringType,
-						Optional: true,
+						Computed: true,
 					},
 					"ycql_password": {
 						Type:     types.StringType,
-						Optional: true,
+						Computed: true,
 					},
 				}),
 			},
 			"cluster_info": {
-				Optional: true,
+				Computed: true,
 				Attributes: tfsdk.SingleNestedAttributes(map[string]tfsdk.Attribute{
 					"state": {
 						Type:     types.StringType,
-						Optional: true,
+						Computed: true,
 					},
 					"software_version": {
 						Type:     types.StringType,
-						Optional: true,
+						Computed: true,
 					},
 					"created_time": {
 						Type:     types.StringType,
-						Optional: true,
+						Computed: true,
 					},
 					"updated_time": {
 						Type:     types.StringType,
-						Optional: true,
+						Computed: true,
 					},
 				}),
 			},
 			"cluster_version": {
 				Type:     types.StringType,
-				Optional: true,
+				Computed: true,
 			},
 		},
 	}, nil

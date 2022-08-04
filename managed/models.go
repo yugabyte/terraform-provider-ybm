@@ -111,3 +111,18 @@ type ReadReplicaInfo struct {
 	NodeConfig    NodeConfig   `tfsdk:"node_config"`
 	Endpoint      types.String `tfsdk:"endpoint"`
 }
+
+type VPCPeering struct {
+	AccountID          types.String       `tfsdk:"account_id"`
+	Name               types.String       `tfsdk:"name"`
+	YugabyteDBVPCID    types.String       `tfsdk:"yugabytedb_vpc_id"`
+	ApplicationVPCInfo ApplicationVPCInfo `tfsdk:"application_vpc_info"`
+}
+
+type ApplicationVPCInfo struct {
+	CloudType    types.String `tfsdk:"cloud_type"`
+	CloudProject types.String `tfsdk:"cloud_project"`
+	CloudRegion  types.String `tfsdk:"cloud_region"`
+	VPCID        types.String `tfsdk:"vpc_id"`
+	CIDR         types.String `tfsdk:"cidr"`
+}
