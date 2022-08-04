@@ -24,7 +24,6 @@ resource "ybm_cluster" "single_region_cluster" {
     retention_period_in_days = 10
     time_interval_in_days = 10
   }
-  is_production = false
   credentials = {
     ysql_username = "ysql_user"
     ysql_password = "Password1"
