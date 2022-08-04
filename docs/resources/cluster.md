@@ -16,6 +16,8 @@ The resource to create a YugabyteDB cluster. This resource can be used to create
 		being created and restore previously taken backups to the cluster being created. The resource can 
 		also be used to modify the backup schedule of the cluster being created.
 
+## Example Usage
+
 ```terraform
 # Single Region Cluster
 resource "ybm_cluster" "single_region_cluster" {
