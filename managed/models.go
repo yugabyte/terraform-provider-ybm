@@ -114,6 +114,7 @@ type ReadReplicaInfo struct {
 
 type VPCPeering struct {
 	AccountID          types.String       `tfsdk:"account_id"`
+	ProjectID          types.String       `tfsdk:"project_id"`
 	Name               types.String       `tfsdk:"name"`
 	VPCPeeringID       types.String       `tfsdk:"vpc_peering_id"`
 	YugabyteDBVPCID    types.String       `tfsdk:"yugabytedb_vpc_id"`

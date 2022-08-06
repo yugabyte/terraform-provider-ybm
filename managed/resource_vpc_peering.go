@@ -52,17 +52,17 @@ func (r resourceVPCPeeringType) GetSchema(_ context.Context) (tfsdk.Schema, diag
 				Required:    true,
 				Attributes: tfsdk.SingleNestedAttributes(map[string]tfsdk.Attribute{
 					"cloud": {
-						Description: "The cloud on which the application is deployed.",
+						Description: "The cloud(eg. AWS or GCP) on which the application is deployed.",
 						Type:        types.StringType,
 						Required:    true,
 					},
 					"project": {
-						Description: "The project on the cloud in which the application is deployed.",
+						Description: "The project ID on the cloud(eg. AWS or GCP) in which the application is deployed.",
 						Type:        types.StringType,
 						Required:    true,
 					},
 					"region": {
-						Description: "The region in the cloud where the application is deployed.",
+						Description: "The region in the cloud(eg. AWS or GCP) where the application is deployed.",
 						Type:        types.StringType,
 						Required:    true,
 					},
@@ -157,111 +157,84 @@ func (r resourceVPCPeering) Create(ctx context.Context, req tfsdk.CreateResource
 
 	applicationVPCSpec := *openapiclient.NewCustomerVpcSpec(*openapiclient.NewVpcCloudInfo(openapiclient.CloudEnum(applicationCloud)), applicationProject, applicationVPCID)
 	applicationVPCSpec.CloudInfo.SetRegion(applicationRegion)
+	applicationVPCSpec.SetCidr(applicationVPCCIDR)
 	vpcPeeringSpec := *openapiclient.NewVpcPeeringSpec(applicationVPCSpec, yugabyteDBVPCID, vpcPeeringName)
 
-	vpcRequest := *openapiclient.NewSingleTenantVpcRequest(vpcSpec)
-
-	vpcResp, response, err := apiClient.NetworkApi.CreateVpc(ctx, accountId, projectId).SingleTenantVpcRequest(vpcRequest).Execute()
+	vpcPeeringResp, response, err := apiClient.NetworkApi.CreateVpcPeering(ctx, accountId, projectId).VpcPeeringSpec(vpcPeeringSpec).Execute()
 	if err != nil {
 		b, _ := httputil.DumpResponse(response, true)
-		resp.Diagnostics.AddError("Could not create vpc", string(b))
+		resp.Diagnostics.AddError("Could not create vpc peering", string(b))
 		return
 	}
-	vpcId := vpcResp.Data.Info.Id
+	vpcPeeringId := vpcPeeringResp.Data.Info.Id
 
 	retryPolicy := retry.NewConstant(10 * time.Second)
 	retryPolicy = retry.WithMaxDuration(600*time.Second, retryPolicy)
 	err = retry.Do(ctx, retryPolicy, func(ctx context.Context) error {
-		vpcResp, _, err := apiClient.NetworkApi.GetSingleTenantVpc(context.Background(), accountId, projectId, vpcId).Execute()
+		vpcResp, _, err := apiClient.NetworkApi.GetVpcPeering(ctx, accountId, projectId, vpcPeeringId).Execute()
 		if err == nil {
-			if vpcResp.Data.Info.State == "ACTIVE" {
+			if vpcResp.Data.Info.State == "ACTIVE" || vpcResp.Data.Info.State == "PENDING" {
 				return nil
 			}
 		}
-		return retry.RetryableError(errors.New("The vpc creation didn't succeed yet"))
+		return retry.RetryableError(errors.New("The vpc peering creation didn't succeed yet"))
 	})
 
 	if err != nil {
-		resp.Diagnostics.AddError("Could not create vpc", "Timed out waiting for vpc creation to be successful.")
+		resp.Diagnostics.AddError("Could not create vpc peering", "Timed out waiting for vpc peering creation to be successful.")
 		return
 	}
 
-	vpc, readOK, message := resourceVPCRead(accountId, projectId, vpcId, regionMap, apiClient)
+	vpcPeering, readOK, message := resourceVPCPeeringRead(accountId, projectId, vpcPeeringId, apiClient)
 	if !readOK {
-		resp.Diagnostics.AddError("Could not read the state of the vpc", message)
+		resp.Diagnostics.AddError("Could not read the state of the vpc peering", message)
 		return
 	}
-	if !globalCIDRPresent {
-		vpc.GlobalCIDR.Null = true
-	} else {
-		vpc.RegionCIDRInfo = nil
-	}
 
-	diags = resp.State.Set(ctx, &vpc)
+	diags = resp.State.Set(ctx, &vpcPeering)
 	resp.Diagnostics.Append(diags...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
 }
 
-func getIDsFromVPCState(ctx context.Context, state tfsdk.State, vpc *VPC) {
-	state.GetAttribute(ctx, path.Root("account_id"), &vpc.AccountID)
-	state.GetAttribute(ctx, path.Root("project_id"), &vpc.ProjectID)
-	state.GetAttribute(ctx, path.Root("vpc_id"), &vpc.VPCID)
+func getIDsFromVPCPeeringState(ctx context.Context, state tfsdk.State, vpcPeering *VPCPeering) {
+	state.GetAttribute(ctx, path.Root("account_id"), &vpcPeering.AccountID)
+	state.GetAttribute(ctx, path.Root("project_id"), &vpcPeering.ProjectID)
+	state.GetAttribute(ctx, path.Root("vpc_peering_id"), &vpcPeering.VPCPeeringID)
 }
 
-func resourceVPCRead(accountId string, projectId string, vpcId string, regionMap map[string]int, apiClient *openapiclient.APIClient) (vpc VPC, readOK bool, errorMessage string) {
-	vpcResp, response, err := apiClient.NetworkApi.GetSingleTenantVpc(context.Background(), accountId, projectId, vpcId).Execute()
+func resourceVPCPeeringRead(accountId string, projectId string, vpcPeeringId string, apiClient *openapiclient.APIClient) (vpcPeering VPCPeering, readOK bool, errorMessage string) {
+	vpcPeeringResp, response, err := apiClient.NetworkApi.GetVpcPeering(context.Background(), accountId, projectId, vpcPeeringId).Execute()
 	if err != nil {
 		b, _ := httputil.DumpResponse(response, true)
-		return vpc, false, string(b)
+		return vpcPeering, false, string(b)
 	}
 
-	vpc.AccountID.Value = accountId
-	vpc.ProjectID.Value = projectId
-	vpc.VPCID.Value = vpcId
+	vpcPeering.AccountID.Value = accountId
+	vpcPeering.ProjectID.Value = projectId
+	vpcPeering.VPCPeeringID.Value = vpcPeeringId
 
-	vpc.Name.Value = vpcResp.Data.Spec.GetName()
-	vpc.Cloud.Value = string(vpcResp.Data.Spec.GetCloud())
-	vpc.GlobalCIDR.Value = vpcResp.Data.Spec.GetParentCidr()
+	vpcPeering.Name.Value = vpcPeeringResp.Data.Spec.GetName()
+	vpcPeering.YugabyteDBVPCID.Value = vpcPeeringResp.Data.Spec.GetInternalYugabyteVpcId()
+	vpcPeering.VPCPeeringState.Value = string(vpcPeeringResp.Data.Info.GetState())
+	vpcPeering.ApplicationVPCInfo.Cloud.Value = string(vpcPeeringResp.Data.Spec.CustomerVpc.CloudInfo.GetCode())
+	vpcPeering.ApplicationVPCInfo.Project.Value = vpcPeeringResp.Data.Spec.CustomerVpc.GetCloudProviderProject()
+	vpcPeering.ApplicationVPCInfo.Region.Value = vpcPeeringResp.Data.Spec.CustomerVpc.CloudInfo.GetRegion()
+	vpcPeering.ApplicationVPCInfo.VPCID.Value = vpcPeeringResp.Data.Spec.CustomerVpc.GetExternalVpcId()
+	vpcPeering.ApplicationVPCInfo.CIDR.Value = vpcPeeringResp.Data.Spec.CustomerVpc.GetCidr()
 
-	if len(regionMap) > 0 {
-		regionInfo := make([]VPCRegionInfo, len(regionMap))
-		for _, info := range vpcResp.Data.Spec.GetRegionSpecs() {
-			region := info.GetRegion()
-			cidr := info.GetCidr()
-			index := regionMap[region]
-			regionInfo[index] = VPCRegionInfo{
-				Region: types.String{Value: region},
-				CIDR:   types.String{Value: cidr},
-			}
-		}
-		vpc.RegionCIDRInfo = regionInfo
-	}
-
-	return vpc, true, ""
+	return vpcPeering, true, ""
 }
 
-// Read vpc
-func (r resourceVPC) Read(ctx context.Context, req tfsdk.ReadResourceRequest, resp *tfsdk.ReadResourceResponse) {
-	var state VPC
-	getIDsFromVPCState(ctx, req.State, &state)
+// Read vpc peering
+func (r resourceVPCPeering) Read(ctx context.Context, req tfsdk.ReadResourceRequest, resp *tfsdk.ReadResourceResponse) {
+	var state VPCPeering
+	getIDsFromVPCPeeringState(ctx, req.State, &state)
 
-	regionCIDRInfoPresent := false
-	if state.RegionCIDRInfo != nil {
-		regionCIDRInfoPresent = true
-	}
-	regionMap := map[string]int{}
-	if regionCIDRInfoPresent {
-		for index, info := range state.RegionCIDRInfo {
-			region := info.Region.Value
-			regionMap[region] = index
-		}
-	}
-
-	vpc, readOK, message := resourceVPCRead(state.AccountID.Value, state.ProjectID.Value, state.VPCID.Value, regionMap, r.p.client)
+	vpc, readOK, message := resourceVPCPeeringRead(state.AccountID.Value, state.ProjectID.Value, state.VPCPeeringID.Value, r.p.client)
 	if !readOK {
-		resp.Diagnostics.AddError("Could not read the state of the vpc", message)
+		resp.Diagnostics.AddError("Could not read the state of the vpc peering", message)
 		return
 	}
 
@@ -272,45 +245,45 @@ func (r resourceVPC) Read(ctx context.Context, req tfsdk.ReadResourceRequest, re
 	}
 }
 
-// Update vpc
-func (r resourceVPC) Update(ctx context.Context, req tfsdk.UpdateResourceRequest, resp *tfsdk.UpdateResourceResponse) {
+// Update vpc peering
+func (r resourceVPCPeering) Update(ctx context.Context, req tfsdk.UpdateResourceRequest, resp *tfsdk.UpdateResourceResponse) {
 
-	resp.Diagnostics.AddError("Could not update vpc.", "Updating a vpc is not supported yet. Please delete and recreate.")
+	resp.Diagnostics.AddError("Could not update vpc peering.", "Updating a vpc peering is not supported yet. Please delete and recreate.")
 	return
 
 }
 
-// Delete vpc
-func (r resourceVPC) Delete(ctx context.Context, req tfsdk.DeleteResourceRequest, resp *tfsdk.DeleteResourceResponse) {
-	var state VPC
-	getIDsFromVPCState(ctx, req.State, &state)
+// Delete vpc peering
+func (r resourceVPCPeering) Delete(ctx context.Context, req tfsdk.DeleteResourceRequest, resp *tfsdk.DeleteResourceResponse) {
+	var state VPCPeering
+	getIDsFromVPCPeeringState(ctx, req.State, &state)
 	accountId := state.AccountID.Value
 	projectId := state.ProjectID.Value
-	vpcId := state.VPCID.Value
+	vpcPeeringId := state.VPCPeeringID.Value
 
 	apiClient := r.p.client
 
-	response, err := apiClient.NetworkApi.DeleteVpc(context.Background(), accountId, projectId, vpcId).Execute()
+	response, err := apiClient.NetworkApi.DeleteVpcPeering(ctx, accountId, projectId, vpcPeeringId).Execute()
 	if err != nil {
 		b, _ := httputil.DumpResponse(response, true)
-		resp.Diagnostics.AddError("Could not delete the vpc", string(b))
+		resp.Diagnostics.AddError("Could not delete the vpc peering", string(b))
 		return
 	}
 
 	retryPolicy := retry.NewConstant(10 * time.Second)
 	retryPolicy = retry.WithMaxDuration(300*time.Second, retryPolicy)
 	err = retry.Do(ctx, retryPolicy, func(ctx context.Context) error {
-		_, resp, err := apiClient.NetworkApi.GetSingleTenantVpc(context.Background(), accountId, projectId, vpcId).Execute()
+		_, resp, err := apiClient.NetworkApi.GetVpcPeering(ctx, accountId, projectId, vpcPeeringId).Execute()
 		if err != nil {
 			if resp.StatusCode == 404 {
 				return nil
 			}
 		}
-		return retry.RetryableError(errors.New("The vpc deletion didn't succeed yet"))
+		return retry.RetryableError(errors.New("The vpc peering deletion didn't succeed yet"))
 	})
 
 	if err != nil {
-		resp.Diagnostics.AddError("Could not delete vpc", "Timed out waiting for vpc deletion to be successful.")
+		resp.Diagnostics.AddError("Could not delete vpc peering", "Timed out waiting for vpc peering deletion to be successful.")
 		return
 	}
 
@@ -319,7 +292,7 @@ func (r resourceVPC) Delete(ctx context.Context, req tfsdk.DeleteResourceRequest
 }
 
 // Import vpc
-func (r resourceVPC) ImportState(ctx context.Context, req tfsdk.ImportResourceStateRequest, resp *tfsdk.ImportResourceStateResponse) {
+func (r resourceVPCPeering) ImportState(ctx context.Context, req tfsdk.ImportResourceStateRequest, resp *tfsdk.ImportResourceStateResponse) {
 	// Save the import identifier in the id attribute
 	tfsdk.ResourceImportStatePassthroughID(ctx, path.Root("id"), req, resp)
 }
