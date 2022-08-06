@@ -115,14 +115,16 @@ type ReadReplicaInfo struct {
 type VPCPeering struct {
 	AccountID          types.String       `tfsdk:"account_id"`
 	Name               types.String       `tfsdk:"name"`
+	VPCPeeringID       types.String       `tfsdk:"vpc_peering_id"`
 	YugabyteDBVPCID    types.String       `tfsdk:"yugabytedb_vpc_id"`
 	ApplicationVPCInfo ApplicationVPCInfo `tfsdk:"application_vpc_info"`
+	VPCPeeringState    types.String       `tfsdk:"vpc_peering_state"`
 }
 
 type ApplicationVPCInfo struct {
-	CloudType    types.String `tfsdk:"cloud_type"`
-	CloudProject types.String `tfsdk:"cloud_project"`
-	CloudRegion  types.String `tfsdk:"cloud_region"`
-	VPCID        types.String `tfsdk:"vpc_id"`
-	CIDR         types.String `tfsdk:"cidr"`
+	Cloud   types.String `tfsdk:"cloud"`
+	Project types.String `tfsdk:"project"`
+	Region  types.String `tfsdk:"region"`
+	VPCID   types.String `tfsdk:"vpc_id"`
+	CIDR    types.String `tfsdk:"cidr"`
 }
