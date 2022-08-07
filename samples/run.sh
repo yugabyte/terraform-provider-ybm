@@ -1,6 +1,6 @@
 #!/bin/bash
 cd ..
 make install
-cd examples
+cd samples
 rm .terraform.lock.hcl
 terraform init
