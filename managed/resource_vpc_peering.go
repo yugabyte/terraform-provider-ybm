@@ -57,14 +57,14 @@ func (r resourceVPCPeeringType) GetSchema(_ context.Context) (tfsdk.Schema, diag
 						Required:    true,
 					},
 					"project": {
-						Description: "The project ID on the cloud(eg. AWS or GCP) in which the application is deployed.",
+						Description: "The account ID for AWS and project ID for GCP.",
 						Type:        types.StringType,
 						Required:    true,
 					},
 					"region": {
-						Description: "The region in the cloud(eg. AWS or GCP) where the application is deployed.",
+						Description: "The region in the cloud where the application is deployed.",
 						Type:        types.StringType,
-						Required:    true,
+						Optional:    true,
 					},
 					"vpc_id": {
 						Description: "The ID of the VPC in which the application is deployed.",
@@ -74,7 +74,7 @@ func (r resourceVPCPeeringType) GetSchema(_ context.Context) (tfsdk.Schema, diag
 					"cidr": {
 						Description: "The CIDR of the VPC in which the application is deployed.",
 						Type:        types.StringType,
-						Required:    true,
+						Optional:    true,
 					},
 				}),
 			},
@@ -151,13 +151,23 @@ func (r resourceVPCPeering) Create(ctx context.Context, req tfsdk.CreateResource
 	yugabyteDBVPCID := plan.YugabyteDBVPCID.Value
 	applicationCloud := plan.ApplicationVPCInfo.Cloud.Value
 	applicationProject := plan.ApplicationVPCInfo.Project.Value
-	applicationRegion := plan.ApplicationVPCInfo.Region.Value
 	applicationVPCID := plan.ApplicationVPCInfo.VPCID.Value
-	applicationVPCCIDR := plan.ApplicationVPCInfo.CIDR.Value
 
 	applicationVPCSpec := *openapiclient.NewCustomerVpcSpec(*openapiclient.NewVpcCloudInfo(openapiclient.CloudEnum(applicationCloud)), applicationProject, applicationVPCID)
-	applicationVPCSpec.CloudInfo.SetRegion(applicationRegion)
-	applicationVPCSpec.SetCidr(applicationVPCCIDR)
+	if applicationCloud == "AWS" {
+		if plan.ApplicationVPCInfo.Region.Null {
+			resp.Diagnostics.AddError("Invalid Input", "Application VPC region must be provided for AWS.")
+			return
+		}
+		applicationRegion := plan.ApplicationVPCInfo.Region.Value
+		applicationVPCSpec.CloudInfo.SetRegion(applicationRegion)
+		if plan.ApplicationVPCInfo.CIDR.Null {
+			resp.Diagnostics.AddError("Invalid Input", "Application VPC CIDR must be provided for AWS.")
+			return
+		}
+		applicationVPCCIDR := plan.ApplicationVPCInfo.CIDR.Value
+		applicationVPCSpec.SetCidr(applicationVPCCIDR)
+	}
 	vpcPeeringSpec := *openapiclient.NewVpcPeeringSpec(applicationVPCSpec, yugabyteDBVPCID, vpcPeeringName)
 
 	vpcPeeringResp, response, err := apiClient.NetworkApi.CreateVpcPeering(ctx, accountId, projectId).VpcPeeringSpec(vpcPeeringSpec).Execute()
@@ -189,6 +199,13 @@ func (r resourceVPCPeering) Create(ctx context.Context, req tfsdk.CreateResource
 	if !readOK {
 		resp.Diagnostics.AddError("Could not read the state of the vpc peering", message)
 		return
+	}
+
+	if plan.ApplicationVPCInfo.Region.Null {
+		vpcPeering.ApplicationVPCInfo.Region.Null = true
+	}
+	if plan.ApplicationVPCInfo.CIDR.Null {
+		vpcPeering.ApplicationVPCInfo.CIDR.Null = true
 	}
 
 	diags = resp.State.Set(ctx, &vpcPeering)

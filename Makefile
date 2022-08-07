@@ -37,7 +37,8 @@ testacc:
 doc:
 	./install_tfplugindocs.sh ${OS_ARCH}
 	tfplugindocs generate --rendered-provider-name 'YugabyteDB Managed Provider' --provider-name ybm
-	sed -i '' "s/ybm Provider/YugabyteDB Managed Provider/g" docs/index.md
+	sed -i.bak "s/ybm Provider/YugabyteDB Managed Provider/g" docs/index.md
+	rm -rf docs/index.md.bak
 
 clean:
 	rm -rf terraform-provider-ybm

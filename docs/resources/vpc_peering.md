@@ -48,10 +48,13 @@ resource "ybm_vpc_peering" "example_vpc_peering" {
 
 Required:
 
-- `cidr` (String) The CIDR of the VPC in which the application is deployed.
 - `cloud` (String) The cloud(eg. AWS or GCP) on which the application is deployed.
-- `project` (String) The project ID on the cloud(eg. AWS or GCP) in which the application is deployed.
-- `region` (String) The region in the cloud(eg. AWS or GCP) where the application is deployed.
+- `project` (String) The account ID for AWS and project ID for GCP.
 - `vpc_id` (String) The ID of the VPC in which the application is deployed.
+
+Optional:
+
+- `cidr` (String) The CIDR of the VPC in which the application is deployed.
+- `region` (String) The region in the cloud where the application is deployed.
 
 
