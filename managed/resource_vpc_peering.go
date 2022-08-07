@@ -308,7 +308,7 @@ func (r resourceVPCPeering) Delete(ctx context.Context, req tfsdk.DeleteResource
 
 }
 
-// Import vpc
+// Import vpc peering
 func (r resourceVPCPeering) ImportState(ctx context.Context, req tfsdk.ImportResourceStateRequest, resp *tfsdk.ImportResourceStateResponse) {
 	// Save the import identifier in the id attribute
 	tfsdk.ResourceImportStatePassthroughID(ctx, path.Root("id"), req, resp)
