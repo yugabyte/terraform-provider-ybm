@@ -24,6 +24,18 @@ variable "account_id" {
   description = "The account ID."
 }
 
+variable "ysql_password" {
+  type        = string
+  description = "YSQL Password."
+  sensitive = true
+}
+
+variable "ycql_password" {
+  type        = string
+  description = "YCQL Password."
+  sensitive = true
+}
+
 resource "ybm_cluster" "single_region" {
   account_id = var.account_id
   cluster_name = "terraform-cluster"
@@ -52,10 +64,10 @@ resource "ybm_cluster" "single_region" {
   }
   
   credentials = {
-    ysql_username = "ysql_user"
-    ysql_password = "Password1"
-    ycql_username = "ycql_user"
-    ycql_password = "Password1"
+    ysql_username = "example_ysql_user"
+    ysql_password = var.ysql_password
+    ycql_username = "example_ycql_user"
+    ycql_password = var.ycql_password
   }
  
 }
