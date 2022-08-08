@@ -154,6 +154,8 @@ func (r resourceVPCPeering) Create(ctx context.Context, req tfsdk.CreateResource
 	applicationVPCID := plan.ApplicationVPCInfo.VPCID.Value
 
 	applicationVPCSpec := *openapiclient.NewCustomerVpcSpec(*openapiclient.NewVpcCloudInfo(openapiclient.CloudEnum(applicationCloud)), applicationProject, applicationVPCID)
+
+	// The Region and CIDR are required only for AWS. They are not required for GCP.
 	if applicationCloud == "AWS" {
 		if plan.ApplicationVPCInfo.Region.Null {
 			resp.Diagnostics.AddError("Invalid Input", "Application VPC region must be provided for AWS.")
@@ -183,6 +185,7 @@ func (r resourceVPCPeering) Create(ctx context.Context, req tfsdk.CreateResource
 	err = retry.Do(ctx, retryPolicy, func(ctx context.Context) error {
 		vpcResp, _, err := apiClient.NetworkApi.GetVpcPeering(ctx, accountId, projectId, vpcPeeringId).Execute()
 		if err == nil {
+			// VPC peering is a 2 step process. Once it is in pending state, it is up to the customer to confirm the peering.
 			if vpcResp.Data.Info.State == "ACTIVE" || vpcResp.Data.Info.State == "PENDING" {
 				return nil
 			}
