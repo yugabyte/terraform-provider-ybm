@@ -1,0 +1,16 @@
+---
+page_title: {{ .RenderedProviderName }} Provider
+description: |-
+  {{ .Description }}
+---
+
+# {{ .RenderedProviderName }} Provider
+
+{{ .Description }}
+
+## Example Usage
+
+{{ tffile "examples/provider/provider.tf" }}
+
+{{ .SchemaMarkdown | trimspace }}
+
