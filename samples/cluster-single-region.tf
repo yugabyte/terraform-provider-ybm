@@ -126,3 +126,16 @@ resource "ybm_read_replicas" "myrr" {
   ]
   primary_cluster_id = ybm_cluster.single_region.cluster_id
 }
+
+resource "ybm_vpc_peering" "example_vpc_peering" {
+  account_id = var.account_id
+  name = "example_name"
+  yugabytedb_vpc_id = "example_vpc_id"
+  application_vpc_info = {
+    cloud = "GCP"
+    project = "example_project"
+    region = "us-west1"
+    vpc_id = "application_vpc_id"
+    cidr = "example_cidr"
+  }
+}

@@ -38,7 +38,7 @@ make doc
 - `terraform login`, provide the token for the private registry when prompted
 - `export TF_VAR_account_id=<your-account-id>`
 - `export TF_VAR_auth_token=<your-auth-token>`
-- Create a Terraform configuration file similar to the one provided in `examples/private_registry/read_replica.tf`
+- Create a Terraform configuration file similar to the one provided in `samples/private_registry/read_replica.tf`
 - `terraform init`
 - `terraform apply`
 - When the resources created are no longer needed, `terraform destroy`
