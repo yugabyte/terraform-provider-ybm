@@ -1,12 +1,12 @@
 ---
 page_title: {{ .RenderedProviderName }} Provider
 description: |-
-  {{ .Description }}
+  {{ .Description | plainmarkdown | trimspace | prefixlines "  " }}
 ---
 
 # {{ .RenderedProviderName }} Provider
 
-{{ .Description }}
+{{ .Description | trimspace }}
 
 ## Example Usage
 

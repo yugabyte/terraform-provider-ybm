@@ -1,7 +1,7 @@
 ---
 page_title: YugabyteDB Managed Provider
 description: |-
-  Terraform provider for YugabyteDB Managed
+    Terraform provider for YugabyteDB Managed
 ---
 
 # YugabyteDB Managed Provider
