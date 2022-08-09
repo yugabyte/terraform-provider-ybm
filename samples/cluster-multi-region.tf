@@ -30,9 +30,9 @@ resource "ybm_cluster" "multi_region" {
     disk_size_gb = 10
   }
   credentials = {
-    ysql_username = "ysql_user"
-    ysql_password = "Password1"
-    ycql_username = "ycql_user"
-    ycql_password = "Password1"
+    ysql_username = "example_ysql_user"
+    ysql_password = var.ysql_password
+    ycql_username = "example_ycql_user"
+    ycql_password = var.ycql_password
   }
 }

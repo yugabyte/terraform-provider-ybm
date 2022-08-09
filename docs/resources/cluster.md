@@ -18,6 +18,18 @@ The resource to create a YugabyteDB cluster. This resource can be used to create
 ## Example Usage
 
 ```terraform
+variable "ysql_password" {
+  type        = string
+  description = "YSQL Password."
+  sensitive = true
+}
+
+variable "ycql_password" {
+  type        = string
+  description = "YCQL Password."
+  sensitive = true
+}
+
 # Single Region Cluster
 resource "ybm_cluster" "single_region_cluster" {
   account_id = "example-account-id"
@@ -45,10 +57,10 @@ resource "ybm_cluster" "single_region_cluster" {
     time_interval_in_days = 10
   }
   credentials = {
-    ysql_username = "ysql_user"
-    ysql_password = "Password1"
-    ycql_username = "ycql_user"
-    ycql_password = "Password1"
+    ysql_username = "example_ysql_user"
+    ysql_password = var.ysql_password
+    ycql_username = "example_ycql_user"
+    ycql_password = var.ycql_password
   }
  
 }
@@ -91,10 +103,10 @@ resource "ybm_cluster" "multi_region_cluster" {
     time_interval_in_days = 10
   } 
   credentials = {
-    ysql_username = "ysql_user"
-    ysql_password = "Password1"
-    ycql_username = "ycql_user"
-    ycql_password = "Password1"
+    ysql_username = "example_ysql_user"
+    ysql_password = var.ysql_password
+    ycql_username = "example_ycql_user"
+    ycql_password = var.ycql_password
   }
 }
 ```
@@ -145,10 +157,10 @@ Optional:
 
 Required:
 
-- `ycql_password` (String, Sensitive)
-- `ycql_username` (String)
-- `ysql_password` (String, Sensitive)
-- `ysql_username` (String)
+- `ycql_password` (String, Sensitive) YCQL Password for the YugabyteDB Managed cluster. Note that this will be stored in the state file.
+- `ycql_username` (String) YCQL Username for the YugabyteDB Managed cluster.
+- `ysql_password` (String, Sensitive) YSQL Password for the YugabyteDB Managed cluster. Note that this will be stored in the state file.
+- `ysql_username` (String) YSQL Username for the YugabyteDB Managed cluster.
 
 
 <a id="nestedatt--node_config"></a>
