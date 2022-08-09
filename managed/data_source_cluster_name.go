@@ -32,7 +32,7 @@ func (r dataClusterNameType) GetSchema(_ context.Context) (tfsdk.Schema, diag.Di
 			},
 
 			"cluster_id": {
-				Description: "The id of the cluster. Filled automatically on creating a cluster. Use to get a specific cluster.",
+				Description: "The ID of the cluster. Created automatically when a cluster is created. Used to get a specific cluster.",
 				Type:        types.StringType,
 				Computed:    true,
 			},
@@ -47,7 +47,7 @@ func (r dataClusterNameType) GetSchema(_ context.Context) (tfsdk.Schema, diag.Di
 				Computed:    true,
 			},
 			"cloud_type": {
-				Description: "Which cloud the cluster is deployed in: AWS or GCP. Default GCP.",
+				Description: "The cloud provider where the cluster is deployed: AWS or GCP. Default GCP.",
 				Type:        types.StringType,
 				Computed:    true,
 			},
@@ -75,19 +75,19 @@ func (r dataClusterNameType) GetSchema(_ context.Context) (tfsdk.Schema, diag.Di
 
 					"state": {
 
-						Description: "The state for  backup schedule. It is use to pause or resume the backup schedule. It can have value ACTIVE or PAUSED only.",
+						Description: "The state of the backup schedule. Used to pause or resume the backup schedule. Valid values are ACTIVE or PAUSED.",
 						Type:        types.StringType,
 						Computed:    true,
 					},
 
 					"cron_expression": {
-						Description: "The cron expression for  backup schedule",
+						Description: "The cron expression for the backup schedule.",
 						Type:        types.StringType,
 						Computed:    true,
 					},
 
 					"time_interval_in_days": {
-						Description: "The time interval in days for backup schedule.",
+						Description: "The time interval in days for the backup schedule.",
 						Type:        types.Int64Type,
 						Computed:    true,
 					},
@@ -105,7 +105,7 @@ func (r dataClusterNameType) GetSchema(_ context.Context) (tfsdk.Schema, diag.Di
 					},
 
 					"schedule_id": {
-						Description: "The id of the backup schedule. Filled automatically on creating a backup schedule. Used to get a specific backup schedule.",
+						Description: "The ID of the backup schedule. Created automatically when the backup schedule is created. Used to get a specific backup schedule.",
 						Type:        types.StringType,
 						Computed:    true,
 					},
@@ -123,14 +123,14 @@ func (r dataClusterNameType) GetSchema(_ context.Context) (tfsdk.Schema, diag.Di
 				Computed:    true,
 			},
 			"cluster_allow_list_ids": {
-				Description: "The list of IDs of allow lists associated with the cluster.",
+				Description: "The list of IDs of the allow lists assigned to the cluster.",
 				Type: types.ListType{
 					ElemType: types.StringType,
 				},
 				Computed: true,
 			},
 			"restore_backup_id": {
-				Description: "The backup ID to be restored to the cluster.",
+				Description: "The ID of the backup to be restored to the cluster.",
 				Type:        types.StringType,
 				Computed:    true,
 			},
@@ -233,7 +233,7 @@ func (r dataClusterName) Read(ctx context.Context, req tfsdk.ReadDataSourceReque
 	apiClient := r.p.client
 	projectId, getProjectOK, message := getProjectId(attr.account_id, apiClient)
 	if !getProjectOK {
-		resp.Diagnostics.AddError("Could not get project ID", message)
+		resp.Diagnostics.AddError("Unable to get the project ID", message)
 		return
 	}
 
@@ -241,7 +241,7 @@ func (r dataClusterName) Read(ctx context.Context, req tfsdk.ReadDataSourceReque
 
 	if err != nil {
 		b, _ := httputil.DumpResponse(r1, true)
-		resp.Diagnostics.AddError("Could not extract the info of cluster info", string(b))
+		resp.Diagnostics.AddError("Unable to extract the info of cluster info", string(b))
 		return
 	}
 
@@ -251,7 +251,7 @@ func (r dataClusterName) Read(ctx context.Context, req tfsdk.ReadDataSourceReque
 
 	scheduleResp, r2, err1 := apiClient.BackupApi.ListBackupSchedules(ctx, attr.account_id, projectId).EntityId(clusterId).Execute()
 	if err1 != nil {
-		resp.Diagnostics.AddError("Could not fetch the backup schedule for the cluster "+r2.Status, "Try again")
+		resp.Diagnostics.AddError("Unable to fetch the backup schedule for the cluster "+r2.Status, "Try again.")
 		return
 	}
 
@@ -261,7 +261,7 @@ func (r dataClusterName) Read(ctx context.Context, req tfsdk.ReadDataSourceReque
 	cluster, readOK, message := resourceClusterRead(attr.account_id, projectId, clusterId, scheduleId, make([]string, 0), true, make([]string, 0), true, apiClient)
 
 	if !readOK {
-		resp.Diagnostics.AddError("Could not read the state of the cluster", message)
+		resp.Diagnostics.AddError("Unable to read the state of the cluster", message)
 		return
 	}
 	diags := resp.State.Set(ctx, &cluster)
