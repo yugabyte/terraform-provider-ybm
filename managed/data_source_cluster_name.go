@@ -113,7 +113,7 @@ func (r dataClusterNameType) GetSchema(_ context.Context) (tfsdk.Schema, diag.Di
 			},
 
 			"cluster_tier": {
-				Description: "FREE or PAID.",
+				Description: "FREE (Sandbox) or PAID (Dedicated).",
 				Type:        types.StringType,
 				Computed:    true,
 			},
@@ -123,7 +123,7 @@ func (r dataClusterNameType) GetSchema(_ context.Context) (tfsdk.Schema, diag.Di
 				Computed:    true,
 			},
 			"cluster_allow_list_ids": {
-				Description: "The list of IDs of the allow lists assigned to the cluster.",
+				Description: "List of IDs of the allow lists assigned to the cluster.",
 				Type: types.ListType{
 					ElemType: types.StringType,
 				},
@@ -221,7 +221,7 @@ func (r dataClusterName) Read(ctx context.Context, req tfsdk.ReadDataSourceReque
 	if !r.p.configured {
 		resp.Diagnostics.AddError(
 			"Provider not configured",
-			"The provider hasn't been configured before apply, likely because it depends on an unknown value from another resource.",
+			"The provider wasn't configured before being applied, likely because it depends on an unknown value from another resource.",
 		)
 		return
 	}

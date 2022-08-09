@@ -25,17 +25,17 @@ func (r dataSourceBackupType) GetSchema(_ context.Context) (tfsdk.Schema, diag.D
 				Required:    true,
 			},
 			"cluster_id": {
-				Description: "The ID of the cluster that needs to be backed up.",
+				Description: "The ID of the cluster to be backed up.",
 				Type:        types.StringType,
 				Required:    true,
 			},
 			"most_recent": {
-				Description: "Set to true if the ID of the most recent backup is needed.",
+				Description: "Set to true to fetch the most recent backup.",
 				Type:        types.BoolType,
 				Optional:    true,
 			},
 			"timestamp": {
-				Description: "The timestamp of the backup that needs to be fetched. Format: '2022-07-08T00:06:01.890Z'.",
+				Description: "The timestamp of the backup to be fetched. Format: '2022-07-08T00:06:01.890Z'.",
 				Type:        types.StringType,
 				Optional:    true,
 			},
@@ -45,7 +45,7 @@ func (r dataSourceBackupType) GetSchema(_ context.Context) (tfsdk.Schema, diag.D
 				Computed:    true,
 			},
 			"backup_id": {
-				Description: "The id of the backup. Fetched from read.",
+				Description: "The ID of the backup. Fetched from read.",
 				Type:        types.StringType,
 				Computed:    true,
 			},
@@ -142,7 +142,7 @@ func (r dataSourceBackup) Read(ctx context.Context, req tfsdk.ReadDataSourceRequ
 	if !r.p.configured {
 		resp.Diagnostics.AddError(
 			"Provider not configured",
-			"The provider hasn't been configured before apply, likely because it depends on an unknown value from another resource.",
+			"The provider wasn't configured before being applied, likely because it depends on an unknown value from another resource.",
 		)
 		return
 	}
@@ -160,15 +160,15 @@ func (r dataSourceBackup) Read(ctx context.Context, req tfsdk.ReadDataSourceRequ
 
 	if (!config.BackupID.Unknown && !config.BackupID.Null) || config.BackupID.Value != "" {
 		resp.Diagnostics.AddError(
-			"Backup ID provided when creating a backup datasource",
-			"The backup_id field was provided even though a new backup is being created. Make sure this field is not in the provider on creation.",
+			"Backup ID provided for new backup",
+			"The backup_id was provided even though a new backup is being created. Do not include this field in the provider when creating a backup.",
 		)
 		return
 	}
 
 	projectId, getProjectOK, message := getProjectId(accountId, apiClient)
 	if !getProjectOK {
-		resp.Diagnostics.AddError("Could not get project ID", message)
+		resp.Diagnostics.AddError("Unable to get the project ID ", message)
 		return
 	}
 
@@ -190,8 +190,8 @@ func (r dataSourceBackup) Read(ctx context.Context, req tfsdk.ReadDataSourceRequ
 	// Simulating XOR by comparing boolean values
 	if mostRecent == timestampPresent {
 		resp.Diagnostics.AddError(
-			"Problem with input",
-			"Please provide exactly one parameter amongst most_recent and timestamp. Please don't provide both or none.",
+			"Specify most_recent or a timestamp",
+			"To choose a backup, use either most_recent or provide a timestamp. Don't provide both.",
 		)
 		return
 	}
@@ -199,7 +199,7 @@ func (r dataSourceBackup) Read(ctx context.Context, req tfsdk.ReadDataSourceRequ
 	backup, readOK, message := dataSourceBackupRead(ctx, accountId, projectId, clusterId, mostRecent, timestamp, r.p.client)
 
 	if !readOK {
-		resp.Diagnostics.AddError("Could not read the state of the backup", message)
+		resp.Diagnostics.AddError("Unable to read the state of the backup ", message)
 		return
 	}
 

@@ -22,10 +22,10 @@ type resourceClusterType struct{}
 
 func (r resourceClusterType) GetSchema(_ context.Context) (tfsdk.Schema, diag.Diagnostics) {
 	return tfsdk.Schema{
-		Description: `The resource to create a YugabyteDB cluster. This resource can be used to create both 
-		single and multi-region clusters. The resource can also be used to bind allow lists to the cluster 
-		being created and restore previously taken backups to the cluster being created. The resource can 
-		also be used to modify the backup schedule of the cluster being created.`,
+		Description: `The resource to create a YugabyteDB cluster. Use this resource to create both 
+		single- and multi-region clusters. You can also use this resource to bind allow lists to the cluster 
+		being created; restore previously taken backups to the cluster being created; 
+		and modify the backup schedule of the cluster being created.`,
 		Attributes: map[string]tfsdk.Attribute{
 			"account_id": {
 				Description: "The ID of the account this cluster belongs to.",
@@ -39,7 +39,7 @@ func (r resourceClusterType) GetSchema(_ context.Context) (tfsdk.Schema, diag.Di
 			},
 
 			"cluster_id": {
-				Description: "The id of the cluster. Filled automatically on creating a cluster. Use to get a specific cluster.",
+				Description: "The ID of the cluster. Created automatically when a cluster is created. Used to get a specific cluster.",
 				Type:        types.StringType,
 				Optional:    true,
 				Computed:    true,
@@ -55,7 +55,7 @@ func (r resourceClusterType) GetSchema(_ context.Context) (tfsdk.Schema, diag.Di
 				Required:    true,
 			},
 			"cloud_type": {
-				Description: "Which cloud the cluster is deployed in: AWS or GCP. Default GCP.",
+				Description: "The cloud provider where the cluster is deployed: AWS or GCP. Default GCP.",
 				Type:        types.StringType,
 				Optional:    true,
 				Computed:    true,
@@ -84,21 +84,21 @@ func (r resourceClusterType) GetSchema(_ context.Context) (tfsdk.Schema, diag.Di
 
 					"state": {
 
-						Description: "The state for  backup schedule. It is use to pause or resume the backup schedule. It can have value ACTIVE or PAUSED only.",
+						Description: "The state of the backup schedule. Used to pause or resume the backup schedule. Valid values are ACTIVE or PAUSED.",
 						Type:        types.StringType,
 						Computed:    true,
 						Optional:    true,
 					},
 
 					"cron_expression": {
-						Description: "The cron expression for  backup schedule",
+						Description: "The cron expression for the backup schedule",
 						Type:        types.StringType,
 						Computed:    true,
 						Optional:    true,
 					},
 
 					"time_interval_in_days": {
-						Description: "The time interval in days for backup schedule.",
+						Description: "The time interval in days for the backup schedule.",
 						Type:        types.Int64Type,
 						Computed:    true,
 						Optional:    true,
@@ -119,7 +119,7 @@ func (r resourceClusterType) GetSchema(_ context.Context) (tfsdk.Schema, diag.Di
 					},
 
 					"schedule_id": {
-						Description: "The id of the backup schedule. Filled automatically on creating a backup schedule. Used to get a specific backup schedule.",
+						Description: "The ID of the backup schedule. Created automatically when the backup schedule is created. Used to get a specific backup schedule.",
 						Type:        types.StringType,
 						Computed:    true,
 						Optional:    true,
@@ -128,7 +128,7 @@ func (r resourceClusterType) GetSchema(_ context.Context) (tfsdk.Schema, diag.Di
 			},
 
 			"cluster_tier": {
-				Description: "FREE or PAID.",
+				Description: "FREE (Sandbox) or PAID (Dedicated).",
 				Type:        types.StringType,
 				Required:    true,
 			},
@@ -139,14 +139,14 @@ func (r resourceClusterType) GetSchema(_ context.Context) (tfsdk.Schema, diag.Di
 				Computed:    true,
 			},
 			"cluster_allow_list_ids": {
-				Description: "The list of IDs of allow lists associated with the cluster.",
+				Description: "List of IDs of the allow lists assigned to the cluster.",
 				Type: types.ListType{
 					ElemType: types.StringType,
 				},
 				Optional: true,
 			},
 			"restore_backup_id": {
-				Description: "The backup ID to be restored to the cluster.",
+				Description: "The ID of the backup to be restored to the cluster.",
 				Type:        types.StringType,
 				Optional:    true,
 			},
@@ -174,23 +174,23 @@ func (r resourceClusterType) GetSchema(_ context.Context) (tfsdk.Schema, diag.Di
 				Required: true,
 				Attributes: tfsdk.SingleNestedAttributes(map[string]tfsdk.Attribute{
 					"ysql_username": {
-						Description: "YSQL Username for the YugabyteDB Managed cluster.",
+						Description: "YSQL username for the database.",
 						Type:        types.StringType,
 						Required:    true,
 					},
 					"ysql_password": {
-						Description: "YSQL Password for the YugabyteDB Managed cluster. Note that this will be stored in the state file.",
+						Description: "YSQL password for the database. Note that this will be stored in the state file.",
 						Type:        types.StringType,
 						Required:    true,
 						Sensitive:   true,
 					},
 					"ycql_username": {
-						Description: "YCQL Username for the YugabyteDB Managed cluster.",
+						Description: "YCQL username for the database.",
 						Type:        types.StringType,
 						Required:    true,
 					},
 					"ycql_password": {
-						Description: "YCQL Password for the YugabyteDB Managed cluster. Note that this will be stored in the state file.",
+						Description: "YCQL password for the database. Note that this will be stored in the state file.",
 						Type:        types.StringType,
 						Required:    true,
 						Sensitive:   true,
@@ -254,7 +254,7 @@ func EditBackupSchedule(ctx context.Context, plan Cluster, scheduleId string, ba
 			scheduleSpec.SetCronExpression(cronExp)
 		}
 		if plan.BackupSchedule.TimeIntervalInDays.Value != 0 && plan.BackupSchedule.CronExpression.Value != "" {
-			return errors.New("Could not create custom backup schedule,connot pass cron expression and time interval in days both")
+			return errors.New("Unable to create custom backup schedule. You can't pass both the cron expression and time interval in days.")
 		}
 		backupScheduleSpec := *openapiclient.NewBackupScheduleSpec(backupSpec, scheduleSpec)
 
@@ -262,7 +262,7 @@ func EditBackupSchedule(ctx context.Context, plan Cluster, scheduleId string, ba
 
 		if err != nil {
 			b, _ := httputil.DumpResponse(res, true)
-			return errors.New("Could not create modify backup-schedule. " + string(b))
+			return errors.New("Unable to modify the backup schedule. " + string(b))
 		}
 	}
 	return nil
@@ -380,7 +380,7 @@ func (r resourceCluster) Create(ctx context.Context, req tfsdk.CreateResourceReq
 	if !r.p.configured {
 		resp.Diagnostics.AddError(
 			"Provider not configured",
-			"The provider hasn't been configured before apply, likely because it depends on an unknown value from another resource.",
+			"The provider wasn't configured before being applied, likely because it depends on an unknown value from another resource.",
 		)
 		return
 	}
@@ -398,21 +398,21 @@ func (r resourceCluster) Create(ctx context.Context, req tfsdk.CreateResourceReq
 
 	if (!plan.ClusterID.Unknown && !plan.ClusterID.Null) || plan.ClusterID.Value != "" {
 		resp.Diagnostics.AddError(
-			"Cluster ID provided when creating a cluster",
-			"The cluster_id field was provided even though a new cluster is being created. Make sure this field is not in the provider on creation.",
+			"Cluster ID provided for new cluster",
+			"The cluster_id was provided even though a new cluster is being created. Do not include this field in the provider when creating a cluster.",
 		)
 		return
 	}
 
 	projectId, getProjectOK, message := getProjectId(accountId, apiClient)
 	if !getProjectOK {
-		resp.Diagnostics.AddError("Could not get project ID", message)
+		resp.Diagnostics.AddError("Unable to get project ID ", message)
 		return
 	}
 
 	clusterSpec, clusterOK, message := createClusterSpec(ctx, plan, false)
 	if !clusterOK {
-		resp.Diagnostics.AddError("Could not create cluster spec", message)
+		resp.Diagnostics.AddError("Unable to create cluster spec", message)
 		return
 	}
 
@@ -445,13 +445,13 @@ func (r resourceCluster) Create(ctx context.Context, req tfsdk.CreateResourceReq
 				return nil
 			}
 		} else {
-			return retry.RetryableError(errors.New("Could not get cluster state: " + message))
+			return retry.RetryableError(errors.New("Unable to get cluster state: " + message))
 		}
 		return retry.RetryableError(errors.New("The cluster creation is in progress"))
 	})
 
 	if err != nil {
-		resp.Diagnostics.AddError("Could not create cluster ", "Timed out waiting for  cluster creation.")
+		resp.Diagnostics.AddError("Unable to create cluster ", "The operation timed out waiting for cluster creation.")
 		return
 	}
 
@@ -460,15 +460,15 @@ func (r resourceCluster) Create(ctx context.Context, req tfsdk.CreateResourceReq
 	scheduleResp, r1, err := apiClient.BackupApi.ListBackupSchedules(ctx, accountId, projectId).EntityId(clusterId).Execute()
 
 	if err != nil {
-		resp.Diagnostics.AddError("Could not fetch the backup schedule for the cluster "+r1.Status, "Try again")
+		resp.Diagnostics.AddError("Unable to fetch the backup schedule for the cluster "+r1.Status, "Try again")
 		return
 	}
 	if plan.BackupSchedule.State.Value != "" && plan.BackupSchedule.RetentionPeriodInDays.Value == 0 {
-		resp.Diagnostics.AddError("Could not create custom backup schedule", "pass both state and retention period in days ")
+		resp.Diagnostics.AddError("Unable to create custom backup schedule", "You must provide both state and retention period in days.")
 		return
 	}
 	if plan.BackupSchedule.State.Value == "" && plan.BackupSchedule.RetentionPeriodInDays.Value != 0 {
-		resp.Diagnostics.AddError("Could not create custom backup schedule", "pass both state and retention period in days ")
+		resp.Diagnostics.AddError("Unable to create custom backup schedule", "You must provide both state and retention period in days.")
 		return
 	}
 	list := scheduleResp.GetData()
@@ -492,7 +492,7 @@ func (r resourceCluster) Create(ctx context.Context, req tfsdk.CreateResourceReq
 		_, response, err := apiClient.ClusterApi.EditClusterNetworkAllowLists(ctx, accountId, projectId, clusterId).RequestBody(allowListIDs).Execute()
 		if err != nil {
 			b, _ := httputil.DumpResponse(response, true)
-			resp.Diagnostics.AddError("Could not assign allow list to cluster", string(b))
+			resp.Diagnostics.AddError("Unable to assign allow list to cluster", string(b))
 			return
 		}
 		allowListProvided = true
@@ -506,7 +506,7 @@ func (r resourceCluster) Create(ctx context.Context, req tfsdk.CreateResourceReq
 	if restoreRequired {
 		err = handleRestore(ctx, accountId, projectId, clusterId, backupId, apiClient)
 		if err != nil {
-			resp.Diagnostics.AddError("Error duing store: ", err.Error())
+			resp.Diagnostics.AddError("Error during store: ", err.Error())
 			return
 		}
 	}
@@ -518,7 +518,7 @@ func (r resourceCluster) Create(ctx context.Context, req tfsdk.CreateResourceReq
 
 	cluster, readOK, message := resourceClusterRead(accountId, projectId, clusterId, scheduleId, regions, allowListProvided, allowListIDs, false, apiClient)
 	if !readOK {
-		resp.Diagnostics.AddError("Could not read the state of the cluster", message)
+		resp.Diagnostics.AddError("Unable to read the state of the cluster ", message)
 		return
 	}
 
@@ -581,7 +581,7 @@ func (r resourceCluster) Read(ctx context.Context, req tfsdk.ReadResourceRequest
 
 	cluster, readOK, message := resourceClusterRead(state.AccountID.Value, state.ProjectID.Value, state.ClusterID.Value, state.BackupSchedule.ScheduleID.Value, regions, allowListProvided, allowListIDs, false, r.p.client)
 	if !readOK {
-		resp.Diagnostics.AddError("Could not read the state of the cluster", message)
+		resp.Diagnostics.AddError("Unable to read the state of the cluster", message)
 		return
 	}
 
@@ -734,7 +734,7 @@ func handleRestore(ctx context.Context, accountId string, projectId string, clus
 	restoreResp, response, err := apiClient.BackupApi.RestoreBackup(ctx, accountId, projectId).RestoreSpec(restoreSpec).Execute()
 	if err != nil {
 		b, _ := httputil.DumpResponse(response, true)
-		return errors.New("Could not restore backup to cluster: " + string(b))
+		return errors.New("Unable to restore backup to cluster: " + string(b))
 	}
 
 	restoreId := *restoreResp.Data.Info.Id
@@ -748,13 +748,13 @@ func handleRestore(ctx context.Context, accountId string, projectId string, clus
 				return nil
 			}
 		} else {
-			return retry.RetryableError(errors.New("Could not get restore state: " + message))
+			return retry.RetryableError(errors.New("Unable to get restore state: " + message))
 		}
 		return retry.RetryableError(errors.New("The backup restore is in progress"))
 	})
 
 	if err != nil {
-		return errors.New("Could not restore backup to the cluster: Timed out waiting for backup restore.")
+		return errors.New("Unable to restore backup to the cluster: The operation timed out waiting for backup restore.")
 	}
 
 	return nil
@@ -779,13 +779,13 @@ func (r resourceCluster) Update(ctx context.Context, req tfsdk.UpdateResourceReq
 
 	clusterSpec, clusterOK, message := createClusterSpec(ctx, plan, false)
 	if !clusterOK {
-		resp.Diagnostics.AddError("Could not create cluster spec", message)
+		resp.Diagnostics.AddError("Unable to create cluster specification ", message)
 		return
 	}
 
 	clusterVersion, versionOK, message := getClusterVersion(accountId, projectId, clusterId, apiClient)
 	if !versionOK {
-		resp.Diagnostics.AddError("Could not get cluster version", message)
+		resp.Diagnostics.AddError("Unable to get cluster version ", message)
 		return
 	}
 	clusterSpec.ClusterInfo.SetVersion(int32(clusterVersion))
@@ -794,11 +794,11 @@ func (r resourceCluster) Update(ctx context.Context, req tfsdk.UpdateResourceReq
 	if err != nil {
 		b, _ := httputil.DumpResponse(response, true)
 		if len(string(b)) > 10000 {
-			resp.Diagnostics.AddError("Could not edit cluster. NOTE: The length of the HTML output indicates your authentication token may be out of date. A truncated response follows:",
+			resp.Diagnostics.AddError("Unable to edit cluster. NOTE: The length of the HTML output indicates your authentication token may be out of date. A truncated response follows: ",
 				string(b)[:10000])
 			return
 		}
-		resp.Diagnostics.AddError("Could not edit cluster", string(b))
+		resp.Diagnostics.AddError("Unable to edit cluster ", string(b))
 		return
 	}
 
@@ -812,28 +812,28 @@ func (r resourceCluster) Update(ctx context.Context, req tfsdk.UpdateResourceReq
 				return nil
 			}
 		} else {
-			return retry.RetryableError(errors.New("Could not get cluster state: " + message))
+			return retry.RetryableError(errors.New("Unable to get cluster state: " + message))
 		}
-		return retry.RetryableError(errors.New("The cluster creation is in progress"))
+		return retry.RetryableError(errors.New("Cluster creation in progress"))
 	})
 
 	if err != nil {
-		resp.Diagnostics.AddError("Could not create cluster ", "Timed out waiting for  cluster creation.")
+		resp.Diagnostics.AddError("Unable to create cluster", "The operation timed out waiting for cluster creation.")
 		return
 	}
 
 	if plan.BackupSchedule.State.Value != "" && plan.BackupSchedule.RetentionPeriodInDays.Value == 0 {
-		resp.Diagnostics.AddError("Could not modify custom backup schedule", "pass both state and retention period in days ")
+		resp.Diagnostics.AddError("Unable to modify backup schedule", "You must provide both state and retention period in days.")
 		return
 	}
 	if plan.BackupSchedule.State.Value == "" && plan.BackupSchedule.RetentionPeriodInDays.Value != 0 {
-		resp.Diagnostics.AddError("Could not modify custom backup schedule", "pass both state and retention period in days ")
+		resp.Diagnostics.AddError("Unable to modify backup schedule", "You must provide both state and retention period in days.")
 		return
 	}
 	//Edit Backup Schedule
 	err = EditBackupSchedule(ctx, plan, scheduleId, backupDescription, accountId, projectId, clusterId, apiClient)
 	if err != nil {
-		resp.Diagnostics.AddError("Error duing store: ", err.Error())
+		resp.Diagnostics.AddError("Error during store: ", err.Error())
 		return
 	}
 	allowListIDs := []string{}
@@ -847,7 +847,7 @@ func (r resourceCluster) Update(ctx context.Context, req tfsdk.UpdateResourceReq
 		_, response, err := apiClient.ClusterApi.EditClusterNetworkAllowLists(context.Background(), accountId, projectId, clusterId).RequestBody(allowListIDs).Execute()
 		if err != nil {
 			b, _ := httputil.DumpResponse(response, true)
-			resp.Diagnostics.AddError("Could not assign allow list to cluster", string(b))
+			resp.Diagnostics.AddError("Unable to assign allow list to cluster ", string(b))
 			return
 		}
 		allowListProvided = true
@@ -868,7 +868,7 @@ func (r resourceCluster) Update(ctx context.Context, req tfsdk.UpdateResourceReq
 	if restoreRequired {
 		err = handleRestore(ctx, accountId, projectId, clusterId, backupId, apiClient)
 		if err != nil {
-			resp.Diagnostics.AddError("Error duing store: ", err.Error())
+			resp.Diagnostics.AddError("Error during store: ", err.Error())
 			return
 		}
 	}
@@ -880,7 +880,7 @@ func (r resourceCluster) Update(ctx context.Context, req tfsdk.UpdateResourceReq
 
 	cluster, readOK, message := resourceClusterRead(accountId, projectId, clusterId, scheduleId, regions, allowListProvided, allowListIDs, false, apiClient)
 	if !readOK {
-		resp.Diagnostics.AddError("Could not read the state of the cluster", message)
+		resp.Diagnostics.AddError("Unable to read the state of the cluster ", message)
 		return
 	}
 	tflog.Debug(ctx, "Cluster Update: Allow list IDs read from API server ", map[string]interface{}{
@@ -914,7 +914,7 @@ func (r resourceCluster) Delete(ctx context.Context, req tfsdk.DeleteResourceReq
 	response, err := apiClient.ClusterApi.DeleteCluster(context.Background(), accountId, projectId, clusterId).Execute()
 	if err != nil {
 		b, _ := httputil.DumpResponse(response, true)
-		resp.Diagnostics.AddError("Could not delete the cluster", string(b))
+		resp.Diagnostics.AddError("Unable to delete the cluster ", string(b))
 		return
 	}
 

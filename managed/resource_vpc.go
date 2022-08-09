@@ -33,7 +33,7 @@ func (r resourceVPCType) GetSchema(_ context.Context) (tfsdk.Schema, diag.Diagno
 				Computed:    true,
 			},
 			"vpc_id": {
-				Description: "The ID of the VPC. Filled automatically on creating a VPC. Used to get a specific VPC.",
+				Description: "The ID of the VPC. Created automatically when the VPC is created. Used to get a specific VPC.",
 				Type:        types.StringType,
 				Computed:    true,
 				Optional:    true,
@@ -44,12 +44,12 @@ func (r resourceVPCType) GetSchema(_ context.Context) (tfsdk.Schema, diag.Diagno
 				Required:    true,
 			},
 			"cloud": {
-				Description: "The cloud on which the VPC has to be created.",
+				Description: "The cloud provider (AWS or GCP) where the VPC is to be created.",
 				Type:        types.StringType,
 				Required:    true,
 			},
 			"global_cidr": {
-				Description: "The global CIDR of the VPC (allowed only on GCP).",
+				Description: "The global CIDR of the VPC (GCP only).",
 				Type:        types.StringType,
 				Optional:    true,
 			},
@@ -104,7 +104,7 @@ func (r resourceVPC) Create(ctx context.Context, req tfsdk.CreateResourceRequest
 	if !r.p.configured {
 		resp.Diagnostics.AddError(
 			"Provider not configured",
-			"The provider hasn't been configured before apply, likely because it depends on an unknown value from another resource.",
+			"The provider wasn't configured before being applied, likely because it depends on an unknown value from another resource.",
 		)
 		return
 	}
@@ -121,14 +121,14 @@ func (r resourceVPC) Create(ctx context.Context, req tfsdk.CreateResourceRequest
 
 	if (!plan.VPCID.Unknown && !plan.VPCID.Null) || plan.VPCID.Value != "" {
 		resp.Diagnostics.AddError(
-			"VPC ID provided when creating a vpc",
-			"The vpc_id field was provided even though a new vpc is being created. Make sure this field is not in the provider on creation.",
+			"VPC ID provided for new VPC",
+			"The vpc_id was provided even though a new VPC is being created. Do not include this field in the provider when creating a VPC.",
 		)
 		return
 	}
 	projectId, getProjectOK, message := getProjectId(accountId, apiClient)
 	if !getProjectOK {
-		resp.Diagnostics.AddError("Could not get project ID", message)
+		resp.Diagnostics.AddError("Unable to get the project ID", message)
 		return
 	}
 
@@ -146,8 +146,8 @@ func (r resourceVPC) Create(ctx context.Context, req tfsdk.CreateResourceRequest
 	// Simulating XOR by comparing boolean values
 	if globalCIDRPresent == regionCIDRInfoPresent {
 		resp.Diagnostics.AddError(
-			"Problem with CIDR input",
-			"Please provide exactly one parameter amongst Global CIDR and Region CIDR Info. Please don't provide both or none.",
+			"Global and region CIDR details provided",
+			"Specify either the global CIDR or the CIDR information for the regions. Don't provide both.",
 		)
 		return
 	}
@@ -157,8 +157,8 @@ func (r resourceVPC) Create(ctx context.Context, req tfsdk.CreateResourceRequest
 
 	if cloud != "GCP" && globalCIDRPresent {
 		resp.Diagnostics.AddError(
-			"Global CIDR not allowed",
-			"Global CIDR is allowed only for GCP.",
+			"Global CIDR specified",
+			"Global CIDR only applies to GCP.",
 		)
 		return
 	}
@@ -180,8 +180,8 @@ func (r resourceVPC) Create(ctx context.Context, req tfsdk.CreateResourceRequest
 		// This is not handled in the API yet
 		if len(regionMap) != len(plan.RegionCIDRInfo) {
 			resp.Diagnostics.AddError(
-				"Invalid Spec",
-				"Please ensure the regions are unique.",
+				"Duplicate regions",
+				"Ensure the regions are unique.",
 			)
 			return
 		}
@@ -196,7 +196,7 @@ func (r resourceVPC) Create(ctx context.Context, req tfsdk.CreateResourceRequest
 	vpcResp, response, err := apiClient.NetworkApi.CreateVpc(ctx, accountId, projectId).SingleTenantVpcRequest(vpcRequest).Execute()
 	if err != nil {
 		b, _ := httputil.DumpResponse(response, true)
-		resp.Diagnostics.AddError("Could not create vpc", string(b))
+		resp.Diagnostics.AddError("Unable to create VPC", string(b))
 		return
 	}
 	vpcId := vpcResp.Data.Info.Id
@@ -210,17 +210,17 @@ func (r resourceVPC) Create(ctx context.Context, req tfsdk.CreateResourceRequest
 				return nil
 			}
 		}
-		return retry.RetryableError(errors.New("The vpc creation didn't succeed yet"))
+		return retry.RetryableError(errors.New("VPC creation in progress."))
 	})
 
 	if err != nil {
-		resp.Diagnostics.AddError("Could not create vpc", "Timed out waiting for vpc creation to be successful.")
+		resp.Diagnostics.AddError("Unable to create VPC", "The operation timed out waiting for VPC creation.")
 		return
 	}
 
 	vpc, readOK, message := resourceVPCRead(accountId, projectId, vpcId, regionMap, apiClient)
 	if !readOK {
-		resp.Diagnostics.AddError("Could not read the state of the vpc", message)
+		resp.Diagnostics.AddError("Unable to read the state of the VPC", message)
 		return
 	}
 	if !globalCIDRPresent {
@@ -293,7 +293,7 @@ func (r resourceVPC) Read(ctx context.Context, req tfsdk.ReadResourceRequest, re
 
 	vpc, readOK, message := resourceVPCRead(state.AccountID.Value, state.ProjectID.Value, state.VPCID.Value, regionMap, r.p.client)
 	if !readOK {
-		resp.Diagnostics.AddError("Could not read the state of the vpc", message)
+		resp.Diagnostics.AddError("Unable to read the state of the VPC", message)
 		return
 	}
 
@@ -307,7 +307,7 @@ func (r resourceVPC) Read(ctx context.Context, req tfsdk.ReadResourceRequest, re
 // Update vpc
 func (r resourceVPC) Update(ctx context.Context, req tfsdk.UpdateResourceRequest, resp *tfsdk.UpdateResourceResponse) {
 
-	resp.Diagnostics.AddError("Could not update vpc.", "Updating a vpc is not supported yet. Please delete and recreate.")
+	resp.Diagnostics.AddError("Unable to update VPC.", "Updating VPCs is not currently supported. Delete and recreate the provider.")
 	return
 
 }
@@ -325,7 +325,7 @@ func (r resourceVPC) Delete(ctx context.Context, req tfsdk.DeleteResourceRequest
 	response, err := apiClient.NetworkApi.DeleteVpc(context.Background(), accountId, projectId, vpcId).Execute()
 	if err != nil {
 		b, _ := httputil.DumpResponse(response, true)
-		resp.Diagnostics.AddError("Could not delete the vpc", string(b))
+		resp.Diagnostics.AddError("Unable to delete the VPC", string(b))
 		return
 	}
 
@@ -338,11 +338,11 @@ func (r resourceVPC) Delete(ctx context.Context, req tfsdk.DeleteResourceRequest
 				return nil
 			}
 		}
-		return retry.RetryableError(errors.New("The vpc deletion didn't succeed yet"))
+		return retry.RetryableError(errors.New("VPC deletion in progress."))
 	})
 
 	if err != nil {
-		resp.Diagnostics.AddError("Could not delete vpc", "Timed out waiting for vpc deletion to be successful.")
+		resp.Diagnostics.AddError("Unable to delete VPC", "The operation timed out waiting for the VPC to be deleted.")
 		return
 	}
 

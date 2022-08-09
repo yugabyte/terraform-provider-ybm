@@ -75,7 +75,7 @@ func TestCreateAllowList(t *testing.T) {
 	cidrList := []string{"0.0.0.0/0"}
 	cidrListSchema := []types.String{{Value: "0.0.0.0/0"}}
 	allowListName := "allow-all"
-	allowListDescription := "Allows all the IP addresses"
+	allowListDescription := "Allow connections from any IP address"
 	allowListID := "test-allow-list-id"
 	allowList := getMockAllowList(cfg, mockNetworkApi, mockProjectApi)
 	listProjectsRequest := getListProjectsRequest(ctx, cfg, accountID, mockProjectApi)
@@ -229,7 +229,7 @@ func TestUpdateAllowList(t *testing.T) {
 	req := tfsdk.UpdateResourceRequest{}
 	resp := &tfsdk.UpdateResourceResponse{}
 	diags := diag.Diagnostics{}
-	diags.AddError("Could not update allow list.", "Updating an allow list is not supported yet. Please delete and recreate.")
+	diags.AddError("Unable to update allow list", "Updating allow lists is not currently supported. Delete and recreate the provider.")
 
 	testCases := []struct {
 		TestName            string

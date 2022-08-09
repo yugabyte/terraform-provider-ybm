@@ -29,7 +29,7 @@ func (r resourceAllowListType) GetSchema(_ context.Context) (tfsdk.Schema, diag.
 				Computed:    true,
 			},
 			"allow_list_id": {
-				Description: "The id of the allow list. Filled automatically on creating an allow list. Use to get a specific allow list.",
+				Description: "The ID of the allow list. Created automatically when an allow list is created. Use this ID to get a specific allow list.",
 				Type:        types.StringType,
 				Computed:    true,
 				Optional:    true,
@@ -40,19 +40,19 @@ func (r resourceAllowListType) GetSchema(_ context.Context) (tfsdk.Schema, diag.
 				Required:    true,
 			},
 			"allow_list_description": {
-				Description: "The name of the allow list.",
+				Description: "The description of the allow list.",
 				Type:        types.StringType,
 				Required:    true,
 			},
 			"cidr_list": {
-				Description: "The CIDR list of the allow list",
+				Description: "The CIDR list of the allow list.",
 				Type: types.SetType{
 					ElemType: types.StringType,
 				},
 				Required: true,
 			},
 			"cluster_ids": {
-				Description: "The list of cluster IDs the allow list is associated with",
+				Description: "List of the IDs of the clusters the allow list is assigned to.",
 				Type: types.SetType{
 					ElemType: types.StringType,
 				},
@@ -94,7 +94,7 @@ func (r resourceAllowList) Create(ctx context.Context, req tfsdk.CreateResourceR
 	if !r.p.configured {
 		resp.Diagnostics.AddError(
 			"Provider not configured",
-			"The provider hasn't been configured before apply, likely because it depends on an unknown value from another resource.",
+			"The provider wasn't configured before being applied, likely because it depends on an unknown value from another resource.",
 		)
 		return
 	}
@@ -112,15 +112,15 @@ func (r resourceAllowList) Create(ctx context.Context, req tfsdk.CreateResourceR
 
 	if (!plan.AllowListID.Unknown && !plan.AllowListID.Null) || plan.AllowListID.Value != "" {
 		resp.Diagnostics.AddError(
-			"Allow List ID provided when creating an allow list",
-			"The allow_list_id field was provided even though a new allow_list is being created. Make sure this field is not in the provider on creation.",
+			"Allow list ID provided for new allow list",
+			"The allow_list_id was provided even though a new allow list is being created. Do not include this field in the provider when creating an allow list.",
 		)
 		return
 	}
 
 	projectId, getProjectOK, message := getProjectId(accountId, apiClient)
 	if !getProjectOK {
-		resp.Diagnostics.AddError("Could not get project ID", message)
+		resp.Diagnostics.AddError("Unable to get project ID ", message)
 		return
 	}
 
@@ -136,14 +136,14 @@ func (r resourceAllowList) Create(ctx context.Context, req tfsdk.CreateResourceR
 	allowListResp, response, err := apiClient.NetworkApi.CreateNetworkAllowList(context.Background(), accountId, projectId).NetworkAllowListSpec(networkAllowListSpec).Execute()
 	if err != nil {
 		b, _ := httputil.DumpResponse(response, true)
-		resp.Diagnostics.AddError("Could not create allow list", string(b))
+		resp.Diagnostics.AddError("Unable to create allow list ", string(b))
 		return
 	}
 	allowListId := allowListResp.Data.Info.Id
 
 	allowList, readOK, message := resourceAllowListRead(accountId, projectId, allowListId, apiClient)
 	if !readOK {
-		resp.Diagnostics.AddError("Could not read the state of the allow list", message)
+		resp.Diagnostics.AddError("Unable to read the state of the allow list ", message)
 		return
 	}
 	tflog.Debug(ctx, "Allow List Create: Allow list on read from API server", map[string]interface{}{
@@ -207,7 +207,7 @@ func (r resourceAllowList) Read(ctx context.Context, req tfsdk.ReadResourceReque
 
 	allowList, readOK, message := resourceAllowListRead(state.AccountID.Value, state.ProjectID.Value, state.AllowListID.Value, r.p.client)
 	if !readOK {
-		resp.Diagnostics.AddError("Could not read the state of the allow list", message)
+		resp.Diagnostics.AddError("Unable to read the state of the allow list ", message)
 		return
 	}
 	tflog.Debug(ctx, "Allow List Read: Allow list on read from API server", map[string]interface{}{
@@ -223,7 +223,7 @@ func (r resourceAllowList) Read(ctx context.Context, req tfsdk.ReadResourceReque
 // Update allow list
 func (r resourceAllowList) Update(ctx context.Context, req tfsdk.UpdateResourceRequest, resp *tfsdk.UpdateResourceResponse) {
 
-	resp.Diagnostics.AddError("Could not update allow list.", "Updating an allow list is not supported yet. Please delete and recreate.")
+	resp.Diagnostics.AddError("Unable to update allow list", "Updating allow lists is not currently supported. Delete and recreate the provider.")
 	return
 
 }
@@ -241,7 +241,7 @@ func (r resourceAllowList) Delete(ctx context.Context, req tfsdk.DeleteResourceR
 	response, err := apiClient.NetworkApi.DeleteNetworkAllowList(context.Background(), accountId, projectId, allowListId).Execute()
 	if err != nil {
 		b, _ := httputil.DumpResponse(response, true)
-		resp.Diagnostics.AddError("Could not delete the allow list", string(b))
+		resp.Diagnostics.AddError("Unable to delete the allow list ", string(b))
 		return
 	}
 

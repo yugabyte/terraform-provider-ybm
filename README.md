@@ -2,7 +2,8 @@
 
 The Yugabyte Cloud provider is used to create, read, update, and delete clusters on the cloud. Any cloud site will work as long as the API is compatible (cloudportal, devcloud, localhost, etc.)
 
-## Build Provier
+## Build Provider
+
 Run the following command to build the provider
 
 ```shell
@@ -20,6 +21,7 @@ make install
 Then, run the following command to initialize the workspace and apply the sample configuration.
 
 **Note: to run this without errors you will need to do the following**
+
 - change the email and password in `examples/main.tf` according to your local configuration
 - have an instance of the apiserver running locally
 
@@ -27,8 +29,8 @@ Then, run the following command to initialize the workspace and apply the sample
 cd examples && ./run_example.sh
 ```
 
-
 ## Generate Documentation
+
 Install tfplugindocs from [here](https://github.com/hashicorp/terraform-plugin-docs) 
 ```shell
 make doc

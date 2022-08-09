@@ -21,7 +21,7 @@ type resourceBackupType struct{}
 func (r resourceBackupType) GetSchema(_ context.Context) (tfsdk.Schema, diag.Diagnostics) {
 	return tfsdk.Schema{
 		Description: `The resource to create a manual backup of tables in a particular cluster. 
-		Please ensure that the cluster for which the backup is being taken has some data populated.`,
+		Ensure that the cluster for which the backup is being taken has data.`,
 		Attributes: map[string]tfsdk.Attribute{
 			"account_id": {
 				Description: "The ID of the account this backup belongs to.",
@@ -29,7 +29,7 @@ func (r resourceBackupType) GetSchema(_ context.Context) (tfsdk.Schema, diag.Dia
 				Required:    true,
 			},
 			"cluster_id": {
-				Description: "The ID of the cluster that needs to be backed up.",
+				Description: "The ID of the cluster to be backed up.",
 				Type:        types.StringType,
 				Required:    true,
 			},
@@ -39,7 +39,7 @@ func (r resourceBackupType) GetSchema(_ context.Context) (tfsdk.Schema, diag.Dia
 				Computed:    true,
 			},
 			"backup_id": {
-				Description: "The id of the backup. Filled automatically on creating a backup. Used to get a specific backup.",
+				Description: "The ID of the backup. Created automatically when the backup is created. Used to get a specific backup.",
 				Type:        types.StringType,
 				Computed:    true,
 				Optional:    true,
@@ -55,12 +55,12 @@ func (r resourceBackupType) GetSchema(_ context.Context) (tfsdk.Schema, diag.Dia
 				Required:    true,
 			},
 			"most_recent": {
-				Description: "Set to true if the ID of the most recent backup is needed.",
+				Description: "Set to true to fetch the most recent backup.",
 				Type:        types.BoolType,
 				Optional:    true,
 			},
 			"timestamp": {
-				Description: "The timestamp of the backup that needs to be fetched",
+				Description: "The timestamp of the backup to be fetched",
 				Type:        types.StringType,
 				Optional:    true,
 			},
@@ -100,7 +100,7 @@ func (r resourceBackup) Create(ctx context.Context, req tfsdk.CreateResourceRequ
 	if !r.p.configured {
 		resp.Diagnostics.AddError(
 			"Provider not configured",
-			"The provider hasn't been configured before apply, likely because it depends on an unknown value from another resource.",
+			"The provider wasn't configured before being applied, likely because it depends on an unknown value from another resource.",
 		)
 		return
 	}
@@ -118,15 +118,15 @@ func (r resourceBackup) Create(ctx context.Context, req tfsdk.CreateResourceRequ
 
 	if (!plan.BackupID.Unknown && !plan.BackupID.Null) || plan.BackupID.Value != "" {
 		resp.Diagnostics.AddError(
-			"Backup ID provided when creating a backup",
-			"The backup_id field was provided even though a new backup is being created. Make sure this field is not in the provider on creation.",
+			"Backup ID provided for new backup",
+			"The backup_id was provided even though a new backup is being created. Do not include this field in the provider when creating a backup.",
 		)
 		return
 	}
 
 	projectId, getProjectOK, message := getProjectId(accountId, apiClient)
 	if !getProjectOK {
-		resp.Diagnostics.AddError("Could not get project ID", message)
+		resp.Diagnostics.AddError("Unable to get the project ID ", message)
 		return
 	}
 
@@ -141,7 +141,7 @@ func (r resourceBackup) Create(ctx context.Context, req tfsdk.CreateResourceRequ
 	backupResp, response, err := apiClient.BackupApi.CreateBackup(context.Background(), accountId, projectId).BackupSpec(backupSpec).Execute()
 	if err != nil {
 		b, _ := httputil.DumpResponse(response, true)
-		resp.Diagnostics.AddError("Could not create backup", string(b))
+		resp.Diagnostics.AddError("Unable to create backup ", string(b))
 		return
 	}
 	backupId := *(backupResp.Data.Info.Id)
@@ -155,17 +155,17 @@ func (r resourceBackup) Create(ctx context.Context, req tfsdk.CreateResourceRequ
 				return nil
 			}
 		}
-		return retry.RetryableError(errors.New("The backup creation didn't succeed yet"))
+		return retry.RetryableError(errors.New("The backup hasn't finished."))
 	})
 
 	if err != nil {
-		resp.Diagnostics.AddError("Could not create backup", "Timed out waiting for backup creation to be successful.")
+		resp.Diagnostics.AddError("Unable to create backup", "The operation timed out waiting for the backup to complete.")
 		return
 	}
 
 	backup, readOK, message := resourceBackupRead(accountId, projectId, backupId, apiClient)
 	if !readOK {
-		resp.Diagnostics.AddError("Could not read the state of the backup", message)
+		resp.Diagnostics.AddError("Unable to read the state of the backup ", message)
 		return
 	}
 
@@ -208,7 +208,7 @@ func (r resourceBackup) Read(ctx context.Context, req tfsdk.ReadResourceRequest,
 
 	backup, readOK, message := resourceBackupRead(state.AccountID.Value, state.ProjectID.Value, state.BackupID.Value, r.p.client)
 	if !readOK {
-		resp.Diagnostics.AddError("Could not read the state of the backup", message)
+		resp.Diagnostics.AddError("Unable to read the state of the backup ", message)
 		return
 	}
 
@@ -222,9 +222,8 @@ func (r resourceBackup) Read(ctx context.Context, req tfsdk.ReadResourceRequest,
 // Update backup
 func (r resourceBackup) Update(ctx context.Context, req tfsdk.UpdateResourceRequest, resp *tfsdk.UpdateResourceResponse) {
 
-	resp.Diagnostics.AddError("Could not update backup.", "Updating a backup is not supported yet. Please delete and recreate.")
+	resp.Diagnostics.AddError("Unable to update backup.", "Updating backups is not currently supported. Delete and recreate the provider.")
 	return
-
 }
 
 // Delete backup
@@ -253,11 +252,11 @@ func (r resourceBackup) Delete(ctx context.Context, req tfsdk.DeleteResourceRequ
 				return nil
 			}
 		}
-		return retry.RetryableError(errors.New("The backup deletion didn't succeed yet"))
+		return retry.RetryableError(errors.New("Backup deletion hasn't finished."))
 	})
 
 	if err != nil {
-		resp.Diagnostics.AddError("Could not delete backup", "Timed out waiting for backup deletion to be successful.")
+		resp.Diagnostics.AddError("Unable to delete backup", "The operation timed out waiting for the backup deletion to complete.")
 		return
 	}
 
