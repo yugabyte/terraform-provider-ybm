@@ -241,7 +241,7 @@ func (r dataClusterName) Read(ctx context.Context, req tfsdk.ReadDataSourceReque
 
 	if err != nil {
 		b, _ := httputil.DumpResponse(r1, true)
-		resp.Diagnostics.AddError("Unable to extract the info of cluster info", string(b))
+		resp.Diagnostics.AddError("Unable to extract the following cluster information: ", string(b))
 		return
 	}
 
