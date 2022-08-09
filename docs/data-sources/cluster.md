@@ -32,10 +32,10 @@ data "ybm_cluster" "example_cluster"{
 
 ### Read-Only
 
-- `backup_schedule` (Attributes) (see [below for nested schema](#nestedatt--backup_schedule))
-- `cloud_type` (String) The cloud provider where the cluster is deployed: AWS or GCP. Default GCP.
-- `cluster_allow_list_ids` (List of String) List of IDs of the allow lists assigned to the cluster.
-- `cluster_id` (String) The ID of the cluster. Created automatically when a cluster is created. Used to get a specific cluster.
+- `backup_schedules` (Attributes List) (see [below for nested schema](#nestedatt--backup_schedules))
+- `cloud_type` (String) Which cloud the cluster is deployed in: AWS or GCP. Default GCP.
+- `cluster_allow_list_ids` (List of String) The list of IDs of allow lists associated with the cluster.
+- `cluster_id` (String) The id of the cluster. Filled automatically on creating a cluster. Use to get a specific cluster.
 - `cluster_info` (Attributes) (see [below for nested schema](#nestedatt--cluster_info))
 - `cluster_region_info` (Attributes List) (see [below for nested schema](#nestedatt--cluster_region_info))
 - `cluster_tier` (String) FREE (Sandbox) or PAID (Dedicated).
@@ -46,8 +46,8 @@ data "ybm_cluster" "example_cluster"{
 - `node_config` (Attributes) (see [below for nested schema](#nestedatt--node_config))
 - `restore_backup_id` (String) The ID of the backup to be restored to the cluster.
 
-<a id="nestedatt--backup_schedule"></a>
-### Nested Schema for `backup_schedule`
+<a id="nestedatt--backup_schedules"></a>
+### Nested Schema for `backup_schedules`
 
 Read-Only:
 
