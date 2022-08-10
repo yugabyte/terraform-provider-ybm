@@ -45,4 +45,4 @@ make doc
 
 ## Release to Terraform Public Registry
 
-The information about creating a pre-release that doesn't appear in the documentation yet available in the public Terraform registry for someone willing to try explicity can be found [here](https://www.terraform.io/registry/providers/publishing#creating-a-github-release)
+Prerelease versions are supported (available if explicitly defined but not chosen automatically) with a hyphen (-) delimiter, such as v1.2.3-pre. More information can be found [here](https://www.terraform.io/registry/providers/publishing#creating-a-github-release).
