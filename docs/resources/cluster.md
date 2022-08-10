@@ -1,18 +1,18 @@
 ---
 page_title: "ybm_cluster Resource - YugabyteDB Managed"
 description: |-
-  The resource to create a YugabyteDB cluster. This resource can be used to create both
-          single and multi-region clusters. The resource can also be used to bind allow lists to the cluster
-          being created and restore previously taken backups to the cluster being created. The resource can
-          also be used to modify the backup schedule of the cluster being created.
+  The resource to create a YugabyteDB cluster. Use this resource to create both
+          single- and multi-region clusters. You can also use this resource to bind allow lists to the cluster
+          being created; restore previously taken backups to the cluster being created;
+          and modify the backup schedule of the cluster being created.
 ---
 
 # ybm_cluster (Resource)
 
-The resource to create a YugabyteDB cluster. This resource can be used to create both 
-		single and multi-region clusters. The resource can also be used to bind allow lists to the cluster 
-		being created and restore previously taken backups to the cluster being created. The resource can 
-		also be used to modify the backup schedule of the cluster being created.
+The resource to create a YugabyteDB cluster. Use this resource to create both 
+		single- and multi-region clusters. You can also use this resource to bind allow lists to the cluster 
+		being created; restore previously taken backups to the cluster being created; 
+		and modify the backup schedule of the cluster being created.
 
 
 ## Example Usage
@@ -119,7 +119,7 @@ resource "ybm_cluster" "multi_region_cluster" {
 - `account_id` (String) The ID of the account this cluster belongs to.
 - `cluster_name` (String) The name of the cluster.
 - `cluster_region_info` (Attributes List) (see [below for nested schema](#nestedatt--cluster_region_info))
-- `cluster_tier` (String) FREE or PAID.
+- `cluster_tier` (String) FREE (Sandbox) or PAID (Dedicated).
 - `cluster_type` (String) The type of the cluster.
 - `credentials` (Attributes) (see [below for nested schema](#nestedatt--credentials))
 - `node_config` (Attributes) (see [below for nested schema](#nestedatt--node_config))
@@ -127,11 +127,11 @@ resource "ybm_cluster" "multi_region_cluster" {
 ### Optional
 
 - `backup_schedule` (Attributes) (see [below for nested schema](#nestedatt--backup_schedule))
-- `cloud_type` (String) Which cloud the cluster is deployed in: AWS or GCP. Default GCP.
-- `cluster_allow_list_ids` (List of String) The list of IDs of allow lists associated with the cluster.
-- `cluster_id` (String) The id of the cluster. Filled automatically on creating a cluster. Use to get a specific cluster.
+- `cloud_type` (String) The cloud provider where the cluster is deployed: AWS or GCP. Default GCP.
+- `cluster_allow_list_ids` (List of String) List of IDs of the allow lists assigned to the cluster.
+- `cluster_id` (String) The ID of the cluster. Created automatically when a cluster is created. Used to get a specific cluster.
 - `fault_tolerance` (String) The fault tolerance of the cluster.
-- `restore_backup_id` (String) The backup ID to be restored to the cluster.
+- `restore_backup_id` (String) The ID of the backup to be restored to the cluster.
 
 ### Read-Only
 
@@ -157,10 +157,10 @@ Optional:
 
 Required:
 
-- `ycql_password` (String, Sensitive) YCQL Password for the YugabyteDB Managed cluster. Note that this will be stored in the state file.
-- `ycql_username` (String) YCQL Username for the YugabyteDB Managed cluster.
-- `ysql_password` (String, Sensitive) YSQL Password for the YugabyteDB Managed cluster. Note that this will be stored in the state file.
-- `ysql_username` (String) YSQL Username for the YugabyteDB Managed cluster.
+- `ycql_password` (String, Sensitive) YCQL password for the database. Note that this will be stored in the state file.
+- `ycql_username` (String) YCQL username for the database.
+- `ysql_password` (String, Sensitive) YSQL password for the database. Note that this will be stored in the state file.
+- `ysql_username` (String) YSQL username for the database.
 
 
 <a id="nestedatt--node_config"></a>
@@ -179,11 +179,11 @@ Optional:
 Optional:
 
 - `backup_description` (String) The description of the backup schedule.
-- `cron_expression` (String) The cron expression for  backup schedule
+- `cron_expression` (String) The cron expression for the backup schedule
 - `retention_period_in_days` (Number) The retention period of the backup schedule.
-- `schedule_id` (String) The id of the backup schedule. Filled automatically on creating a backup schedule. Used to get a specific backup schedule.
-- `state` (String) The state for  backup schedule. It is use to pause or resume the backup schedule. It can have value ACTIVE or PAUSED only.
-- `time_interval_in_days` (Number) The time interval in days for backup schedule.
+- `schedule_id` (String) The ID of the backup schedule. Created automatically when the backup schedule is created. Used to get a specific backup schedule.
+- `state` (String) The state of the backup schedule. Used to pause or resume the backup schedule. Valid values are ACTIVE or PAUSED.
+- `time_interval_in_days` (Number) The time interval in days for the backup schedule.
 
 
 <a id="nestedatt--cluster_info"></a>

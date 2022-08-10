@@ -1,14 +1,14 @@
 ---
 page_title: "ybm_read_replicas Resource - YugabyteDB Managed"
 description: |-
-  The resource to create read replicas of a particular cluster. Multiple read replicas
-          in different regions can be created using a single resource of this kind.
+  The resource to create read replicas of a particular cluster. You can create multiple read replicas
+          in different regions using a single resource.
 ---
 
 # ybm_read_replicas (Resource)
 
-The resource to create read replicas of a particular cluster. Multiple read replicas
-		in different regions can be created using a single resource of this kind.
+The resource to create read replicas of a particular cluster. You can create multiple read replicas
+		in different regions using a single resource.
 
 
 ## Example Usage
@@ -41,7 +41,7 @@ resource "ybm_read_replicas" "example_read_replica" {
 
 - `account_id` (String) The ID of the account this read replica belongs to.
 - `primary_cluster_id` (String) The primary cluster ID for the read replica.
-- `read_replicas_info` (Attributes Set) The information about multiple read replicas. (see [below for nested schema](#nestedatt--read_replicas_info))
+- `read_replicas_info` (Attributes Set) Information about multiple read replicas. (see [below for nested schema](#nestedatt--read_replicas_info))
 
 ### Read-Only
 
@@ -56,16 +56,16 @@ Required:
 - `num_nodes` (Number) The number of nodes of the read replica.
 - `num_replicas` (Number) The number of replicas of the read replica.
 - `region` (String) The region of the read replica.
-- `vpc_id` (String) The VPC ID of the read replica.
+- `vpc_id` (String) The ID of the VPC where the read replica is deployed.
 
 Optional:
 
-- `cloud_type` (String) The cloud the read replica is deployed in: AWS or GCP. Default GCP.
+- `cloud_type` (String) The cloud provider where the read replica is deployed: AWS or GCP. Default GCP.
 
 Read-Only:
 
-- `endpoint` (String) The endpoint of the read replica. Filled automatically on creating a read replica..
-- `read_replica_id` (String) The id of the read replica. Filled automatically on creating a read replica. Use to get a specific read replica.
+- `endpoint` (String) The endpoint of the read replica. Created automatically when a read replica is created.
+- `read_replica_id` (String) The ID of the read replica. Created automatically when a read replica is created. Used to get a specific read replica.
 
 <a id="nestedatt--read_replicas_info--node_config"></a>
 ### Nested Schema for `read_replicas_info.node_config`

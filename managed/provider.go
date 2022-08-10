@@ -31,18 +31,18 @@ func (p *provider) GetSchema(_ context.Context) (tfsdk.Schema, diag.Diagnostics)
 		Description: "Terraform provider for YugabyteDB Managed",
 		Attributes: map[string]tfsdk.Attribute{
 			"auth_token": {
-				Description: "The authentication token of the account this cluster belongs to.",
+				Description: "The authentication token (API key) of the account this cluster belongs to.",
 				Type:        types.StringType,
 				Required:    true,
 				Sensitive:   true,
 			},
 			"host": {
-				Description: "The environment this cluster is being created in, e.g. cloud.yugabyte.com ",
+				Description: "The environment this cluster is being created in, for example, cloud.yugabyte.com ",
 				Type:        types.StringType,
 				Required:    true,
 			},
 			"use_secure_host": {
-				Description: "Whether or not the host requires a secure connection (HTTPS).",
+				Description: "Set to true to use a secure connection (HTTPS) to the host.",
 				Type:        types.BoolType,
 				Optional:    true,
 			},
@@ -68,7 +68,7 @@ func (p *provider) Configure(ctx context.Context, req tfsdk.ConfigureProviderReq
 	var auth_token string
 	if config.AuthToken.Unknown {
 		resp.Diagnostics.AddWarning(
-			"Unable to create client", "Cannot use unknown value as auth token",
+			"Unable to create client", "The authentication token is invalid.",
 		)
 		return
 	}
@@ -79,14 +79,14 @@ func (p *provider) Configure(ctx context.Context, req tfsdk.ConfigureProviderReq
 	}
 	if auth_token == "" {
 		resp.Diagnostics.AddError(
-			"Unable to find auth token", "Auth token cannot be an empty string",
+			"Missing authentication token", "You must provide an authentication token.",
 		)
 	}
 
 	var host string
 	if config.Host.Unknown {
 		resp.Diagnostics.AddWarning(
-			"Unable to create client", "Cannot use unknown value as host",
+			"Unable to create client", "The provided host is not recognized.",
 		)
 		return
 	}
@@ -102,7 +102,7 @@ func (p *provider) Configure(ctx context.Context, req tfsdk.ConfigureProviderReq
 	use_secure_host := true
 	if config.UseSecureHost.Unknown {
 		resp.Diagnostics.AddWarning(
-			"Unable to create client", "Cannot use unknown value as use_secure_host",
+			"Unable to create client", "You must specify use_secure_host; valid values are true or false.",
 		)
 		return
 	}

@@ -20,8 +20,8 @@ type resourceReadReplicasType struct{}
 
 func (r resourceReadReplicasType) GetSchema(_ context.Context) (tfsdk.Schema, diag.Diagnostics) {
 	return tfsdk.Schema{
-		Description: `The resource to create read replicas of a particular cluster. Multiple read replicas
-		in different regions can be created using a single resource of this kind.`,
+		Description: `The resource to create read replicas of a particular cluster. You can create multiple read replicas
+		in different regions using a single resource.`,
 		Attributes: map[string]tfsdk.Attribute{
 			"account_id": {
 				Description: "The ID of the account this read replica belongs to.",
@@ -35,15 +35,15 @@ func (r resourceReadReplicasType) GetSchema(_ context.Context) (tfsdk.Schema, di
 			},
 			"read_replicas_info": {
 				Required:    true,
-				Description: "The information about multiple read replicas.",
+				Description: "Information about multiple read replicas.",
 				Attributes: tfsdk.SetNestedAttributes(map[string]tfsdk.Attribute{
 					"read_replica_id": {
-						Description: "The id of the read replica. Filled automatically on creating a read replica. Use to get a specific read replica.",
+						Description: "The ID of the read replica. Created automatically when a read replica is created. Used to get a specific read replica.",
 						Type:        types.StringType,
 						Computed:    true,
 					},
 					"cloud_type": {
-						Description: "The cloud the read replica is deployed in: AWS or GCP. Default GCP.",
+						Description: "The cloud provider where the read replica is deployed: AWS or GCP. Default GCP.",
 						Type:        types.StringType,
 						Optional:    true,
 						Computed:    true,
@@ -64,7 +64,7 @@ func (r resourceReadReplicasType) GetSchema(_ context.Context) (tfsdk.Schema, di
 						Required:    true,
 					},
 					"vpc_id": {
-						Description: "The VPC ID of the read replica.",
+						Description: "The ID of the VPC where the read replica is deployed.",
 						Type:        types.StringType,
 						Required:    true,
 					},
@@ -87,7 +87,7 @@ func (r resourceReadReplicasType) GetSchema(_ context.Context) (tfsdk.Schema, di
 						}),
 					},
 					"endpoint": {
-						Description: "The endpoint of the read replica. Filled automatically on creating a read replica..",
+						Description: "The endpoint of the read replica. Created automatically when a read replica is created.",
 						Type:        types.StringType,
 						Computed:    true,
 					},
@@ -163,7 +163,7 @@ func (r resourceReadReplicas) Create(ctx context.Context, req tfsdk.CreateResour
 	if !r.p.configured {
 		resp.Diagnostics.AddError(
 			"Provider not configured",
-			"The provider hasn't been configured before apply, likely because it depends on an unknown value from another resource.",
+			"The provider wasn't configured before being applied, likely because it depends on an unknown value from another resource.",
 		)
 		return
 	}
@@ -177,8 +177,8 @@ func (r resourceReadReplicas) Create(ctx context.Context, req tfsdk.CreateResour
 
 	if plan.ReadReplicasInfo == nil {
 		resp.Diagnostics.AddError(
-			"Error while create read replica",
-			"Atleast one read replica must be specified.",
+			"No read replica specified",
+			"You must specify at least one read replica.",
 		)
 		return
 	}
@@ -187,7 +187,7 @@ func (r resourceReadReplicas) Create(ctx context.Context, req tfsdk.CreateResour
 	accountId := plan.AccountID.Value
 	projectId, getProjectOK, message := getProjectId(accountId, apiClient)
 	if !getProjectOK {
-		resp.Diagnostics.AddError("Could not get project ID", message)
+		resp.Diagnostics.AddError("Unable to get project ID", message)
 		return
 	}
 	clusterId := plan.PrimaryClusterID.Value
@@ -198,11 +198,11 @@ func (r resourceReadReplicas) Create(ctx context.Context, req tfsdk.CreateResour
 	if err != nil {
 		b, _ := httputil.DumpResponse(response, true)
 		if len(string(b)) > 10000 {
-			resp.Diagnostics.AddError("Could not create read replicas. NOTE: The length of the HTML output indicates your authentication token may be out of date. A truncated response follows:",
+			resp.Diagnostics.AddError("Unable to create read replicas. NOTE: The length of the HTML output indicates your authentication token may be out of date. A truncated response follows: ",
 				string(b)[:10000])
 			return
 		}
-		resp.Diagnostics.AddError("Could not create read replicas", string(b))
+		resp.Diagnostics.AddError("Unable to create read replicas ", string(b))
 		return
 	}
 
@@ -216,19 +216,19 @@ func (r resourceReadReplicas) Create(ctx context.Context, req tfsdk.CreateResour
 				return nil
 			}
 		} else {
-			return retry.RetryableError(errors.New("Could not get the primary cluster's state: " + message))
+			return retry.RetryableError(errors.New("Unable to get the primary cluster's state: " + message))
 		}
-		return retry.RetryableError(errors.New("The read replicas creation is in progress"))
+		return retry.RetryableError(errors.New("Read replica creation in progress"))
 	})
 
 	if err != nil {
-		resp.Diagnostics.AddError("Could not create read replicas ", "Timed out waiting for read replicas creation.")
+		resp.Diagnostics.AddError("Unable to create read replicas ", "The operation timed out waiting for read replica creation.")
 		return
 	}
 
 	readReplicas, readOK, message := resourceReadReplicasRead(accountId, projectId, clusterId, apiClient)
 	if !readOK {
-		resp.Diagnostics.AddError("Could not read the state of the read replicas", message)
+		resp.Diagnostics.AddError("Unable to read the state of the read replicas", message)
 		return
 	}
 
@@ -249,7 +249,7 @@ func (r resourceReadReplicas) Read(ctx context.Context, req tfsdk.ReadResourceRe
 
 	readReplicas, readOK, message := resourceReadReplicasRead(accountId, projectId, clusterId, r.p.client)
 	if !readOK {
-		resp.Diagnostics.AddError("Could not read the state of the read replica", message)
+		resp.Diagnostics.AddError("Unable to read the state of the read replica", message)
 		return
 	}
 
@@ -298,7 +298,7 @@ func resourceReadReplicasRead(accountId string, projectId string, clusterId stri
 
 // Update read replicas
 func (r resourceReadReplicas) Update(ctx context.Context, req tfsdk.UpdateResourceRequest, resp *tfsdk.UpdateResourceResponse) {
-	resp.Diagnostics.AddError("Could not update read replicas.", "Updating read replicas is not supported yet. Please delete and recreate.")
+	resp.Diagnostics.AddError("Unable to update read replicas.", "Updating read replicas is not currently supported. Delete and recreate the provider.")
 	return
 }
 
@@ -315,7 +315,7 @@ func (r resourceReadReplicas) Delete(ctx context.Context, req tfsdk.DeleteResour
 	listReadReplicasResp, response, err := apiClient.ReadReplicaApi.ListReadReplicas(context.Background(), accountId, projectId, clusterId).Execute()
 	if err != nil {
 		b, _ := httputil.DumpResponse(response, true)
-		resp.Diagnostics.AddError("Could not list the read replicas", string(b))
+		resp.Diagnostics.AddError("Unable to list the read replicas", string(b))
 		return
 	}
 
@@ -325,7 +325,7 @@ func (r resourceReadReplicas) Delete(ctx context.Context, req tfsdk.DeleteResour
 		response, err := apiClient.ReadReplicaApi.DeleteReadReplica(ctx, accountId, projectId, clusterId, readReplicaId).Execute()
 		if err != nil {
 			b, _ := httputil.DumpResponse(response, true)
-			resp.Diagnostics.AddError("Could not delete the read replicas", string(b))
+			resp.Diagnostics.AddError("Unable to delete the read replicas", string(b))
 			return
 		}
 	}
@@ -340,13 +340,13 @@ func (r resourceReadReplicas) Delete(ctx context.Context, req tfsdk.DeleteResour
 				return nil
 			}
 		} else {
-			return retry.RetryableError(errors.New("Could not get the primary cluster's state: " + message))
+			return retry.RetryableError(errors.New("Unable to get the primary cluster's state: " + message))
 		}
-		return retry.RetryableError(errors.New("The read replicas deletion is in progress"))
+		return retry.RetryableError(errors.New("Read replica deletion in progress."))
 	})
 
 	if err != nil {
-		resp.Diagnostics.AddError("Could not delete read replicas", "Timed out waiting for read replicas deletion to be successful.")
+		resp.Diagnostics.AddError("Unable to delete read replicas", "The operation timed out waiting for read replica deletion.")
 		return
 	}
 

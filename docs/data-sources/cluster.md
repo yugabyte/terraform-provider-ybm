@@ -33,18 +33,18 @@ data "ybm_cluster" "example_cluster"{
 ### Read-Only
 
 - `backup_schedule` (Attributes) (see [below for nested schema](#nestedatt--backup_schedule))
-- `cloud_type` (String) Which cloud the cluster is deployed in: AWS or GCP. Default GCP.
-- `cluster_allow_list_ids` (List of String) The list of IDs of allow lists associated with the cluster.
-- `cluster_id` (String) The id of the cluster. Filled automatically on creating a cluster. Use to get a specific cluster.
+- `cloud_type` (String) The cloud provider where the cluster is deployed: AWS or GCP. Default GCP.
+- `cluster_allow_list_ids` (List of String) List of IDs of the allow lists assigned to the cluster.
+- `cluster_id` (String) The ID of the cluster. Created automatically when a cluster is created. Used to get a specific cluster.
 - `cluster_info` (Attributes) (see [below for nested schema](#nestedatt--cluster_info))
 - `cluster_region_info` (Attributes List) (see [below for nested schema](#nestedatt--cluster_region_info))
-- `cluster_tier` (String) FREE or PAID.
+- `cluster_tier` (String) FREE (Sandbox) or PAID (Dedicated).
 - `cluster_type` (String) The type of the cluster.
 - `cluster_version` (String)
 - `credentials` (Attributes) (see [below for nested schema](#nestedatt--credentials))
 - `fault_tolerance` (String) The fault tolerance of the cluster.
 - `node_config` (Attributes) (see [below for nested schema](#nestedatt--node_config))
-- `restore_backup_id` (String) The backup ID to be restored to the cluster.
+- `restore_backup_id` (String) The ID of the backup to be restored to the cluster.
 
 <a id="nestedatt--backup_schedule"></a>
 ### Nested Schema for `backup_schedule`
@@ -52,11 +52,11 @@ data "ybm_cluster" "example_cluster"{
 Read-Only:
 
 - `backup_description` (String) The description of the backup schedule.
-- `cron_expression` (String) The cron expression for  backup schedule
+- `cron_expression` (String) The cron expression for the backup schedule.
 - `retention_period_in_days` (Number) The retention period of the backup schedule.
-- `schedule_id` (String) The id of the backup schedule. Filled automatically on creating a backup schedule. Used to get a specific backup schedule.
-- `state` (String) The state for  backup schedule. It is use to pause or resume the backup schedule. It can have value ACTIVE or PAUSED only.
-- `time_interval_in_days` (Number) The time interval in days for backup schedule.
+- `schedule_id` (String) The ID of the backup schedule. Created automatically when the backup schedule is created. Used to get a specific backup schedule.
+- `state` (String) The state of the backup schedule. Used to pause or resume the backup schedule. Valid values are ACTIVE or PAUSED.
+- `time_interval_in_days` (Number) The time interval in days for the backup schedule.
 
 
 <a id="nestedatt--cluster_info"></a>

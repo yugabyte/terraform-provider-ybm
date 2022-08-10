@@ -1,12 +1,12 @@
 ---
 page_title: "ybm_vpc_peering Resource - YugabyteDB Managed"
 description: |-
-  The resource to create a VPC Peering in YugabyteDB Managed.
+  The resource to create a VPC peering in YugabyteDB Managed.
 ---
 
 # ybm_vpc_peering (Resource)
 
-The resource to create a VPC Peering in YugabyteDB Managed.
+The resource to create a VPC peering in YugabyteDB Managed.
 
 
 ## Example Usage
@@ -45,14 +45,14 @@ resource "ybm_vpc_peering" "example_vpc_peering" {
 
 ### Required
 
-- `account_id` (String) The ID of the account this VPC Peering belongs to.
-- `application_vpc_info` (Attributes) The information of the VPC in which the application is deployed. (see [below for nested schema](#nestedatt--application_vpc_info))
+- `account_id` (String) The ID of the account this VPC peering belongs to.
+- `application_vpc_info` (Attributes) The details for the VPC where the application is deployed. (see [below for nested schema](#nestedatt--application_vpc_info))
 - `name` (String) The name of the VPC peering.
 - `yugabytedb_vpc_id` (String) The ID of the VPC where the YugabyteDB cluster is deployed.
 
 ### Read-Only
 
-- `project_id` (String) The ID of the project this VPC Peering belongs to.
+- `project_id` (String) The ID of the project this VPC peering belongs to.
 - `vpc_peering_id` (String) The ID of the VPC peering.
 - `vpc_peering_state` (String) The state of the VPC peering.
 
@@ -61,11 +61,11 @@ resource "ybm_vpc_peering" "example_vpc_peering" {
 
 Required:
 
-- `cloud` (String) The cloud(eg. AWS or GCP) on which the application is deployed.
-- `project` (String) The account ID for AWS and project ID for GCP.
+- `cloud` (String) The cloud provider (AWS or GCP) where the application is deployed.
+- `project` (String) The account ID (AWS) or project ID (GCP).
 - `vpc_id` (String) The ID of the VPC in which the application is deployed.
 
 Optional:
 
 - `cidr` (String) The CIDR of the VPC in which the application is deployed.
-- `region` (String) The region in the cloud where the application is deployed.
+- `region` (String) The region where the application is deployed.

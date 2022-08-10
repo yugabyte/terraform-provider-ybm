@@ -2,13 +2,13 @@
 page_title: "ybm_backup Resource - YugabyteDB Managed"
 description: |-
   The resource to create a manual backup of tables in a particular cluster.
-          Please ensure that the cluster for which the backup is being taken has some data populated.
+          Ensure that the cluster for which the backup is being taken has data.
 ---
 
 # ybm_backup (Resource)
 
 The resource to create a manual backup of tables in a particular cluster. 
-		Please ensure that the cluster for which the backup is being taken has some data populated.
+		Ensure that the cluster for which the backup is being taken has data.
 
 
 ## Example Usage
@@ -29,14 +29,14 @@ resource "ybm_backup" "example_backup" {
 
 - `account_id` (String) The ID of the account this backup belongs to.
 - `backup_description` (String) The description of the backup.
-- `cluster_id` (String) The ID of the cluster that needs to be backed up.
+- `cluster_id` (String) The ID of the cluster to be backed up.
 - `retention_period_in_days` (Number) The retention period of the backup.
 
 ### Optional
 
-- `backup_id` (String) The id of the backup. Filled automatically on creating a backup. Used to get a specific backup.
-- `most_recent` (Boolean) Set to true if the ID of the most recent backup is needed.
-- `timestamp` (String) The timestamp of the backup that needs to be fetched
+- `backup_id` (String) The ID of the backup. Created automatically when the backup is created. Used to get a specific backup.
+- `most_recent` (Boolean) Set to true to fetch the most recent backup.
+- `timestamp` (String) The timestamp of the backup to be fetched
 
 ### Read-Only
 

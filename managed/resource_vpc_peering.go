@@ -20,15 +20,15 @@ type resourceVPCPeeringType struct{}
 
 func (r resourceVPCPeeringType) GetSchema(_ context.Context) (tfsdk.Schema, diag.Diagnostics) {
 	return tfsdk.Schema{
-		Description: `The resource to create a VPC Peering in YugabyteDB Managed.`,
+		Description: `The resource to create a VPC peering in YugabyteDB Managed.`,
 		Attributes: map[string]tfsdk.Attribute{
 			"account_id": {
-				Description: "The ID of the account this VPC Peering belongs to.",
+				Description: "The ID of the account this VPC peering belongs to.",
 				Type:        types.StringType,
 				Required:    true,
 			},
 			"project_id": {
-				Description: "The ID of the project this VPC Peering belongs to.",
+				Description: "The ID of the project this VPC peering belongs to.",
 				Type:        types.StringType,
 				Computed:    true,
 			},
@@ -48,21 +48,21 @@ func (r resourceVPCPeeringType) GetSchema(_ context.Context) (tfsdk.Schema, diag
 				Required:    true,
 			},
 			"application_vpc_info": {
-				Description: "The information of the VPC in which the application is deployed.",
+				Description: "The details for the VPC where the application is deployed.",
 				Required:    true,
 				Attributes: tfsdk.SingleNestedAttributes(map[string]tfsdk.Attribute{
 					"cloud": {
-						Description: "The cloud(eg. AWS or GCP) on which the application is deployed.",
+						Description: "The cloud provider (AWS or GCP) where the application is deployed.",
 						Type:        types.StringType,
 						Required:    true,
 					},
 					"project": {
-						Description: "The account ID for AWS and project ID for GCP.",
+						Description: "The account ID (AWS) or project ID (GCP).",
 						Type:        types.StringType,
 						Required:    true,
 					},
 					"region": {
-						Description: "The region in the cloud where the application is deployed.",
+						Description: "The region where the application is deployed.",
 						Type:        types.StringType,
 						Optional:    true,
 					},
@@ -119,7 +119,7 @@ func (r resourceVPCPeering) Create(ctx context.Context, req tfsdk.CreateResource
 	if !r.p.configured {
 		resp.Diagnostics.AddError(
 			"Provider not configured",
-			"The provider hasn't been configured before apply, likely because it depends on an unknown value from another resource.",
+			"The provider wasn't configured before being applied, likely because it depends on an unknown value from another resource.",
 		)
 		return
 	}
@@ -136,14 +136,14 @@ func (r resourceVPCPeering) Create(ctx context.Context, req tfsdk.CreateResource
 
 	if (!plan.VPCPeeringID.Unknown && !plan.VPCPeeringID.Null) || plan.VPCPeeringID.Value != "" {
 		resp.Diagnostics.AddError(
-			"VPC Peering ID provided when creating a vpc peering",
-			"The vpc_peering_id field was provided even though a new vpc peering is being created. Make sure this field is not in the provider on creation.",
+			"VPC Peering ID provided for new VPC peering",
+			"The vpc_peering_id was provided even though a new VPC peering is being created. Do not include this field in the provider when creating a new peering.",
 		)
 		return
 	}
 	projectId, getProjectOK, message := getProjectId(accountId, apiClient)
 	if !getProjectOK {
-		resp.Diagnostics.AddError("Could not get project ID", message)
+		resp.Diagnostics.AddError("Unable to get project ID", message)
 		return
 	}
 
@@ -158,13 +158,13 @@ func (r resourceVPCPeering) Create(ctx context.Context, req tfsdk.CreateResource
 	// The Region and CIDR are required only for AWS. They are not required for GCP.
 	if applicationCloud == "AWS" {
 		if plan.ApplicationVPCInfo.Region.Null {
-			resp.Diagnostics.AddError("Invalid Input", "Application VPC region must be provided for AWS.")
+			resp.Diagnostics.AddError("No region specified", "You must specify the application VPC region for AWS.")
 			return
 		}
 		applicationRegion := plan.ApplicationVPCInfo.Region.Value
 		applicationVPCSpec.CloudInfo.SetRegion(applicationRegion)
 		if plan.ApplicationVPCInfo.CIDR.Null {
-			resp.Diagnostics.AddError("Invalid Input", "Application VPC CIDR must be provided for AWS.")
+			resp.Diagnostics.AddError("No CIDR specified", "You must specify the CIDR of the application VPC for AWS.")
 			return
 		}
 		applicationVPCCIDR := plan.ApplicationVPCInfo.CIDR.Value
@@ -175,7 +175,7 @@ func (r resourceVPCPeering) Create(ctx context.Context, req tfsdk.CreateResource
 	vpcPeeringResp, response, err := apiClient.NetworkApi.CreateVpcPeering(ctx, accountId, projectId).VpcPeeringSpec(vpcPeeringSpec).Execute()
 	if err != nil {
 		b, _ := httputil.DumpResponse(response, true)
-		resp.Diagnostics.AddError("Could not create vpc peering", string(b))
+		resp.Diagnostics.AddError("Unable to create VPC peering", string(b))
 		return
 	}
 	vpcPeeringId := vpcPeeringResp.Data.Info.Id
@@ -190,17 +190,17 @@ func (r resourceVPCPeering) Create(ctx context.Context, req tfsdk.CreateResource
 				return nil
 			}
 		}
-		return retry.RetryableError(errors.New("The vpc peering creation didn't succeed yet"))
+		return retry.RetryableError(errors.New("VPC peering creation in progress."))
 	})
 
 	if err != nil {
-		resp.Diagnostics.AddError("Could not create vpc peering", "Timed out waiting for vpc peering creation to be successful.")
+		resp.Diagnostics.AddError("Could not create vpc peering", "The operation timed out waiting for the VPC peering creation.")
 		return
 	}
 
 	vpcPeering, readOK, message := resourceVPCPeeringRead(accountId, projectId, vpcPeeringId, apiClient)
 	if !readOK {
-		resp.Diagnostics.AddError("Could not read the state of the vpc peering", message)
+		resp.Diagnostics.AddError("Unable to read the state of the VPC peering", message)
 		return
 	}
 
@@ -254,7 +254,7 @@ func (r resourceVPCPeering) Read(ctx context.Context, req tfsdk.ReadResourceRequ
 
 	vpc, readOK, message := resourceVPCPeeringRead(state.AccountID.Value, state.ProjectID.Value, state.VPCPeeringID.Value, r.p.client)
 	if !readOK {
-		resp.Diagnostics.AddError("Could not read the state of the vpc peering", message)
+		resp.Diagnostics.AddError("Unable to read the state of the VPC peering", message)
 		return
 	}
 
@@ -268,7 +268,7 @@ func (r resourceVPCPeering) Read(ctx context.Context, req tfsdk.ReadResourceRequ
 // Update vpc peering
 func (r resourceVPCPeering) Update(ctx context.Context, req tfsdk.UpdateResourceRequest, resp *tfsdk.UpdateResourceResponse) {
 
-	resp.Diagnostics.AddError("Could not update vpc peering.", "Updating a vpc peering is not supported yet. Please delete and recreate.")
+	resp.Diagnostics.AddError("Unable to update VPC peering.", "Updating a VPC peering is not currently supported. Delete and recreate the provider.")
 	return
 
 }
@@ -286,7 +286,7 @@ func (r resourceVPCPeering) Delete(ctx context.Context, req tfsdk.DeleteResource
 	response, err := apiClient.NetworkApi.DeleteVpcPeering(ctx, accountId, projectId, vpcPeeringId).Execute()
 	if err != nil {
 		b, _ := httputil.DumpResponse(response, true)
-		resp.Diagnostics.AddError("Could not delete the vpc peering", string(b))
+		resp.Diagnostics.AddError("Unable to delete the VPC peering", string(b))
 		return
 	}
 
@@ -299,11 +299,11 @@ func (r resourceVPCPeering) Delete(ctx context.Context, req tfsdk.DeleteResource
 				return nil
 			}
 		}
-		return retry.RetryableError(errors.New("The vpc peering deletion didn't succeed yet"))
+		return retry.RetryableError(errors.New("VPC peering deletion in progress."))
 	})
 
 	if err != nil {
-		resp.Diagnostics.AddError("Could not delete vpc peering", "Timed out waiting for vpc peering deletion to be successful.")
+		resp.Diagnostics.AddError("Unable to delete VPC peering", "The operation timed out waiting for the VPC peering to be deleted.")
 		return
 	}
 

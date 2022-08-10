@@ -32,10 +32,10 @@ provider "ybm" {
 
 ### Required
 
-- `auth_token` (String, Sensitive) The authentication token of the account this cluster belongs to.
-- `host` (String) The environment this cluster is being created in, e.g. cloud.yugabyte.com
+- `auth_token` (String, Sensitive) The authentication token (API key) of the account this cluster belongs to.
+- `host` (String) The environment this cluster is being created in, for example, cloud.yugabyte.com
 
 ### Optional
 
-- `use_secure_host` (Boolean) Whether or not the host requires a secure connection (HTTPS).
+- `use_secure_host` (Boolean) Set to true to use a secure connection (HTTPS) to the host.
 
