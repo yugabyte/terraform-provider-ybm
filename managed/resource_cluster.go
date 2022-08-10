@@ -357,6 +357,7 @@ func getPlan(ctx context.Context, plan tfsdk.Plan, cluster *Cluster) diag.Diagno
 	diags.Append(plan.GetAttribute(ctx, path.Root("node_config"), &cluster.NodeConfig)...)
 	diags.Append(plan.GetAttribute(ctx, path.Root("credentials"), &cluster.Credentials)...)
 	diags.Append(plan.GetAttribute(ctx, path.Root("backup_schedules"), &cluster.BackupSchedules)...)
+
 	return diags
 }
 
@@ -454,7 +455,6 @@ func (r resourceCluster) Create(ctx context.Context, req tfsdk.CreateResourceReq
 	// Backup_schedule
 
 	scheduleResp, r1, err := apiClient.BackupApi.ListBackupSchedules(ctx, accountId, projectId).EntityId(clusterId).Execute()
-
 	if err != nil {
 		resp.Diagnostics.AddError("Unable to fetch the backup schedule for the cluster "+r1.Status, "Try again")
 		return

@@ -20,7 +20,7 @@ type Cluster struct {
 	Credentials         Credentials          `tfsdk:"credentials"`
 	ClusterInfo         ClusterInfo          `tfsdk:"cluster_info"`
 	ClusterVersion      types.String         `tfsdk:"cluster_version"`
-	BackupSchedules     []BackupScheduleInfo `tfsdk:"backup_schedule"`
+	BackupSchedules     []BackupScheduleInfo `tfsdk:"backup_schedules"`
 }
 
 type BackupScheduleInfo struct {
