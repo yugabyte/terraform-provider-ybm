@@ -58,11 +58,11 @@ resource "ybm_cluster" "single_region" {
   }
   // for custom_backup_schedule to be activated pass true 
 
-  backup_schedule = [
+  backup_schedules = [
     {
       state                    = "ACTIVE"
-      retention_period_in_days = 26
-      time_interval_in_days    = 18
+      retention_period_in_days = 10
+      time_interval_in_days    = 10
     }
   ]
   credentials = {
