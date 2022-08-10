@@ -121,7 +121,7 @@ func (p *provider) Configure(ctx context.Context, req tfsdk.ConfigureProviderReq
 	api_client.GetConfig().AddDefaultHeader("Authorization", "Bearer "+auth_token)
 
 	// add client header
-	api_client.GetConfig().AddDefaultHeader("User-Agent", "terraform-provider-ybm/"+p.version)
+	api_client.GetConfig().UserAgent = "terraform-provider-ybm/" + p.version
 
 	p.client = api_client
 	p.configured = true
