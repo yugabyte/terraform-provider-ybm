@@ -5,25 +5,25 @@ import (
 )
 
 type Cluster struct {
-	AccountID           types.String   `tfsdk:"account_id"`
-	ProjectID           types.String   `tfsdk:"project_id"`
-	ClusterID           types.String   `tfsdk:"cluster_id"`
-	ClusterName         types.String   `tfsdk:"cluster_name"`
-	CloudType           types.String   `tfsdk:"cloud_type"`
-	ClusterType         types.String   `tfsdk:"cluster_type"`
-	FaultTolerance      types.String   `tfsdk:"fault_tolerance"`
-	ClusterRegionInfo   []RegionInfo   `tfsdk:"cluster_region_info"`
-	ClusterTier         types.String   `tfsdk:"cluster_tier"`
-	ClusterAllowListIDs []types.String `tfsdk:"cluster_allow_list_ids"`
-	RestoreBackupID     types.String   `tfsdk:"restore_backup_id"`
-	NodeConfig          NodeConfig     `tfsdk:"node_config"`
-	Credentials         Credentials    `tfsdk:"credentials"`
-	ClusterInfo         ClusterInfo    `tfsdk:"cluster_info"`
-	ClusterVersion      types.String   `tfsdk:"cluster_version"`
-	BackupSchedule      BackupSchedule `tfsdk:"backup_schedule"`
+	AccountID           types.String         `tfsdk:"account_id"`
+	ProjectID           types.String         `tfsdk:"project_id"`
+	ClusterID           types.String         `tfsdk:"cluster_id"`
+	ClusterName         types.String         `tfsdk:"cluster_name"`
+	CloudType           types.String         `tfsdk:"cloud_type"`
+	ClusterType         types.String         `tfsdk:"cluster_type"`
+	FaultTolerance      types.String         `tfsdk:"fault_tolerance"`
+	ClusterRegionInfo   []RegionInfo         `tfsdk:"cluster_region_info"`
+	ClusterTier         types.String         `tfsdk:"cluster_tier"`
+	ClusterAllowListIDs []types.String       `tfsdk:"cluster_allow_list_ids"`
+	RestoreBackupID     types.String         `tfsdk:"restore_backup_id"`
+	NodeConfig          NodeConfig           `tfsdk:"node_config"`
+	Credentials         Credentials          `tfsdk:"credentials"`
+	ClusterInfo         ClusterInfo          `tfsdk:"cluster_info"`
+	ClusterVersion      types.String         `tfsdk:"cluster_version"`
+	BackupSchedules     []BackupScheduleInfo `tfsdk:"backup_schedules"`
 }
 
-type BackupSchedule struct {
+type BackupScheduleInfo struct {
 	State                 types.String `tfsdk:"state"`
 	RetentionPeriodInDays types.Int64  `tfsdk:"retention_period_in_days"`
 	ScheduleID            types.String `tfsdk:"schedule_id"`
