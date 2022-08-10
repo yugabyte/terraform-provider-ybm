@@ -42,3 +42,7 @@ make doc
 - `terraform init`
 - `terraform apply`
 - When the resources created are no longer needed, `terraform destroy`
+
+## Release to Terraform Public Registry
+
+The information about creating a pre-release that doesn't appear in the documentation yet available in the public Terraform registry for someone willing to try explicity can be found [here](https://www.terraform.io/registry/providers/publishing#creating-a-github-release)
