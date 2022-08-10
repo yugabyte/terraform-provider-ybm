@@ -25,16 +25,16 @@ data "ybm_backup" "example_backup" {
 ### Required
 
 - `account_id` (String) The ID of the account this backup belongs to.
-- `cluster_id` (String) The ID of the cluster that needs to be backed up.
+- `cluster_id` (String) The ID of the cluster to be backed up.
 
 ### Optional
 
 - `backup_description` (String) The description of the backup.
-- `most_recent` (Boolean) Set to true if the ID of the most recent backup is needed.
+- `most_recent` (Boolean) Set to true to fetch the most recent backup.
 - `retention_period_in_days` (Number) The retention period of the backup.
-- `timestamp` (String) The timestamp of the backup that needs to be fetched. Format: '2022-07-08T00:06:01.890Z'.
+- `timestamp` (String) The timestamp of the backup to be fetched. Format: '2022-07-08T00:06:01.890Z'.
 
 ### Read-Only
 
-- `backup_id` (String) The id of the backup. Fetched from read.
+- `backup_id` (String) The ID of the backup. Fetched from read.
 - `project_id` (String) The ID of the project this backup belongs to.
