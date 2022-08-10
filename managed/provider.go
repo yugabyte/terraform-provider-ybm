@@ -12,11 +12,16 @@ import (
 
 var stderr = os.Stderr
 
-func New() tfsdk.Provider {
-	return &provider{}
+func New(version string) func() tfsdk.Provider {
+	return func() tfsdk.Provider {
+		return &provider{
+			version: version,
+		}
+	}
 }
 
 type provider struct {
+	version    string
 	configured bool
 	client     *openapiclient.APIClient
 }
@@ -114,6 +119,9 @@ func (p *provider) Configure(ctx context.Context, req tfsdk.ConfigureProviderReq
 
 	// authorize user
 	api_client.GetConfig().AddDefaultHeader("Authorization", "Bearer "+auth_token)
+
+	// add client header
+	api_client.GetConfig().AddDefaultHeader("User-Agent", "terraform-provider-ybm/"+p.version)
 
 	p.client = api_client
 	p.configured = true
