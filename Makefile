@@ -35,7 +35,7 @@ testacc:
 	TF_ACC=1 go test -v -cover ./... -timeout 120m   
 
 doc:
-	./install_tfplugindocs.sh ${OS_ARCH}
+	./scripts/install_tfplugindocs.sh ${OS_ARCH}
 	tfplugindocs generate --rendered-provider-name 'YugabyteDB Managed' --provider-name ybm
 
 clean:

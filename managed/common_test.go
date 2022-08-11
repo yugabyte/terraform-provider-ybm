@@ -5,7 +5,7 @@ import (
 	"net/http"
 	"testing"
 
-	mocks "terraform-provider-ybm/mock_yugabytedb_managed_go_client_internal"
+	mocks "github.com/yugabyte/terraform-provider-ybm/mock_yugabytedb_managed_go_client_internal"
 
 	gomock "github.com/golang/mock/gomock"
 	openapiclient "github.com/yugabyte/yugabytedb-managed-go-client-internal"

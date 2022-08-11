@@ -2,7 +2,8 @@ package main
 
 import (
 	"context"
-	"terraform-provider-ybm/managed"
+
+	"github.com/yugabyte/terraform-provider-ybm/managed"
 
 	"github.com/hashicorp/terraform-plugin-framework/providerserver"
 )
