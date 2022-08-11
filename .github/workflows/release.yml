@@ -57,18 +57,6 @@ jobs:
           # GitHub sets this automatically
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - 
-        name: Push to Terraform Cloud Private Registry
-        run: |
-          cp dist/*.zip publish/
-          cp dist/*SHA256SUMS* publish/
-          cd publish
-          TAG=${GITHUB_REF#refs/*/}
-          export VERSION=${TAG:1}
-          export TOKEN=${{ secrets.TERRAFORM_CLOUD_TOKEN }}
-          export KEY_ID=${{ secrets.KEY_ID }}
-          chmod +x publish.sh
-          ./publish.sh
-      - 
         name: Clean upSSH key
         run: |
           sudo rm -rf ~/.ssh/id_ed25519
