@@ -1,4 +1,4 @@
-module terraform-provider-ybm
+module github.com/yugabyte/terraform-provider-ybm
 
 go 1.18
 
