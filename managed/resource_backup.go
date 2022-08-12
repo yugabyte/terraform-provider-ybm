@@ -27,6 +27,7 @@ func (r resourceBackupType) GetSchema(_ context.Context) (tfsdk.Schema, diag.Dia
 				Description: "The ID of the account this backup belongs to. To be provided if there are multiple accounts associated with the user.",
 				Type:        types.StringType,
 				Optional:    true,
+				Computed:    true,
 			},
 			"cluster_id": {
 				Description: "The ID of the cluster to be backed up.",
@@ -36,6 +37,7 @@ func (r resourceBackupType) GetSchema(_ context.Context) (tfsdk.Schema, diag.Dia
 			"project_id": {
 				Description: "The ID of the project this backup belongs to.",
 				Type:        types.StringType,
+				Optional:    true,
 				Computed:    true,
 			},
 			"backup_id": {
@@ -117,7 +119,7 @@ func (r resourceBackup) Create(ctx context.Context, req tfsdk.CreateResourceRequ
 
 	apiClient := r.p.client
 
-	if !plan.AccountID.Null {
+	if !plan.AccountID.Null && !plan.AccountID.Unknown {
 		accountId = plan.AccountID.Value
 	} else {
 		accountId, getAccountOK, message = getAccountId(apiClient)

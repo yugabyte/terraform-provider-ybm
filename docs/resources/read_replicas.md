@@ -44,9 +44,6 @@ resource "ybm_read_replicas" "example_read_replica" {
 ### Optional
 
 - `account_id` (String) The ID of the account this read replica belongs to. To be provided if there are multiple accounts associated with the user.
-
-### Read-Only
-
 - `project_id` (String) The ID of the project this read replica belongs to.
 
 <a id="nestedatt--read_replicas_info"></a>

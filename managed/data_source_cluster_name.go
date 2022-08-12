@@ -23,6 +23,7 @@ func (r dataClusterNameType) GetSchema(_ context.Context) (tfsdk.Schema, diag.Di
 				Description: "The ID of the account this cluster belongs to. To be provided if there are multiple accounts associated with the user.",
 				Type:        types.StringType,
 				Optional:    true,
+				Computed:    true,
 			},
 			"project_id": {
 				Description: "The ID of the project this cluster belongs to.",

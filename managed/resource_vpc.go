@@ -26,10 +26,12 @@ func (r resourceVPCType) GetSchema(_ context.Context) (tfsdk.Schema, diag.Diagno
 				Description: "The ID of the account this VPC belongs to. To be provided if there are multiple accounts associated with the user.",
 				Type:        types.StringType,
 				Optional:    true,
+				Computed:    true,
 			},
 			"project_id": {
 				Description: "The ID of the project this VPC belongs to.",
 				Type:        types.StringType,
+				Optional:    true,
 				Computed:    true,
 			},
 			"vpc_id": {
@@ -120,7 +122,7 @@ func (r resourceVPC) Create(ctx context.Context, req tfsdk.CreateResourceRequest
 	}
 
 	apiClient := r.p.client
-	if !plan.AccountID.Null {
+	if !plan.AccountID.Null && !plan.AccountID.Unknown {
 		accountId = plan.AccountID.Value
 	} else {
 		accountId, getAccountOK, message = getAccountId(apiClient)

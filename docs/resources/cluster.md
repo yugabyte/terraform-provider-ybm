@@ -133,13 +133,13 @@ resource "ybm_cluster" "multi_region_cluster" {
 - `cluster_allow_list_ids` (List of String) List of IDs of the allow lists assigned to the cluster.
 - `cluster_id` (String) The ID of the cluster. Created automatically when a cluster is created. Used to get a specific cluster.
 - `fault_tolerance` (String) The fault tolerance of the cluster.
+- `project_id` (String) The ID of the project this cluster belongs to.
 - `restore_backup_id` (String) The ID of the backup to be restored to the cluster.
 
 ### Read-Only
 
 - `cluster_info` (Attributes) (see [below for nested schema](#nestedatt--cluster_info))
 - `cluster_version` (String)
-- `project_id` (String) The ID of the project this cluster belongs to.
 
 <a id="nestedatt--cluster_region_info"></a>
 ### Nested Schema for `cluster_region_info`

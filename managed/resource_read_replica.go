@@ -27,10 +27,12 @@ func (r resourceReadReplicasType) GetSchema(_ context.Context) (tfsdk.Schema, di
 				Description: "The ID of the account this read replica belongs to. To be provided if there are multiple accounts associated with the user.",
 				Type:        types.StringType,
 				Optional:    true,
+				Computed:    true,
 			},
 			"project_id": {
 				Description: "The ID of the project this read replica belongs to.",
 				Type:        types.StringType,
+				Optional:    true,
 				Computed:    true,
 			},
 			"read_replicas_info": {
@@ -186,7 +188,7 @@ func (r resourceReadReplicas) Create(ctx context.Context, req tfsdk.CreateResour
 	}
 
 	apiClient := r.p.client
-	if !plan.AccountID.Null {
+	if !plan.AccountID.Null && !plan.AccountID.Unknown {
 		accountId = plan.AccountID.Value
 	} else {
 		accountId, getAccountOK, message = getAccountId(apiClient)

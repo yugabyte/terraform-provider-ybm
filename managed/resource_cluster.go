@@ -31,10 +31,12 @@ func (r resourceClusterType) GetSchema(_ context.Context) (tfsdk.Schema, diag.Di
 				Description: "The ID of the account this cluster belongs to. To be provided if there are multiple accounts associated with the user.",
 				Type:        types.StringType,
 				Optional:    true,
+				Computed:    true,
 			},
 			"project_id": {
 				Description: "The ID of the project this cluster belongs to.",
 				Type:        types.StringType,
+				Optional:    true,
 				Computed:    true,
 			},
 
@@ -393,7 +395,7 @@ func (r resourceCluster) Create(ctx context.Context, req tfsdk.CreateResourceReq
 
 	backupId := ""
 	apiClient := r.p.client
-	if !plan.AccountID.Null {
+	if !plan.AccountID.Null && !plan.AccountID.Unknown {
 		accountId = plan.AccountID.Value
 	} else {
 		accountId, getAccountOK, message = getAccountId(apiClient)

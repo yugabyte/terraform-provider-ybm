@@ -26,10 +26,12 @@ func (r resourceVPCPeeringType) GetSchema(_ context.Context) (tfsdk.Schema, diag
 				Description: "The ID of the account this VPC peering belongs to. To be provided if there are multiple accounts associated with the user.",
 				Type:        types.StringType,
 				Optional:    true,
+				Computed:    true,
 			},
 			"project_id": {
 				Description: "The ID of the project this VPC peering belongs to.",
 				Type:        types.StringType,
+				Optional:    true,
 				Computed:    true,
 			},
 			"vpc_peering_id": {
@@ -135,7 +137,7 @@ func (r resourceVPCPeering) Create(ctx context.Context, req tfsdk.CreateResource
 	}
 
 	apiClient := r.p.client
-	if !plan.AccountID.Null {
+	if !plan.AccountID.Null && !plan.AccountID.Unknown {
 		accountId = plan.AccountID.Value
 	} else {
 		accountId, getAccountOK, message = getAccountId(apiClient)
