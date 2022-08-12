@@ -15,7 +15,6 @@ The resource to create a manual backup of tables in a particular cluster.
 
 ```terraform
 resource "ybm_backup" "example_backup" {
-  account_id = "example-account-id"
   cluster_id = "example-cluster-id"
   backup_description = "example-backup-description"
   retention_period_in_days = 2  
@@ -27,13 +26,13 @@ resource "ybm_backup" "example_backup" {
 
 ### Required
 
-- `account_id` (String) The ID of the account this backup belongs to.
 - `backup_description` (String) The description of the backup.
 - `cluster_id` (String) The ID of the cluster to be backed up.
 - `retention_period_in_days` (Number) The retention period of the backup.
 
 ### Optional
 
+- `account_id` (String) The ID of the account this backup belongs to. To be provided if there are multiple accounts associated with the user.
 - `backup_id` (String) The ID of the backup. Created automatically when the backup is created. Used to get a specific backup.
 - `most_recent` (Boolean) Set to true to fetch the most recent backup.
 - `timestamp` (String) The timestamp of the backup to be fetched

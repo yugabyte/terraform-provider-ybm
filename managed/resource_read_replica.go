@@ -24,9 +24,9 @@ func (r resourceReadReplicasType) GetSchema(_ context.Context) (tfsdk.Schema, di
 		in different regions using a single resource.`,
 		Attributes: map[string]tfsdk.Attribute{
 			"account_id": {
-				Description: "The ID of the account this read replica belongs to.",
+				Description: "The ID of the account this read replica belongs to. To be provided if there are multiple accounts associated with the user.",
 				Type:        types.StringType,
-				Required:    true,
+				Optional:    true,
 			},
 			"project_id": {
 				Description: "The ID of the project this read replica belongs to.",
@@ -169,6 +169,8 @@ func (r resourceReadReplicas) Create(ctx context.Context, req tfsdk.CreateResour
 	}
 
 	var plan ReadReplicas
+	var accountId, message string
+	var getAccountOK bool
 	resp.Diagnostics.Append(getReadReplicasPlan(ctx, req.Plan, &plan)...)
 	if resp.Diagnostics.HasError() {
 		tflog.Debug(ctx, "Read Replicas Resource: Error on Get Plan")
@@ -184,7 +186,15 @@ func (r resourceReadReplicas) Create(ctx context.Context, req tfsdk.CreateResour
 	}
 
 	apiClient := r.p.client
-	accountId := plan.AccountID.Value
+	if !plan.AccountID.Null {
+		accountId = plan.AccountID.Value
+	} else {
+		accountId, getAccountOK, message = getAccountId(apiClient)
+		if !getAccountOK {
+			resp.Diagnostics.AddError("Unable to get account ID", message)
+			return
+		}
+	}
 	projectId, getProjectOK, message := getProjectId(accountId, apiClient)
 	if !getProjectOK {
 		resp.Diagnostics.AddError("Unable to get project ID", message)

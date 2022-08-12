@@ -32,7 +32,6 @@ variable "ycql_password" {
 
 # Single Region Cluster
 resource "ybm_cluster" "single_region_cluster" {
-  account_id   = "example-account-id"
   cluster_name = "single-region-cluster"
   cloud_type   = "GCP"
   cluster_type = "SYNCHRONOUS"
@@ -69,7 +68,6 @@ resource "ybm_cluster" "single_region_cluster" {
 
 # Multi Region Cluster
 resource "ybm_cluster" "multi_region_cluster" {
-  account_id   = "example-account-id"
   cluster_name = "multi-region-cluster"
   cloud_type   = "GCP"
   cluster_type = "SYNCHRONOUS"
@@ -120,7 +118,6 @@ resource "ybm_cluster" "multi_region_cluster" {
 
 ### Required
 
-- `account_id` (String) The ID of the account this cluster belongs to.
 - `cluster_name` (String) The name of the cluster.
 - `cluster_region_info` (Attributes List) (see [below for nested schema](#nestedatt--cluster_region_info))
 - `cluster_tier` (String) FREE (Sandbox) or PAID (Dedicated).
@@ -130,6 +127,7 @@ resource "ybm_cluster" "multi_region_cluster" {
 
 ### Optional
 
+- `account_id` (String) The ID of the account this cluster belongs to. To be provided if there are multiple accounts associated with the user.
 - `backup_schedules` (Attributes List) (see [below for nested schema](#nestedatt--backup_schedules))
 - `cloud_type` (String) The cloud provider where the cluster is deployed: AWS or GCP. Default GCP.
 - `cluster_allow_list_ids` (List of String) List of IDs of the allow lists assigned to the cluster.

@@ -1,5 +1,4 @@
 resource "ybm_vpc" "example-vpc" {
-  account_id = "example-account-id"
   name = "example-vpc"
   cloud = "GCP"
   # Use only one of either global cidr or region cidr

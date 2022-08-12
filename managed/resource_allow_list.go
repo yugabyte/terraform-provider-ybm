@@ -19,9 +19,9 @@ func (r resourceAllowListType) GetSchema(_ context.Context) (tfsdk.Schema, diag.
 		Description: `The resource to create an allow list in YugabyteDB Managed.`,
 		Attributes: map[string]tfsdk.Attribute{
 			"account_id": {
-				Description: "The ID of the account this allow list belongs to.",
+				Description: "The ID of the account this allow list belongs to. To be provided if there are multiple accounts associated with the user.",
 				Type:        types.StringType,
-				Required:    true,
+				Optional:    true,
 			},
 			"project_id": {
 				Description: "The ID of the project this allow list belongs to.",
@@ -100,6 +100,8 @@ func (r resourceAllowList) Create(ctx context.Context, req tfsdk.CreateResourceR
 	}
 
 	var plan AllowList
+	var accountId, message string
+	var getAccountOK bool
 	diags := req.Plan.Get(ctx, &plan)
 	resp.Diagnostics.Append(getAllowListPlan(ctx, req.Plan, &plan)...)
 	if resp.Diagnostics.HasError() {
@@ -108,7 +110,15 @@ func (r resourceAllowList) Create(ctx context.Context, req tfsdk.CreateResourceR
 
 	apiClient := r.p.client
 
-	accountId := plan.AccountID.Value
+	if !plan.AccountID.Null {
+		accountId = plan.AccountID.Value
+	} else {
+		accountId, getAccountOK, message = getAccountId(apiClient)
+		if !getAccountOK {
+			resp.Diagnostics.AddError("Unable to get account ID", message)
+			return
+		}
+	}
 
 	if (!plan.AllowListID.Unknown && !plan.AllowListID.Null) || plan.AllowListID.Value != "" {
 		resp.Diagnostics.AddError(

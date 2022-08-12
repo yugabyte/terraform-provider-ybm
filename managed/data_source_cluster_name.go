@@ -20,9 +20,9 @@ func (r dataClusterNameType) GetSchema(_ context.Context) (tfsdk.Schema, diag.Di
 		Description: "The data source to fetch the cluster ID and other information about a cluster given the cluster name.",
 		Attributes: map[string]tfsdk.Attribute{
 			"account_id": {
-				Description: "The ID of the account this cluster belongs to.",
+				Description: "The ID of the account this cluster belongs to. To be provided if there are multiple accounts associated with the user.",
 				Type:        types.StringType,
-				Required:    true,
+				Optional:    true,
 			},
 			"project_id": {
 				Description: "The ID of the project this cluster belongs to.",
@@ -226,18 +226,29 @@ func (r dataClusterName) Read(ctx context.Context, req tfsdk.ReadDataSourceReque
 		return
 	}
 	var attr inputClusterDetails
+	var accountId, message string
+	var getAccountOK bool
 
 	attr1 := &attr
 	req.Config.GetAttribute(ctx, path.Root("account_id"), &attr1.account_id)
 	req.Config.GetAttribute(ctx, path.Root("cluster_name"), &attr1.cluster_name)
 	apiClient := r.p.client
-	projectId, getProjectOK, message := getProjectId(attr.account_id, apiClient)
+	if attr.account_id != "" {
+		accountId = attr.account_id
+	} else {
+		accountId, getAccountOK, message = getAccountId(apiClient)
+		if !getAccountOK {
+			resp.Diagnostics.AddError("Unable to get account ID", message)
+			return
+		}
+	}
+	projectId, getProjectOK, message := getProjectId(accountId, apiClient)
 	if !getProjectOK {
 		resp.Diagnostics.AddError("Unable to get the project ID", message)
 		return
 	}
 
-	res, r1, err := apiClient.ClusterApi.ListClusters(context.Background(), attr.account_id, projectId).Name(attr.cluster_name).Execute()
+	res, r1, err := apiClient.ClusterApi.ListClusters(context.Background(), accountId, projectId).Name(attr.cluster_name).Execute()
 
 	if err != nil {
 		b, _ := httputil.DumpResponse(r1, true)
@@ -249,7 +260,7 @@ func (r dataClusterName) Read(ctx context.Context, req tfsdk.ReadDataSourceReque
 	Info := list[0].GetInfo()
 	clusterId := Info.GetId()
 
-	scheduleResp, r2, err1 := apiClient.BackupApi.ListBackupSchedules(ctx, attr.account_id, projectId).EntityId(clusterId).Execute()
+	scheduleResp, r2, err1 := apiClient.BackupApi.ListBackupSchedules(ctx, accountId, projectId).EntityId(clusterId).Execute()
 	if err1 != nil {
 		resp.Diagnostics.AddError("Unable to fetch the backup schedule for the cluster "+r2.Status, "Try again.")
 		return
@@ -264,7 +275,7 @@ func (r dataClusterName) Read(ctx context.Context, req tfsdk.ReadDataSourceReque
 		ScheduleID: types.String{Value: scheduleId},
 	}
 	backUpSchedule = append(backUpSchedule, backUpInfo)
-	cluster, readOK, message := resourceClusterRead(attr.account_id, projectId, clusterId, backUpSchedule, make([]string, 0), true, make([]string, 0), true, apiClient)
+	cluster, readOK, message := resourceClusterRead(accountId, projectId, clusterId, backUpSchedule, make([]string, 0), true, make([]string, 0), true, apiClient)
 	if !readOK {
 		resp.Diagnostics.AddError("Unable to read the state of the cluster", message)
 		return

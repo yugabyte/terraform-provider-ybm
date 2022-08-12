@@ -1,5 +1,4 @@
 resource "ybm_read_replicas" "example_read_replica" {
-  account_id = "example-account-id"
   read_replicas_info = [ 
     {
       cloud_type = "GCP"

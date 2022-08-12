@@ -1,7 +1,6 @@
 #AWS VPC Peering
 
 resource "ybm_vpc_peering" "example_vpc_peering" {
-  account_id = var.account_id
   name = "example_name"
   yugabytedb_vpc_id = "example_vpc_id"
   application_vpc_info = {
@@ -15,7 +14,6 @@ resource "ybm_vpc_peering" "example_vpc_peering" {
 
 #GCP VPC Peering
 resource "ybm_vpc_peering" "example_vpc_peering" {
-  account_id = var.account_id
   name = "example_name"
   yugabytedb_vpc_id = "example_vpc_id"
   application_vpc_info = {

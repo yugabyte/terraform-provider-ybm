@@ -13,7 +13,6 @@ The resource to create a VPC in YugabyteDB Managed.
 
 ```terraform
 resource "ybm_vpc" "example-vpc" {
-  account_id = "example-account-id"
   name = "example-vpc"
   cloud = "GCP"
   # Use only one of either global cidr or region cidr
@@ -36,12 +35,12 @@ resource "ybm_vpc" "example-vpc" {
 
 ### Required
 
-- `account_id` (String) The ID of the account this VPC belongs to.
 - `cloud` (String) The cloud provider (AWS or GCP) where the VPC is to be created.
 - `name` (String) The description of the VPC.
 
 ### Optional
 
+- `account_id` (String) The ID of the account this VPC belongs to. To be provided if there are multiple accounts associated with the user.
 - `global_cidr` (String) The global CIDR of the VPC (GCP only).
 - `region_cidr_info` (Attributes List) The CIDR information for all the regions for the VPC. (see [below for nested schema](#nestedatt--region_cidr_info))
 - `vpc_id` (String) The ID of the VPC. Created automatically when the VPC is created. Used to get a specific VPC.
