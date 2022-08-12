@@ -9,6 +9,7 @@ import (
 
 	"time"
 
+	"github.com/hashicorp/terraform-plugin-framework-validators/int64validator"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
@@ -154,19 +155,25 @@ func (r resourceClusterType) GetSchema(_ context.Context) (tfsdk.Schema, diag.Di
 				Required: true,
 				Attributes: tfsdk.SingleNestedAttributes(map[string]tfsdk.Attribute{
 					"num_cores": {
-						Type:     types.Int64Type,
-						Optional: true,
-						Computed: true,
+						Description: "Number of CPU cores in the node.",
+						Type:        types.Int64Type,
+						Optional:    true,
+						Computed:    true,
 					},
 					"memory_mb": {
-						Type:     types.Int64Type,
-						Optional: true,
-						Computed: true,
+						Description: "Memory of the node.",
+						Type:        types.Int64Type,
+						Optional:    true,
+						Computed:    true,
 					},
 					"disk_size_gb": {
-						Type:     types.Int64Type,
-						Optional: true,
-						Computed: true,
+						Description: "Disk size of the node.",
+						Type:        types.Int64Type,
+						Optional:    true,
+						Computed:    true,
+						Validators: []tfsdk.AttributeValidator{
+							int64validator.AtLeast(50),
+						},
 					},
 				}),
 			},
