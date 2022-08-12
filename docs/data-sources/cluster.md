@@ -14,7 +14,6 @@ The data source to fetch the cluster ID and other information about a cluster gi
 ```terraform
 data "ybm_cluster" "example_cluster"{
   cluster_name = "example-cluster"
-  account_id = "example-account-id"
 }
 ```
 
@@ -23,11 +22,11 @@ data "ybm_cluster" "example_cluster"{
 
 ### Required
 
-- `account_id` (String) The ID of the account this cluster belongs to.
 - `cluster_name` (String) The name of the cluster.
 
 ### Optional
 
+- `account_id` (String) The ID of the account this cluster belongs to. To be provided if there are multiple accounts associated with the user.
 - `project_id` (String) The ID of the project this cluster belongs to.
 
 ### Read-Only

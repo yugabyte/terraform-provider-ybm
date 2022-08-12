@@ -24,9 +24,10 @@ func (r resourceBackupType) GetSchema(_ context.Context) (tfsdk.Schema, diag.Dia
 		Ensure that the cluster for which the backup is being taken has data.`,
 		Attributes: map[string]tfsdk.Attribute{
 			"account_id": {
-				Description: "The ID of the account this backup belongs to.",
+				Description: "The ID of the account this backup belongs to. To be provided if there are multiple accounts associated with the user.",
 				Type:        types.StringType,
-				Required:    true,
+				Optional:    true,
+				Computed:    true,
 			},
 			"cluster_id": {
 				Description: "The ID of the cluster to be backed up.",
@@ -36,6 +37,7 @@ func (r resourceBackupType) GetSchema(_ context.Context) (tfsdk.Schema, diag.Dia
 			"project_id": {
 				Description: "The ID of the project this backup belongs to.",
 				Type:        types.StringType,
+				Optional:    true,
 				Computed:    true,
 			},
 			"backup_id": {
@@ -106,7 +108,10 @@ func (r resourceBackup) Create(ctx context.Context, req tfsdk.CreateResourceRequ
 	}
 
 	var plan Backup
+	var accountId, message string
+	var getAccountOK bool
 	diags := req.Plan.Get(ctx, &plan)
+	resp.Diagnostics.Append(diags...)
 	resp.Diagnostics.Append(getBackupPlan(ctx, req.Plan, &plan)...)
 	if resp.Diagnostics.HasError() {
 		return
@@ -114,7 +119,15 @@ func (r resourceBackup) Create(ctx context.Context, req tfsdk.CreateResourceRequ
 
 	apiClient := r.p.client
 
-	accountId := plan.AccountID.Value
+	if !plan.AccountID.Null && !plan.AccountID.Unknown {
+		accountId = plan.AccountID.Value
+	} else {
+		accountId, getAccountOK, message = getAccountId(apiClient)
+		if !getAccountOK {
+			resp.Diagnostics.AddError("Unable to get account ID", message)
+			return
+		}
+	}
 
 	if (!plan.BackupID.Unknown && !plan.BackupID.Null) || plan.BackupID.Value != "" {
 		resp.Diagnostics.AddError(

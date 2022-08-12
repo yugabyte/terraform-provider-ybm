@@ -29,13 +29,15 @@ func (r resourceClusterType) GetSchema(_ context.Context) (tfsdk.Schema, diag.Di
 		and modify the backup schedule of the cluster being created.`,
 		Attributes: map[string]tfsdk.Attribute{
 			"account_id": {
-				Description: "The ID of the account this cluster belongs to.",
+				Description: "The ID of the account this cluster belongs to. To be provided if there are multiple accounts associated with the user.",
 				Type:        types.StringType,
-				Required:    true,
+				Optional:    true,
+				Computed:    true,
 			},
 			"project_id": {
 				Description: "The ID of the project this cluster belongs to.",
 				Type:        types.StringType,
+				Optional:    true,
 				Computed:    true,
 			},
 
@@ -390,6 +392,8 @@ func (r resourceCluster) Create(ctx context.Context, req tfsdk.CreateResourceReq
 	}
 
 	var plan Cluster
+	var accountId, message string
+	var getAccountOK bool
 	resp.Diagnostics.Append(getPlan(ctx, req.Plan, &plan)...)
 	if resp.Diagnostics.HasError() {
 		tflog.Debug(ctx, "Cluster Resource: Error on Get Plan")
@@ -398,7 +402,15 @@ func (r resourceCluster) Create(ctx context.Context, req tfsdk.CreateResourceReq
 
 	backupId := ""
 	apiClient := r.p.client
-	accountId := plan.AccountID.Value
+	if !plan.AccountID.Null && !plan.AccountID.Unknown {
+		accountId = plan.AccountID.Value
+	} else {
+		accountId, getAccountOK, message = getAccountId(apiClient)
+		if !getAccountOK {
+			resp.Diagnostics.AddError("Unable to get account ID", message)
+			return
+		}
+	}
 
 	if (!plan.ClusterID.Unknown && !plan.ClusterID.Null) || plan.ClusterID.Value != "" {
 		resp.Diagnostics.AddError(

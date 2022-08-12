@@ -13,7 +13,6 @@ The resource to create an allow list in YugabyteDB Managed.
 
 ```terraform
 resource "ybm_allow_list" "example_allow_list" {
-  account_id = "example-account-id"
   allow_list_name = "allow-all"
   allow_list_description = "allow all the ip addresses"
   cidr_list = ["0.0.0.0/0"]  
@@ -25,16 +24,16 @@ resource "ybm_allow_list" "example_allow_list" {
 
 ### Required
 
-- `account_id` (String) The ID of the account this allow list belongs to.
 - `allow_list_description` (String) The description of the allow list.
 - `allow_list_name` (String) The name of the allow list.
 - `cidr_list` (Set of String) The CIDR list of the allow list.
 
 ### Optional
 
+- `account_id` (String) The ID of the account this allow list belongs to. To be provided if there are multiple accounts associated with the user.
 - `allow_list_id` (String) The ID of the allow list. Created automatically when an allow list is created. Use this ID to get a specific allow list.
+- `project_id` (String) The ID of the project this allow list belongs to.
 
 ### Read-Only
 
 - `cluster_ids` (Set of String) List of the IDs of the clusters the allow list is assigned to.
-- `project_id` (String) The ID of the project this allow list belongs to.

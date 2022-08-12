@@ -15,7 +15,6 @@ The resource to create read replicas of a particular cluster. You can create mul
 
 ```terraform
 resource "ybm_read_replicas" "example_read_replica" {
-  account_id = "example-account-id"
   read_replicas_info = [ 
     {
       cloud_type = "GCP"
@@ -39,12 +38,12 @@ resource "ybm_read_replicas" "example_read_replica" {
 
 ### Required
 
-- `account_id` (String) The ID of the account this read replica belongs to.
 - `primary_cluster_id` (String) The primary cluster ID for the read replica.
 - `read_replicas_info` (Attributes Set) Information about multiple read replicas. (see [below for nested schema](#nestedatt--read_replicas_info))
 
-### Read-Only
+### Optional
 
+- `account_id` (String) The ID of the account this read replica belongs to. To be provided if there are multiple accounts associated with the user.
 - `project_id` (String) The ID of the project this read replica belongs to.
 
 <a id="nestedatt--read_replicas_info"></a>

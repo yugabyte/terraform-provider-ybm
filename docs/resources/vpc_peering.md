@@ -15,7 +15,6 @@ The resource to create a VPC peering in YugabyteDB Managed.
 #AWS VPC Peering
 
 resource "ybm_vpc_peering" "example_vpc_peering" {
-  account_id = var.account_id
   name = "example_name"
   yugabytedb_vpc_id = "example_vpc_id"
   application_vpc_info = {
@@ -29,7 +28,6 @@ resource "ybm_vpc_peering" "example_vpc_peering" {
 
 #GCP VPC Peering
 resource "ybm_vpc_peering" "example_vpc_peering" {
-  account_id = var.account_id
   name = "example_name"
   yugabytedb_vpc_id = "example_vpc_id"
   application_vpc_info = {
@@ -45,14 +43,17 @@ resource "ybm_vpc_peering" "example_vpc_peering" {
 
 ### Required
 
-- `account_id` (String) The ID of the account this VPC peering belongs to.
 - `application_vpc_info` (Attributes) The details for the VPC where the application is deployed. (see [below for nested schema](#nestedatt--application_vpc_info))
 - `name` (String) The name of the VPC peering.
 - `yugabytedb_vpc_id` (String) The ID of the VPC where the YugabyteDB cluster is deployed.
 
+### Optional
+
+- `account_id` (String) The ID of the account this VPC peering belongs to. To be provided if there are multiple accounts associated with the user.
+- `project_id` (String) The ID of the project this VPC peering belongs to.
+
 ### Read-Only
 
-- `project_id` (String) The ID of the project this VPC peering belongs to.
 - `vpc_peering_id` (String) The ID of the VPC peering.
 - `vpc_peering_state` (String) The state of the VPC peering.
 

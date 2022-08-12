@@ -23,13 +23,15 @@ func (r resourceVPCPeeringType) GetSchema(_ context.Context) (tfsdk.Schema, diag
 		Description: `The resource to create a VPC peering in YugabyteDB Managed.`,
 		Attributes: map[string]tfsdk.Attribute{
 			"account_id": {
-				Description: "The ID of the account this VPC peering belongs to.",
+				Description: "The ID of the account this VPC peering belongs to. To be provided if there are multiple accounts associated with the user.",
 				Type:        types.StringType,
-				Required:    true,
+				Optional:    true,
+				Computed:    true,
 			},
 			"project_id": {
 				Description: "The ID of the project this VPC peering belongs to.",
 				Type:        types.StringType,
+				Optional:    true,
 				Computed:    true,
 			},
 			"vpc_peering_id": {
@@ -125,14 +127,25 @@ func (r resourceVPCPeering) Create(ctx context.Context, req tfsdk.CreateResource
 	}
 
 	var plan VPCPeering
+	var accountId, message string
+	var getAccountOK bool
 	diags := req.Plan.Get(ctx, &plan)
+	resp.Diagnostics.Append(diags...)
 	resp.Diagnostics.Append(getVPCPeeringPlan(ctx, req.Plan, &plan)...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
 
 	apiClient := r.p.client
-	accountId := plan.AccountID.Value
+	if !plan.AccountID.Null && !plan.AccountID.Unknown {
+		accountId = plan.AccountID.Value
+	} else {
+		accountId, getAccountOK, message = getAccountId(apiClient)
+		if !getAccountOK {
+			resp.Diagnostics.AddError("Unable to get account ID", message)
+			return
+		}
+	}
 
 	if (!plan.VPCPeeringID.Unknown && !plan.VPCPeeringID.Null) || plan.VPCPeeringID.Value != "" {
 		resp.Diagnostics.AddError(

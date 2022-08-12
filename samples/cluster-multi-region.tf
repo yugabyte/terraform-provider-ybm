@@ -1,5 +1,4 @@
 resource "ybm_cluster" "multi_region" {
-  account_id = var.account_id
   cluster_name = "terraform-test-posriniv-3"
   cloud_type = "GCP"
   cluster_type = "SYNCHRONOUS"

@@ -12,7 +12,6 @@ variable "ycql_password" {
 
 # Single Region Cluster
 resource "ybm_cluster" "single_region_cluster" {
-  account_id   = "example-account-id"
   cluster_name = "single-region-cluster"
   cloud_type   = "GCP"
   cluster_type = "SYNCHRONOUS"
@@ -49,7 +48,6 @@ resource "ybm_cluster" "single_region_cluster" {
 
 # Multi Region Cluster
 resource "ybm_cluster" "multi_region_cluster" {
-  account_id   = "example-account-id"
   cluster_name = "multi-region-cluster"
   cloud_type   = "GCP"
   cluster_type = "SYNCHRONOUS"

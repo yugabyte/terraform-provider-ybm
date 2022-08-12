@@ -19,11 +19,6 @@ variable "auth_token" {
   sensitive   = true
 }
 
-variable "account_id" {
-  type        = string
-  description = "The account ID."
-}
-
 variable "ysql_password" {
   type        = string
   description = "YSQL Password."
@@ -37,7 +32,6 @@ variable "ycql_password" {
 }
 
 resource "ybm_cluster" "single_region" {
-  account_id   = var.account_id
   cluster_name = "terraform-test-posriniv-2"
   cloud_type   = "GCP"
   cluster_type = "SYNCHRONOUS"
@@ -75,20 +69,16 @@ resource "ybm_cluster" "single_region" {
 }
 
 data "ybm_cluster" "clustername" {
-
   cluster_name = "terraform-test-posriniv-1"
-  account_id   = var.account_id
 }
 
 resource "ybm_allow_list" "mylist" {
-  account_id             = var.account_id
   allow_list_name        = "all"
   allow_list_description = "allow all the ip addresses"
   cidr_list              = ["0.0.0.0/0"]
 }
 
 # data "ybm_backup" "latest_backup" {
-#   account_id = var.account_id
 #   cluster_id = ybm_cluster.single_region.cluster_id
 #   most_recent = true
 #   #Ensure the timestamp is in the format given below
@@ -96,7 +86,6 @@ resource "ybm_allow_list" "mylist" {
 # }
 
 # resource "ybm_backup" "mybackup" {
-#   account_id = var.account_id
 #   cluster_id = ybm_cluster.single_region.cluster_id
 #   backup_description = "backup"
 #   retention_period_in_days = 2  
@@ -104,7 +93,6 @@ resource "ybm_allow_list" "mylist" {
 
 
 resource "ybm_vpc" "newvpc" {
-  account_id = var.account_id
   name       = "terraform-vpc"
   cloud      = "GCP"
   # Use only one among global cidr and region cidr
@@ -123,7 +111,6 @@ resource "ybm_vpc" "newvpc" {
 
 
 resource "ybm_read_replicas" "myrr" {
-  account_id = var.account_id
   read_replicas_info = [
     {
       cloud_type   = "GCP"
@@ -142,7 +129,6 @@ resource "ybm_read_replicas" "myrr" {
 }
 
 resource "ybm_vpc_peering" "example_vpc_peering" {
-  account_id        = var.account_id
   name              = "example_name"
   yugabytedb_vpc_id = "example_vpc_id"
   application_vpc_info = {

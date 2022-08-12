@@ -13,7 +13,6 @@ The data source to fetch the backup ID and other information about the most rece
 
 ```terraform
 data "ybm_backup" "example_backup" {
-  account_id = "example-account-id"
   cluster_id = "example-cluster-id"
   most_recent = true
 }
@@ -24,17 +23,17 @@ data "ybm_backup" "example_backup" {
 
 ### Required
 
-- `account_id` (String) The ID of the account this backup belongs to.
 - `cluster_id` (String) The ID of the cluster to be backed up.
 
 ### Optional
 
+- `account_id` (String) The ID of the account this backup belongs to. To be provided if there are multiple accounts associated with the user.
 - `backup_description` (String) The description of the backup.
 - `most_recent` (Boolean) Set to true to fetch the most recent backup.
+- `project_id` (String) The ID of the project this backup belongs to.
 - `retention_period_in_days` (Number) The retention period of the backup.
 - `timestamp` (String) The timestamp of the backup to be fetched. Format: '2022-07-08T00:06:01.890Z'.
 
 ### Read-Only
 
 - `backup_id` (String) The ID of the backup. Fetched from read.
-- `project_id` (String) The ID of the project this backup belongs to.
