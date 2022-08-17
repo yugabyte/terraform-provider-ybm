@@ -121,7 +121,7 @@ resource "ybm_cluster" "multi_region_cluster" {
 - `cluster_name` (String) The name of the cluster.
 - `cluster_region_info` (Attributes List) (see [below for nested schema](#nestedatt--cluster_region_info))
 - `cluster_tier` (String) FREE (Sandbox) or PAID (Dedicated).
-- `cluster_type` (String) The type of the cluster.
+- `cluster_type` (String) The type of the cluster. SYNCHRONOUS or GEO_PARTITIONED
 - `credentials` (Attributes) (see [below for nested schema](#nestedatt--credentials))
 - `node_config` (Attributes) (see [below for nested schema](#nestedatt--node_config))
 
@@ -168,7 +168,7 @@ Required:
 <a id="nestedatt--node_config"></a>
 ### Nested Schema for `node_config`
 
-Optional:
+Required:
 
 - `disk_size_gb` (Number) Disk size of the node.
 - `memory_mb` (Number) Memory of the node.
