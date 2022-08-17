@@ -11,3 +11,10 @@ func areListsEqual(l1 []string, l2 []string) bool {
 	}
 	return true
 }
+
+func isDiskSizeValid(clusterTier string, diskSize int64) bool {
+	if clusterTier == "PAID" && diskSize < 50 {
+		return false
+	}
+	return true
+}

@@ -46,3 +46,40 @@ func TestAreListsEqual(t *testing.T) {
 		})
 	}
 }
+
+func TestIsDiskSizeValid(t *testing.T) {
+	testCases := []struct {
+		TestName         string
+		ClusterTier      string
+		DiskSize         int64
+		ExpectedResponse bool
+	}{
+		{
+			TestName:         "Paid Cluster - Disk size great than 50",
+			ClusterTier:      "PAID",
+			DiskSize:         60,
+			ExpectedResponse: true,
+		},
+		{
+			TestName:         "Paid Cluster - Disk size less than 50",
+			ClusterTier:      "PAID",
+			DiskSize:         40,
+			ExpectedResponse: false,
+		},
+		{
+			TestName:         "FREE Cluster",
+			ClusterTier:      "FREE",
+			DiskSize:         40,
+			ExpectedResponse: true,
+		},
+	}
+
+	for _, testCase := range testCases {
+		t.Run(testCase.TestName, func(t *testing.T) {
+			gotResponse := isDiskSizeValid(testCase.ClusterTier, testCase.DiskSize)
+			if gotResponse != testCase.ExpectedResponse {
+				t.Errorf("isDiskSizeValid(%v,%v) = %v; want %v", testCase.ClusterTier, testCase.DiskSize, gotResponse, testCase.ExpectedResponse)
+			}
+		})
+	}
+}
