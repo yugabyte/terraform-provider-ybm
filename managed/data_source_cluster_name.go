@@ -198,6 +198,19 @@ func (r dataClusterNameType) GetSchema(_ context.Context) (tfsdk.Schema, diag.Di
 				Type:     types.StringType,
 				Computed: true,
 			},
+			"cluster_endpoints": {
+				Description: "The endpoints used to connect to the cluster by region.",
+				Type: types.MapType{
+					ElemType: types.StringType,
+				},
+				Optional: true,
+				Computed: true,
+			},
+			"cluster_certificate": {
+				Description: "The certificate used to connect to the cluster.",
+				Type:        types.StringType,
+				Computed:    true,
+			},
 		},
 	}, nil
 }
