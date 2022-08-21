@@ -131,6 +131,7 @@ resource "ybm_cluster" "multi_region_cluster" {
 - `backup_schedules` (Attributes List) (see [below for nested schema](#nestedatt--backup_schedules))
 - `cloud_type` (String) The cloud provider where the cluster is deployed: AWS or GCP. Default GCP.
 - `cluster_allow_list_ids` (List of String) List of IDs of the allow lists assigned to the cluster.
+- `cluster_endpoints` (Map of String) The endpoints used to connect to the cluster by region.
 - `cluster_id` (String) The ID of the cluster. Created automatically when a cluster is created. Used to get a specific cluster.
 - `fault_tolerance` (String) The fault tolerance of the cluster.
 - `project_id` (String) The ID of the project this cluster belongs to.
@@ -138,6 +139,7 @@ resource "ybm_cluster" "multi_region_cluster" {
 
 ### Read-Only
 
+- `cluster_certificate` (String) The certificate used to connect to the cluster.
 - `cluster_info` (Attributes) (see [below for nested schema](#nestedatt--cluster_info))
 - `cluster_version` (String)
 
