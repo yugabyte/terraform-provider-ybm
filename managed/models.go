@@ -21,6 +21,8 @@ type Cluster struct {
 	ClusterInfo         ClusterInfo          `tfsdk:"cluster_info"`
 	ClusterVersion      types.String         `tfsdk:"cluster_version"`
 	BackupSchedules     []BackupScheduleInfo `tfsdk:"backup_schedules"`
+	ClusterEndpoints    types.Map            `tfsdk:"cluster_endpoints"`
+	ClusterCertificate  types.String         `tfsdk:"cluster_certificate"`
 }
 
 type BackupScheduleInfo struct {

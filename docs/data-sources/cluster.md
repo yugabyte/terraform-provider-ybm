@@ -27,6 +27,7 @@ data "ybm_cluster" "example_cluster"{
 ### Optional
 
 - `account_id` (String) The ID of the account this cluster belongs to. To be provided if there are multiple accounts associated with the user.
+- `cluster_endpoints` (Map of String) The endpoints used to connect to the cluster by region.
 - `project_id` (String) The ID of the project this cluster belongs to.
 
 ### Read-Only
@@ -34,6 +35,7 @@ data "ybm_cluster" "example_cluster"{
 - `backup_schedules` (Attributes List) (see [below for nested schema](#nestedatt--backup_schedules))
 - `cloud_type` (String) The cloud provider where the cluster is deployed: AWS or GCP. Default GCP.
 - `cluster_allow_list_ids` (List of String) List of IDs of the allow lists assigned to the cluster.
+- `cluster_certificate` (String) The certificate used to connect to the cluster.
 - `cluster_id` (String) The ID of the cluster. Created automatically when a cluster is created. Used to get a specific cluster.
 - `cluster_info` (Attributes) (see [below for nested schema](#nestedatt--cluster_info))
 - `cluster_region_info` (Attributes List) (see [below for nested schema](#nestedatt--cluster_region_info))

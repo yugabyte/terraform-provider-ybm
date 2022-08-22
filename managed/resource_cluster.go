@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
+	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
@@ -225,6 +226,19 @@ func (r resourceClusterType) GetSchema(_ context.Context) (tfsdk.Schema, diag.Di
 			"cluster_version": {
 				Type:     types.StringType,
 				Computed: true,
+			},
+			"cluster_endpoints": {
+				Description: "The endpoints used to connect to the cluster by region.",
+				Type: types.MapType{
+					ElemType: types.StringType,
+				},
+				Optional: true,
+				Computed: true,
+			},
+			"cluster_certificate": {
+				Description: "The certificate used to connect to the cluster.",
+				Type:        types.StringType,
+				Computed:    true,
 			},
 		},
 	}, nil
@@ -712,6 +726,23 @@ func resourceClusterRead(accountId string, projectId string, clusterId string, b
 	cluster.ClusterInfo.SoftwareVersion.Value = clusterResp.Data.Info.GetSoftwareVersion()
 	cluster.ClusterInfo.CreatedTime.Value = clusterResp.Data.Info.Metadata.GetCreatedOn()
 	cluster.ClusterInfo.UpdatedTime.Value = clusterResp.Data.Info.Metadata.GetUpdatedOn()
+
+	// Cluster endpoints
+	clusterEndpoints := types.Map{}
+	clusterEndpoints.Elems = make(map[string]attr.Value)
+	clusterEndpoints.ElemType = types.StringType
+	for key, val := range clusterResp.Data.Info.Endpoints {
+		clusterEndpoints.Elems[key] = types.String{Value: val}
+	}
+	cluster.ClusterEndpoints = clusterEndpoints
+
+	// Cluster certificate
+	certResponse, certHttpResp, err := apiClient.ClusterApi.GetConnectionCertificate(context.Background()).Execute()
+	if err != nil {
+		b, _ := httputil.DumpResponse(certHttpResp, true)
+		return cluster, false, string(b)
+	}
+	cluster.ClusterCertificate.Value = *certResponse.Data
 
 	// This is being done to preserve order in the region list since an order mismatch is treated as state mismatch by Terraform
 	regionIndexMap := map[string]int{}
