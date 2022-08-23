@@ -166,7 +166,7 @@ func (r resourceVPCPeering) Create(ctx context.Context, req tfsdk.CreateResource
 	applicationProject := plan.ApplicationVPCInfo.Project.Value
 	applicationVPCID := plan.ApplicationVPCInfo.VPCID.Value
 
-	applicationVPCSpec := *openapiclient.NewCustomerVpcSpec(*openapiclient.NewVpcCloudInfo(openapiclient.CloudEnum(applicationCloud)), applicationProject, applicationVPCID)
+	applicationVPCSpec := *openapiclient.NewCustomerVpcSpec(applicationVPCID, applicationProject, *openapiclient.NewVpcCloudInfo(openapiclient.CloudEnum(applicationCloud)))
 
 	// The Region and CIDR are required only for AWS. They are not required for GCP.
 	if applicationCloud == "AWS" {
@@ -183,7 +183,7 @@ func (r resourceVPCPeering) Create(ctx context.Context, req tfsdk.CreateResource
 		applicationVPCCIDR := plan.ApplicationVPCInfo.CIDR.Value
 		applicationVPCSpec.SetCidr(applicationVPCCIDR)
 	}
-	vpcPeeringSpec := *openapiclient.NewVpcPeeringSpec(applicationVPCSpec, yugabyteDBVPCID, vpcPeeringName)
+	vpcPeeringSpec := *openapiclient.NewVpcPeeringSpec(yugabyteDBVPCID, vpcPeeringName, applicationVPCSpec)
 
 	vpcPeeringResp, response, err := apiClient.NetworkApi.CreateVpcPeering(ctx, accountId, projectId).VpcPeeringSpec(vpcPeeringSpec).Execute()
 	if err != nil {

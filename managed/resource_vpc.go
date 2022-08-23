@@ -200,7 +200,7 @@ func (r resourceVPC) Create(ctx context.Context, req tfsdk.CreateResourceRequest
 		}
 	}
 
-	vpcSpec := *openapiclient.NewSingleTenantVpcSpec(openapiclient.CloudEnum(cloud), vpcName, vpcRegionSpec)
+	vpcSpec := *openapiclient.NewSingleTenantVpcSpec(vpcName, openapiclient.CloudEnum(cloud), vpcRegionSpec)
 	if globalCIDRPresent {
 		vpcSpec.SetParentCidr(plan.GlobalCIDR.Value)
 	}

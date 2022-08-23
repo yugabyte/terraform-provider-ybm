@@ -143,7 +143,7 @@ func (r resourceAllowList) Create(ctx context.Context, req tfsdk.CreateResourceR
 		cidrList = append(cidrList, plan.CIDRList[i].Value)
 	}
 
-	networkAllowListSpec := *openapiclient.NewNetworkAllowListSpec(cidrList, allowListDesc, allowListName) // NetworkAllowListSpec | Allow list specification (optional)
+	networkAllowListSpec := *openapiclient.NewNetworkAllowListSpec(allowListName, allowListDesc, cidrList) // NetworkAllowListSpec | Allow list specification (optional)
 
 	allowListResp, response, err := apiClient.NetworkApi.CreateNetworkAllowList(context.Background(), accountId, projectId).NetworkAllowListSpec(networkAllowListSpec).Execute()
 	if err != nil {

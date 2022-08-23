@@ -9,7 +9,7 @@ import (
 
 	"time"
 
-	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
+	"github.com/hashicorp/terraform-plugin-framework-validators/int64validator"
 	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/path"
@@ -54,7 +54,7 @@ func (r resourceClusterType) GetSchema(_ context.Context) (tfsdk.Schema, diag.Di
 				Required:    true,
 			},
 			"cluster_type": {
-				Description: "The type of the cluster. SYNCHRONOUS or GEO_PARTITIONED",
+				Description: "The type of the cluster.",
 				Type:        types.StringType,
 				Required:    true,
 			},
@@ -135,7 +135,6 @@ func (r resourceClusterType) GetSchema(_ context.Context) (tfsdk.Schema, diag.Di
 				Description: "FREE (Sandbox) or PAID (Dedicated).",
 				Type:        types.StringType,
 				Required:    true,
-				Validators:  []tfsdk.AttributeValidator{stringvalidator.OneOf("FREE", "PAID")},
 			},
 			"fault_tolerance": {
 				Description: "The fault tolerance of the cluster.",
@@ -161,17 +160,23 @@ func (r resourceClusterType) GetSchema(_ context.Context) (tfsdk.Schema, diag.Di
 					"num_cores": {
 						Description: "Number of CPU cores in the node.",
 						Type:        types.Int64Type,
-						Required:    true,
+						Optional:    true,
+						Computed:    true,
 					},
 					"memory_mb": {
 						Description: "Memory of the node.",
 						Type:        types.Int64Type,
-						Required:    true,
+						Optional:    true,
+						Computed:    true,
 					},
 					"disk_size_gb": {
 						Description: "Disk size of the node.",
 						Type:        types.Int64Type,
-						Required:    true,
+						Optional:    true,
+						Computed:    true,
+						Validators: []tfsdk.AttributeValidator{
+							int64validator.AtLeast(50),
+						},
 					},
 				}),
 			},
@@ -324,19 +329,16 @@ func createClusterSpec(ctx context.Context, plan Cluster, clusterExists bool) (c
 	// This is to support a redundant value in the API.
 	// Needs to be removed once API cleans it up.
 	isProduction := true
-	if plan.ClusterTier.Value == "FREE" {
-		isProduction = false
-	}
 
 	clusterInfo := *openapiclient.NewClusterInfo(
 		openapiclient.ClusterTier(plan.ClusterTier.Value),
+		int32(totalNodes),
 		openapiclient.ClusterFaultTolerance(plan.FaultTolerance.Value),
-		isProduction,
 		*openapiclient.NewClusterNodeInfo(
 			int32(plan.NodeConfig.DiskSizeGb.Value),
 			int32(plan.NodeConfig.MemoryMb.Value),
 			int32(plan.NodeConfig.NumCores.Value)),
-		int32(totalNodes))
+		isProduction)
 
 	clusterInfo.SetClusterType(openapiclient.ClusterType(clusterType))
 	if clusterExists {
@@ -345,11 +347,11 @@ func createClusterSpec(ctx context.Context, plan Cluster, clusterExists bool) (c
 	}
 
 	clusterSpec = openapiclient.NewClusterSpec(
+		plan.ClusterName.Value,
 		*openapiclient.NewCloudInfo(
 			openapiclient.CloudEnum(plan.CloudType.Value),
 			region),
 		clusterInfo,
-		plan.ClusterName.Value,
 		networking,
 		softwareInfo)
 
@@ -409,11 +411,6 @@ func (r resourceCluster) Create(ctx context.Context, req tfsdk.CreateResourceReq
 	resp.Diagnostics.Append(getPlan(ctx, req.Plan, &plan)...)
 	if resp.Diagnostics.HasError() {
 		tflog.Debug(ctx, "Cluster Resource: Error on Get Plan")
-		return
-	}
-
-	if !isDiskSizeValid(plan.ClusterTier.Value, plan.NodeConfig.DiskSizeGb.Value) {
-		resp.Diagnostics.AddError("Invalid disk size", "The disk size for a paid cluster must be at least 50 GB.")
 		return
 	}
 
@@ -860,12 +857,6 @@ func (r resourceCluster) Update(ctx context.Context, req tfsdk.UpdateResourceReq
 	if resp.Diagnostics.HasError() {
 		return
 	}
-
-	if !isDiskSizeValid(plan.ClusterTier.Value, plan.NodeConfig.DiskSizeGb.Value) {
-		resp.Diagnostics.AddError("Invalid disk size", "The disk size for a paid cluster must be greater than 50 GB.")
-		return
-	}
-
 	apiClient := r.p.client
 	var state Cluster
 	getIDsFromState(ctx, req.State, &state)
