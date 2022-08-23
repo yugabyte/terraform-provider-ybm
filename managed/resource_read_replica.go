@@ -136,9 +136,10 @@ func createReadReplicasSpec(ctx context.Context, plan ReadReplicas) (readReplica
 
 	for _, readReplica := range readReplicasInfo {
 		clusterNodeInfo := *openapiclient.NewClusterNodeInfo(
-			int32(readReplica.NodeConfig.DiskSizeGb.Value),
+			int32(readReplica.NodeConfig.NumCores.Value),
 			int32(readReplica.NodeConfig.MemoryMb.Value),
-			int32(readReplica.NodeConfig.NumCores.Value))
+			int32(readReplica.NodeConfig.DiskSizeGb.Value),
+		)
 
 		placementInfo := *openapiclient.NewPlacementInfo(
 			*openapiclient.NewCloudInfo(

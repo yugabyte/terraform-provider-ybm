@@ -333,9 +333,10 @@ func createClusterSpec(ctx context.Context, plan Cluster, clusterExists bool) (c
 		int32(totalNodes),
 		openapiclient.ClusterFaultTolerance(plan.FaultTolerance.Value),
 		*openapiclient.NewClusterNodeInfo(
-			int32(plan.NodeConfig.DiskSizeGb.Value),
+			int32(plan.NodeConfig.NumCores.Value),
 			int32(plan.NodeConfig.MemoryMb.Value),
-			int32(plan.NodeConfig.NumCores.Value)),
+			int32(plan.NodeConfig.DiskSizeGb.Value),
+		),
 		isProduction,
 	)
 
