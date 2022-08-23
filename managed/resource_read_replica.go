@@ -338,6 +338,74 @@ func resourceReadReplicasRead(accountId string, projectId string, clusterId stri
 // Update read replicas
 func (r resourceReadReplicas) Update(ctx context.Context, req tfsdk.UpdateResourceRequest, resp *tfsdk.UpdateResourceResponse) {
 
+	var state ReadReplicas
+	getIDsFromReadReplicasState(ctx, req.State, &state)
+	accountId := state.AccountID.Value
+	projectId := state.ProjectID.Value
+	clusterId := state.PrimaryClusterID.Value
+
+	var plan ReadReplicas
+	resp.Diagnostics.Append(getReadReplicasPlan(ctx, req.Plan, &plan)...)
+	if resp.Diagnostics.HasError() {
+		tflog.Debug(ctx, "Read Replicas Resource: Error on Get Plan")
+		return
+	}
+	if plan.ReadReplicasInfo == nil {
+		resp.Diagnostics.AddError(
+			"No read replica specified",
+			"You must specify at least one read replica.",
+		)
+		return
+	}
+
+	apiClient := r.p.client
+
+	readReplicasSpec := createReadReplicasSpec(ctx, plan)
+
+	_, response, err := apiClient.ReadReplicaApi.EditReadReplicas(context.Background(), accountId, projectId, clusterId).ReadReplicaSpec(readReplicasSpec).Execute()
+	if err != nil {
+		b, _ := httputil.DumpResponse(response, true)
+		if len(string(b)) > 10000 {
+			resp.Diagnostics.AddError("Unable to update read replicas. NOTE: The length of the HTML output indicates your authentication token may be out of date. A truncated response follows: ",
+				string(b)[:10000])
+			return
+		}
+		resp.Diagnostics.AddError("Unable to create read replicas ", string(b))
+		return
+	}
+
+	// read status, wait for status to be done
+	retryPolicy := retry.NewConstant(10 * time.Second)
+	retryPolicy = retry.WithMaxDuration(1200*time.Second, retryPolicy)
+	err = retry.Do(ctx, retryPolicy, func(ctx context.Context) error {
+		primaryClusterState, readInfoOK, message := getClusterState(ctx, accountId, projectId, clusterId, apiClient)
+		if readInfoOK {
+			if primaryClusterState == "Active" {
+				return nil
+			}
+		} else {
+			return retry.RetryableError(errors.New("Unable to get the primary cluster's state: " + message))
+		}
+		return retry.RetryableError(errors.New("Read replica creation in progress"))
+	})
+
+	if err != nil {
+		resp.Diagnostics.AddError("Unable to create read replicas ", "The operation timed out waiting for read replica creation.")
+		return
+	}
+
+	readReplicas, readOK, message := resourceReadReplicasRead(accountId, projectId, clusterId, apiClient)
+	if !readOK {
+		resp.Diagnostics.AddError("Unable to read the state of the read replicas", message)
+		return
+	}
+
+	diags := resp.State.Set(ctx, &readReplicas)
+	resp.Diagnostics.Append(diags...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
 	resp.Diagnostics.AddError("Unable to update read replicas.", "Updating read replicas is not currently supported. Delete and recreate the provider.")
 	return
 }
