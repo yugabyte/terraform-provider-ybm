@@ -110,13 +110,7 @@ type ReadReplicaInfo struct {
 	VPCID       types.String `tfsdk:"vpc_id"`
 	NodeConfig  NodeConfig   `tfsdk:"node_config"`
 	MultiZone   types.Bool   `tfsdk:"multi_zone"`
-	Endpoint    Endpoint     `tfsdk:"endpoint"`
-}
-
-type Endpoint struct {
-	Region            types.String `tfsdk:"region"`
-	Host              types.String `tfsdk:"host"`
-	AccessibilityType types.String `tfsdk:"accessibility_type"`
+	Endpoint    types.String `tfsdk:"endpoint"`
 }
 
 type VPCPeering struct {

@@ -90,24 +90,8 @@ func (r resourceReadReplicasType) GetSchema(_ context.Context) (tfsdk.Schema, di
 					},
 					"endpoint": {
 						Description: "The endpoint of the read replica. Created automatically when a read replica is created.",
+						Type:        types.StringType,
 						Computed:    true,
-						Attributes: tfsdk.SingleNestedAttributes(map[string]tfsdk.Attribute{
-							"host": {
-								Description: "The host of the endpoint.",
-								Type:        types.StringType,
-								Computed:    true,
-							},
-							"region": {
-								Description: "The region of the endpoint.",
-								Type:        types.StringType,
-								Computed:    true,
-							},
-							"accessibility_type": {
-								Description: "The accessibility type of the endpoint. Private or Public.",
-								Type:        types.StringType,
-								Computed:    true,
-							},
-						}),
 					},
 				}),
 			},
@@ -140,7 +124,6 @@ func createReadReplicasSpec(ctx context.Context, plan ReadReplicas) (readReplica
 			int32(readReplica.NodeConfig.MemoryMb.Value),
 			int32(readReplica.NodeConfig.DiskSizeGb.Value),
 		)
-
 		placementInfo := *openapiclient.NewPlacementInfo(
 			*openapiclient.NewCloudInfo(
 				openapiclient.CloudEnum(readReplica.CloudType.Value),
@@ -148,7 +131,7 @@ func createReadReplicasSpec(ctx context.Context, plan ReadReplicas) (readReplica
 		placementInfo.SetNumReplicas(int32(readReplica.NumReplicas.Value))
 		placementInfo.SetVpcId(readReplica.VPCID.Value)
 
-		multiZone := false
+		multiZone := true
 		if !readReplica.MultiZone.Null {
 			multiZone = readReplica.MultiZone.Value
 		}
@@ -322,10 +305,9 @@ func resourceReadReplicasRead(accountId string, projectId string, clusterId stri
 		readReplicaInfo.NodeConfig.NumCores.Value = int64(readReplicaSpec.NodeInfo.NumCores)
 		readReplicaInfo.NodeConfig.MemoryMb.Value = int64(readReplicaSpec.NodeInfo.MemoryMb)
 		readReplicaInfo.NodeConfig.DiskSizeGb.Value = int64(readReplicaSpec.NodeInfo.DiskSizeGb)
+		readReplicaInfo.MultiZone.Value = readReplicaSpec.PlacementInfo.GetMultiZone()
 		if getEndpointsOk {
-			readReplicaInfo.Endpoint.Host.Value = endpoints[index].GetHost()
-			readReplicaInfo.Endpoint.Region.Value = endpoints[index].GetRegion()
-			readReplicaInfo.Endpoint.AccessibilityType.Value = string(endpoints[index].GetAccessibilityType())
+			readReplicaInfo.Endpoint.Value = endpoints[index].GetHost()
 		}
 		readReplicasInfo = append(readReplicasInfo, readReplicaInfo)
 
@@ -371,7 +353,7 @@ func (r resourceReadReplicas) Update(ctx context.Context, req tfsdk.UpdateResour
 				string(b)[:10000])
 			return
 		}
-		resp.Diagnostics.AddError("Unable to create read replicas ", string(b))
+		resp.Diagnostics.AddError("Unable to update read replicas ", string(b))
 		return
 	}
 
@@ -387,11 +369,11 @@ func (r resourceReadReplicas) Update(ctx context.Context, req tfsdk.UpdateResour
 		} else {
 			return retry.RetryableError(errors.New("Unable to get the primary cluster's state: " + message))
 		}
-		return retry.RetryableError(errors.New("Read replica creation in progress"))
+		return retry.RetryableError(errors.New("Read replica update in progress"))
 	})
 
 	if err != nil {
-		resp.Diagnostics.AddError("Unable to create read replicas ", "The operation timed out waiting for read replica creation.")
+		resp.Diagnostics.AddError("Unable to update read replicas ", "The operation timed out waiting for read replica update.")
 		return
 	}
 
@@ -406,9 +388,6 @@ func (r resourceReadReplicas) Update(ctx context.Context, req tfsdk.UpdateResour
 	if resp.Diagnostics.HasError() {
 		return
 	}
-
-	resp.Diagnostics.AddError("Unable to update read replicas.", "Updating read replicas is not currently supported. Delete and recreate the provider.")
-	return
 }
 
 // Delete read replicas
