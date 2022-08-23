@@ -64,7 +64,7 @@ Optional:
 
 Read-Only:
 
-- `endpoint` (Attributes) The endpoint of the read replica. Created automatically when a read replica is created. (see [below for nested schema](#nestedatt--read_replicas_info--endpoint))
+- `endpoint` (String) The endpoint of the read replica. Created automatically when a read replica is created.
 
 <a id="nestedatt--read_replicas_info--node_config"></a>
 ### Nested Schema for `read_replicas_info.node_config`
@@ -74,13 +74,3 @@ Required:
 - `disk_size_gb` (Number)
 - `memory_mb` (Number)
 - `num_cores` (Number)
-
-
-<a id="nestedatt--read_replicas_info--endpoint"></a>
-### Nested Schema for `read_replicas_info.endpoint`
-
-Read-Only:
-
-- `accessibility_type` (String) The accessibility type of the endpoint. Private or Public.
-- `host` (String) The host of the endpoint.
-- `region` (String) The region of the endpoint.
