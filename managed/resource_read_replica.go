@@ -18,7 +18,7 @@ import (
 
 type resourceReadReplicasType struct{}
 
-func (r resourceReadReplicasType) GetSchema(_ context.Context) (tfsdk.Schema, diag.Diagnostics) {
+func (r resourceReadReplicasType) GetSchema(ctx context.Context) (tfsdk.Schema, diag.Diagnostics) {
 	return tfsdk.Schema{
 		Description: `The resource to create read replicas of a particular cluster. You can create multiple read replicas
 		in different regions using a single resource.`,
@@ -38,7 +38,7 @@ func (r resourceReadReplicasType) GetSchema(_ context.Context) (tfsdk.Schema, di
 			"read_replicas_info": {
 				Required:    true,
 				Description: "Information about multiple read replicas.",
-				Attributes: tfsdk.SetNestedAttributes(map[string]tfsdk.Attribute{
+				Attributes: tfsdk.ListNestedAttributes(map[string]tfsdk.Attribute{
 					"cloud_type": {
 						Description: "The cloud provider where the read replica is deployed: AWS or GCP. Default GCP.",
 						Type:        types.StringType,
@@ -66,9 +66,10 @@ func (r resourceReadReplicasType) GetSchema(_ context.Context) (tfsdk.Schema, di
 						Required:    true,
 					},
 					"multi_zone": {
-						Description: "Set whether to spread the nodes in this region across zones. Defaults to false.",
+						Description: "Set whether to spread the nodes in this region across zones. Defaults to true.",
 						Optional:    true,
 						Type:        types.BoolType,
+						Computed:    true,
 					},
 					"node_config": {
 						Required:    true,
@@ -244,7 +245,12 @@ func (r resourceReadReplicas) Create(ctx context.Context, req tfsdk.CreateResour
 		return
 	}
 
-	readReplicas, readOK, message := resourceReadReplicasRead(accountId, projectId, clusterId, apiClient)
+	regions := []string{}
+	for _, readReplica := range plan.ReadReplicasInfo {
+		regions = append(regions, readReplica.Region.Value)
+	}
+
+	readReplicas, readOK, message := resourceReadReplicasRead(ctx, accountId, projectId, clusterId, apiClient, regions, false)
 	if !readOK {
 		resp.Diagnostics.AddError("Unable to read the state of the read replicas", message)
 		return
@@ -265,7 +271,12 @@ func (r resourceReadReplicas) Read(ctx context.Context, req tfsdk.ReadResourceRe
 	projectId := state.ProjectID.Value
 	clusterId := state.PrimaryClusterID.Value
 
-	readReplicas, readOK, message := resourceReadReplicasRead(accountId, projectId, clusterId, r.p.client)
+	regions := []string{}
+	for _, readReplica := range state.ReadReplicasInfo {
+		regions = append(regions, readReplica.Region.Value)
+	}
+
+	readReplicas, readOK, message := resourceReadReplicasRead(ctx, accountId, projectId, clusterId, r.p.client, regions, false)
 	if !readOK {
 		resp.Diagnostics.AddError("Unable to read the state of the read replica", message)
 		return
@@ -278,7 +289,7 @@ func (r resourceReadReplicas) Read(ctx context.Context, req tfsdk.ReadResourceRe
 	}
 }
 
-func resourceReadReplicasRead(accountId string, projectId string, clusterId string, apiClient *openapiclient.APIClient) (readReplicas ReadReplicas, readOK bool, errorMessage string) {
+func resourceReadReplicasRead(ctx context.Context, accountId string, projectId string, clusterId string, apiClient *openapiclient.APIClient, planRegions []string, isReadOnly bool) (readReplicas ReadReplicas, readOK bool, errorMessage string) {
 
 	listReadReplicasResp, response, err := apiClient.ReadReplicaApi.ListReadReplicas(context.Background(), accountId, projectId, clusterId).Execute()
 	if err != nil {
@@ -290,11 +301,19 @@ func resourceReadReplicasRead(accountId string, projectId string, clusterId stri
 	readReplicas.ProjectID.Value = projectId
 	readReplicas.PrimaryClusterID.Value = clusterId
 
-	readReplicasInfo := []ReadReplicaInfo{}
 	endpointsPtr, getEndpointsOk := listReadReplicasResp.Data.Info.GetEndpointsOk()
 	endpoints := *endpointsPtr
 
-	for index, readReplicaSpec := range listReadReplicasResp.Data.GetSpec() {
+	// Preserve the order of items in the array since order mismatch is treated as state mismatch
+	regionIndexMap := map[string]int{}
+	for index, region := range planRegions {
+		regionIndexMap[region] = index
+	}
+
+	readReplicasSpec := listReadReplicasResp.Data.GetSpec()
+	readReplicasInfo := make([]ReadReplicaInfo, len(readReplicasSpec))
+
+	for localIndex, readReplicaSpec := range readReplicasSpec {
 
 		readReplicaInfo := ReadReplicaInfo{}
 		readReplicaInfo.CloudType.Value = string(readReplicaSpec.PlacementInfo.CloudInfo.GetCode())
@@ -307,9 +326,11 @@ func resourceReadReplicasRead(accountId string, projectId string, clusterId stri
 		readReplicaInfo.NodeConfig.DiskSizeGb.Value = int64(readReplicaSpec.NodeInfo.DiskSizeGb)
 		readReplicaInfo.MultiZone.Value = readReplicaSpec.PlacementInfo.GetMultiZone()
 		if getEndpointsOk {
-			readReplicaInfo.Endpoint.Value = endpoints[index].GetHost()
+			readReplicaInfo.Endpoint.Value = endpoints[localIndex].GetHost()
 		}
-		readReplicasInfo = append(readReplicasInfo, readReplicaInfo)
+
+		destIndex := getClusterRegionIndex(readReplicaInfo.Region.Value, isReadOnly, regionIndexMap, localIndex)
+		readReplicasInfo[destIndex] = readReplicaInfo
 
 	}
 
@@ -345,6 +366,7 @@ func (r resourceReadReplicas) Update(ctx context.Context, req tfsdk.UpdateResour
 
 	readReplicasSpec := createReadReplicasSpec(ctx, plan)
 
+	tflog.Info(ctx, "Making call to update read replicas...")
 	_, response, err := apiClient.ReadReplicaApi.EditReadReplicas(context.Background(), accountId, projectId, clusterId).ReadReplicaSpec(readReplicasSpec).Execute()
 	if err != nil {
 		b, _ := httputil.DumpResponse(response, true)
@@ -363,6 +385,7 @@ func (r resourceReadReplicas) Update(ctx context.Context, req tfsdk.UpdateResour
 	err = retry.Do(ctx, retryPolicy, func(ctx context.Context) error {
 		primaryClusterState, readInfoOK, message := getClusterState(ctx, accountId, projectId, clusterId, apiClient)
 		if readInfoOK {
+			tflog.Debug(ctx, "Read Replica current state = "+primaryClusterState)
 			if primaryClusterState == "Active" {
 				return nil
 			}
@@ -377,7 +400,14 @@ func (r resourceReadReplicas) Update(ctx context.Context, req tfsdk.UpdateResour
 		return
 	}
 
-	readReplicas, readOK, message := resourceReadReplicasRead(accountId, projectId, clusterId, apiClient)
+	tflog.Debug(ctx, "Cluster is Active again, re-reading read-replica information.")
+
+	regions := []string{}
+	for _, readReplicaInfo := range plan.ReadReplicasInfo {
+		regions = append(regions, readReplicaInfo.Region.Value)
+	}
+
+	readReplicas, readOK, message := resourceReadReplicasRead(ctx, accountId, projectId, clusterId, apiClient, regions, false)
 	if !readOK {
 		resp.Diagnostics.AddError("Unable to read the state of the read replicas", message)
 		return
