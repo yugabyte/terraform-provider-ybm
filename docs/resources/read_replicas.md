@@ -39,7 +39,7 @@ resource "ybm_read_replicas" "example_read_replica" {
 ### Required
 
 - `primary_cluster_id` (String) The primary cluster ID for the read replica.
-- `read_replicas_info` (Attributes Set) Information about multiple read replicas. (see [below for nested schema](#nestedatt--read_replicas_info))
+- `read_replicas_info` (Attributes List) Information about multiple read replicas. (see [below for nested schema](#nestedatt--read_replicas_info))
 
 ### Optional
 
@@ -60,7 +60,7 @@ Required:
 Optional:
 
 - `cloud_type` (String) The cloud provider where the read replica is deployed: AWS or GCP. Default GCP.
-- `multi_zone` (Boolean) Set whether to spread the nodes in this region across zones. Defaults to false.
+- `multi_zone` (Boolean) Set whether to spread the nodes in this region across zones. Defaults to true.
 
 Read-Only:
 
