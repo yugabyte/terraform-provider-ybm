@@ -103,14 +103,14 @@ type ReadReplicas struct {
 }
 
 type ReadReplicaInfo struct {
-	ReadReplicaID types.String `tfsdk:"read_replica_id"`
-	CloudType     types.String `tfsdk:"cloud_type"`
-	NumNodes      types.Int64  `tfsdk:"num_nodes"`
-	NumReplicas   types.Int64  `tfsdk:"num_replicas"`
-	Region        types.String `tfsdk:"region"`
-	VPCID         types.String `tfsdk:"vpc_id"`
-	NodeConfig    NodeConfig   `tfsdk:"node_config"`
-	Endpoint      types.String `tfsdk:"endpoint"`
+	CloudType   types.String `tfsdk:"cloud_type"`
+	NumNodes    types.Int64  `tfsdk:"num_nodes"`
+	NumReplicas types.Int64  `tfsdk:"num_replicas"`
+	Region      types.String `tfsdk:"region"`
+	VPCID       types.String `tfsdk:"vpc_id"`
+	NodeConfig  NodeConfig   `tfsdk:"node_config"`
+	MultiZone   types.Bool   `tfsdk:"multi_zone"`
+	Endpoint    types.String `tfsdk:"endpoint"`
 }
 
 type VPCPeering struct {

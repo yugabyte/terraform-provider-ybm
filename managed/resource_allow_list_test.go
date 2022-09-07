@@ -41,9 +41,9 @@ func getCreateAllowListRequest(ctx context.Context, cfg *openapiclient.Configura
 }
 
 func getCreateAllowListResponse(allowListID string, projectID string, cidrList []string, allowListDescription string, allowListName string) *openapiclient.NetworkAllowListResponse {
-	allowListInfo := openapiclient.NewNetworkAllowListInfo([]string{}, allowListID, projectID)
-	allowListSpec := openapiclient.NewNetworkAllowListSpec(cidrList, allowListDescription, allowListName)
-	allowListData := openapiclient.NewNetworkAllowListData(*allowListInfo, *allowListSpec)
+	allowListInfo := openapiclient.NewNetworkAllowListInfo(allowListID, projectID, []string{})
+	allowListSpec := openapiclient.NewNetworkAllowListSpec(allowListName, allowListDescription, cidrList)
+	allowListData := openapiclient.NewNetworkAllowListData(*allowListSpec, *allowListInfo)
 	createAllowListResponse := openapiclient.NewNetworkAllowListResponse(*allowListData)
 	return createAllowListResponse
 }
@@ -82,7 +82,7 @@ func TestCreateAllowList(t *testing.T) {
 	listProjectsRequest := getListProjectsRequest(ctx, cfg, accountID, mockProjectApi)
 	listProjectsResponse := getListProjectsResponse(projectID)
 	createAllowListRequest := getCreateAllowListRequest(ctx, cfg, accountID, projectID, mockNetworkApi)
-	createAllowListSpec := *openapiclient.NewNetworkAllowListSpec(cidrList, allowListDescription, allowListName)
+	createAllowListSpec := *openapiclient.NewNetworkAllowListSpec(allowListName, allowListDescription, cidrList)
 	createAllowListRequestFinal := createAllowListRequest.NetworkAllowListSpec(createAllowListSpec)
 	createAllowListResponse := getCreateAllowListResponse(allowListID, projectID, cidrList, allowListDescription, allowListName)
 	getAllowListRequest := getGetAllowListRequest(ctx, cfg, accountID, projectID, allowListID, mockNetworkApi)

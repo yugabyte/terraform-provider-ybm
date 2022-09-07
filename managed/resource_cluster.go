@@ -330,13 +330,15 @@ func createClusterSpec(ctx context.Context, plan Cluster, clusterExists bool) (c
 
 	clusterInfo := *openapiclient.NewClusterInfo(
 		openapiclient.ClusterTier(plan.ClusterTier.Value),
+		int32(totalNodes),
 		openapiclient.ClusterFaultTolerance(plan.FaultTolerance.Value),
-		isProduction,
 		*openapiclient.NewClusterNodeInfo(
-			int32(plan.NodeConfig.DiskSizeGb.Value),
+			int32(plan.NodeConfig.NumCores.Value),
 			int32(plan.NodeConfig.MemoryMb.Value),
-			int32(plan.NodeConfig.NumCores.Value)),
-		int32(totalNodes))
+			int32(plan.NodeConfig.DiskSizeGb.Value),
+		),
+		isProduction,
+	)
 
 	clusterInfo.SetClusterType(openapiclient.ClusterType(clusterType))
 	if clusterExists {
@@ -345,11 +347,11 @@ func createClusterSpec(ctx context.Context, plan Cluster, clusterExists bool) (c
 	}
 
 	clusterSpec = openapiclient.NewClusterSpec(
+		plan.ClusterName.Value,
 		*openapiclient.NewCloudInfo(
 			openapiclient.CloudEnum(plan.CloudType.Value),
 			region),
 		clusterInfo,
-		plan.ClusterName.Value,
 		networking,
 		softwareInfo)
 
