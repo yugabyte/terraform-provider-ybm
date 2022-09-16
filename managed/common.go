@@ -2,8 +2,10 @@ package managed
 
 import (
 	"context"
+	"fmt"
 	"net/http/httputil"
 
+	"github.com/hashicorp/terraform-plugin-log/tflog"
 	openapiclient "github.com/yugabyte/yugabytedb-managed-go-client-internal"
 )
 
@@ -34,14 +36,18 @@ func getMemoryFromInstanceType(ctx context.Context, apiClient *openapiclient.API
 	instanceData := instanceResp.GetData()
 	nodeConfigList, ok := instanceData[region]
 	if !ok || len(nodeConfigList) == 0 {
-		return 0, false, "No nodes configured for the given region."
+		return 0, false, "No instances configured for the given region."
 	}
 	for _, nodeConfig := range nodeConfigList {
 		if nodeConfig.GetNumCores() == numCores {
 			memory = nodeConfig.GetMemoryMb()
+			tflog.Debug(ctx, fmt.Sprintf("Found an instance type with %v cores and %v MB memory in %v cloud in the region %v", numCores, memory, cloud, region))
 			return memory, true, ""
 		}
 	}
+
+	tflog.Debug(ctx, fmt.Sprintf("Could not find a instance with %v cores in %v cloud in the region %v", numCores, cloud, region))
+
 	return 0, false, "Node with the given number of CPU cores doesn't exist in the given region."
 }
 
