@@ -303,6 +303,7 @@ func createClusterSpec(ctx context.Context, apiClient *openapiclient.APIClient, 
 		if clusterType == "SYNCHRONOUS" {
 			info.PlacementInfo.SetMultiZone(false)
 		}
+		info.SetIsDefault(false)
 		clusterRegionInfo = append(clusterRegionInfo, info)
 	}
 
