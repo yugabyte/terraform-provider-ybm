@@ -115,7 +115,7 @@ func (r resourceAllowList) Create(ctx context.Context, req tfsdk.CreateResourceR
 	if !plan.AccountID.Null && !plan.AccountID.Unknown {
 		accountId = plan.AccountID.Value
 	} else {
-		accountId, getAccountOK, message = getAccountId(apiClient)
+		accountId, getAccountOK, message = getAccountId(ctx, apiClient)
 		if !getAccountOK {
 			resp.Diagnostics.AddError("Unable to get account ID", message)
 			return
@@ -130,7 +130,7 @@ func (r resourceAllowList) Create(ctx context.Context, req tfsdk.CreateResourceR
 		return
 	}
 
-	projectId, getProjectOK, message := getProjectId(accountId, apiClient)
+	projectId, getProjectOK, message := getProjectId(ctx, apiClient, accountId)
 	if !getProjectOK {
 		resp.Diagnostics.AddError("Unable to get project ID ", message)
 		return

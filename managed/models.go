@@ -41,7 +41,6 @@ type RegionInfo struct {
 
 type NodeConfig struct {
 	NumCores   types.Int64 `tfsdk:"num_cores"`
-	MemoryMb   types.Int64 `tfsdk:"memory_mb"`
 	DiskSizeGb types.Int64 `tfsdk:"disk_size_gb"`
 }
 

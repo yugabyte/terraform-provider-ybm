@@ -27,7 +27,6 @@ resource "ybm_cluster" "single_region_cluster" {
   fault_tolerance        = "NONE"
   node_config = {
     num_cores    = 2
-    memory_mb    = 8192
     disk_size_gb = 10
   }
   backup_schedules = [
@@ -74,7 +73,6 @@ resource "ybm_cluster" "multi_region_cluster" {
   node_config = {
     fault_tolerance = "REGION"
     num_cores       = 2
-    memory_mb       = 8192
     disk_size_gb    = 10
   }
   backup_schedules = [

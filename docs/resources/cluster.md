@@ -47,7 +47,6 @@ resource "ybm_cluster" "single_region_cluster" {
   fault_tolerance        = "NONE"
   node_config = {
     num_cores    = 2
-    memory_mb    = 8192
     disk_size_gb = 10
   }
   backup_schedules = [
@@ -94,7 +93,6 @@ resource "ybm_cluster" "multi_region_cluster" {
   node_config = {
     fault_tolerance = "REGION"
     num_cores       = 2
-    memory_mb       = 8192
     disk_size_gb    = 10
   }
   backup_schedules = [
@@ -173,7 +171,6 @@ Required:
 Required:
 
 - `disk_size_gb` (Number) Disk size of the node.
-- `memory_mb` (Number) Memory of the node.
 - `num_cores` (Number) Number of CPU cores in the node.
 
 

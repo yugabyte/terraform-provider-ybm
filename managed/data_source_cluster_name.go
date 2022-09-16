@@ -142,10 +142,6 @@ func (r dataClusterNameType) GetSchema(_ context.Context) (tfsdk.Schema, diag.Di
 						Type:     types.Int64Type,
 						Computed: true,
 					},
-					"memory_mb": {
-						Type:     types.Int64Type,
-						Computed: true,
-					},
 					"disk_size_gb": {
 						Type:     types.Int64Type,
 						Computed: true,
@@ -250,13 +246,13 @@ func (r dataClusterName) Read(ctx context.Context, req tfsdk.ReadDataSourceReque
 	if attr.account_id != "" {
 		accountId = attr.account_id
 	} else {
-		accountId, getAccountOK, message = getAccountId(apiClient)
+		accountId, getAccountOK, message = getAccountId(ctx, apiClient)
 		if !getAccountOK {
 			resp.Diagnostics.AddError("Unable to get account ID", message)
 			return
 		}
 	}
-	projectId, getProjectOK, message := getProjectId(accountId, apiClient)
+	projectId, getProjectOK, message := getProjectId(ctx, apiClient, accountId)
 	if !getProjectOK {
 		resp.Diagnostics.AddError("Unable to get the project ID", message)
 		return

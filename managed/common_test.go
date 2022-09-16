@@ -72,9 +72,9 @@ func TestGetProjectID(t *testing.T) {
 			mockProjectApi.EXPECT().ListProjects(ctx, testCase.AccountID).Return(*listProjectsRequest).Times(1)
 			mockProjectApi.EXPECT().ListProjectsExecute(*listProjectsRequest).Return(*listProjectsResponse, httpSuccessResponse, nil).Times(1)
 
-			gotProjectID, gotStatus, gotError := getProjectId(testCase.AccountID, apiClient)
+			gotProjectID, gotStatus, gotError := getProjectId(ctx, apiClient, testCase.AccountID)
 			if gotProjectID != expectedProjectID || gotStatus != expectedStatus || gotError != expectedError {
-				t.Errorf("getProjectId(%v,apiClient) = Project ID: %v,Status: %v,Error: %v; want Project ID: %v,Status: %v,Error: %v",
+				t.Errorf("getProjectId(ctx,apiClient,%v) = Project ID: %v,Status: %v,Error: %v; want Project ID: %v,Status: %v,Error: %v",
 					testCase.AccountID, gotProjectID, gotStatus, gotError, expectedProjectID, expectedStatus, expectedError)
 			}
 		})

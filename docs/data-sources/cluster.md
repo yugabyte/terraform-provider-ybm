@@ -98,5 +98,4 @@ Read-Only:
 Read-Only:
 
 - `disk_size_gb` (Number)
-- `memory_mb` (Number)
 - `num_cores` (Number)
