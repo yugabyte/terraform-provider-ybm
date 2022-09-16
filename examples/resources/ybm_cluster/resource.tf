@@ -17,7 +17,7 @@ resource "ybm_cluster" "single_region_cluster" {
   cluster_type = "SYNCHRONOUS"
   cluster_region_info = [
     {
-      region    = "us-west2"
+      region    = "us-west1"
       num_nodes = 1
       vpc_id    = "example-vpc-id"
     }
@@ -52,7 +52,7 @@ resource "ybm_cluster" "multi_region_cluster" {
   cluster_type = "SYNCHRONOUS"
   cluster_region_info = [
     {
-      region    = "us-west2"
+      region    = "us-west1"
       num_nodes = 1
       vpc_id    = "example-vpc-id"
     },
