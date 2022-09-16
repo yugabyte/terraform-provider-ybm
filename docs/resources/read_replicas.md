@@ -24,7 +24,6 @@ resource "ybm_read_replicas" "example_read_replica" {
       vpc_id = "example-vpc-id"
       node_config = {
         num_cores = 2
-        memory_mb = 8192
         disk_size_gb = 10
       }
     }
@@ -72,5 +71,4 @@ Read-Only:
 Required:
 
 - `disk_size_gb` (Number)
-- `memory_mb` (Number)
 - `num_cores` (Number)

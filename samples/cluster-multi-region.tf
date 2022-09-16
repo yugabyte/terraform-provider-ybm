@@ -22,10 +22,9 @@ resource "ybm_cluster" "multi_region" {
   cluster_tier = "PAID"
   cluster_allow_list_ids = [ybm_allow_list.mylist.allow_list_id]
   restore_backup_id = ybm_backup.mybackup.backup_id
+  fault_tolerance = "REGION"
   node_config = {
-    fault_tolerance = "REGION"
     num_cores = 2
-    memory_mb = 8192
     disk_size_gb = 10
   }
   credentials = {

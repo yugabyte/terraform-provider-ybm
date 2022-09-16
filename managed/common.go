@@ -2,13 +2,15 @@ package managed
 
 import (
 	"context"
+	"fmt"
 	"net/http/httputil"
 
+	"github.com/hashicorp/terraform-plugin-log/tflog"
 	openapiclient "github.com/yugabyte/yugabytedb-managed-go-client-internal"
 )
 
-func getProjectId(accountId string, apiClient *openapiclient.APIClient) (projectId string, projectIdOK bool, errorMessage string) {
-	projectResp, resp, err := apiClient.ProjectApi.ListProjects(context.Background(), accountId).Execute()
+func getProjectId(ctx context.Context, apiClient *openapiclient.APIClient, accountId string) (projectId string, projectIdOK bool, errorMessage string) {
+	projectResp, resp, err := apiClient.ProjectApi.ListProjects(ctx, accountId).Execute()
 	if err != nil {
 		b, _ := httputil.DumpResponse(resp, true)
 		return "", false, string(b)
@@ -25,8 +27,32 @@ func getProjectId(accountId string, apiClient *openapiclient.APIClient) (project
 	return projectId, true, ""
 }
 
-func getAccountId(apiClient *openapiclient.APIClient) (accountId string, accountIdOK bool, errorMessage string) {
-	accountResp, resp, err := apiClient.AccountApi.ListAccounts(context.Background()).Execute()
+func getMemoryFromInstanceType(ctx context.Context, apiClient *openapiclient.APIClient, accountId string, cloud string, tier string, region string, numCores int32) (memory int32, memoryOK bool, errorMessage string) {
+	instanceResp, resp, err := apiClient.ClusterApi.GetSupportedInstanceTypes(context.Background()).AccountId(accountId).Cloud(cloud).Tier(tier).Region(region).Execute()
+	if err != nil {
+		b, _ := httputil.DumpResponse(resp, true)
+		return 0, false, string(b)
+	}
+	instanceData := instanceResp.GetData()
+	nodeConfigList, ok := instanceData[region]
+	if !ok || len(nodeConfigList) == 0 {
+		return 0, false, "No instances configured for the given region."
+	}
+	for _, nodeConfig := range nodeConfigList {
+		if nodeConfig.GetNumCores() == numCores {
+			memory = nodeConfig.GetMemoryMb()
+			tflog.Debug(ctx, fmt.Sprintf("Found an instance type with %v cores and %v MB memory in %v cloud in the region %v", numCores, memory, cloud, region))
+			return memory, true, ""
+		}
+	}
+
+	tflog.Debug(ctx, fmt.Sprintf("Could not find a instance with %v cores in %v cloud in the region %v", numCores, cloud, region))
+
+	return 0, false, "Node with the given number of CPU cores doesn't exist in the given region."
+}
+
+func getAccountId(ctx context.Context, apiClient *openapiclient.APIClient) (accountId string, accountIdOK bool, errorMessage string) {
+	accountResp, resp, err := apiClient.AccountApi.ListAccounts(ctx).Execute()
 	if err != nil {
 		b, _ := httputil.DumpResponse(resp, true)
 		return "", false, string(b)

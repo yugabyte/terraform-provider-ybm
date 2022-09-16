@@ -79,10 +79,6 @@ func (r resourceReadReplicasType) GetSchema(ctx context.Context) (tfsdk.Schema, 
 								Type:     types.Int64Type,
 								Required: true,
 							},
-							"memory_mb": {
-								Type:     types.Int64Type,
-								Required: true,
-							},
 							"disk_size_gb": {
 								Type:     types.Int64Type,
 								Required: true,
@@ -115,20 +111,30 @@ type resourceReadReplicas struct {
 	p provider
 }
 
-func createReadReplicasSpec(ctx context.Context, plan ReadReplicas) (readReplicasSpec []openapiclient.ReadReplicaSpec) {
+func createReadReplicasSpec(ctx context.Context, apiClient *openapiclient.APIClient, accountId string, plan ReadReplicas) (readReplicasSpec []openapiclient.ReadReplicaSpec, readReplicaSpecOK bool, errorMessage string) {
 
 	readReplicasInfo := plan.ReadReplicasInfo
+	// Default tier "PAID" used for read replica. Tier is used to get memory from cpu cores using instance types.
+	tier := "PAID"
 
 	for _, readReplica := range readReplicasInfo {
+
+		cloud := readReplica.CloudType.Value
+		region := readReplica.Region.Value
+		numCores := int32(readReplica.NodeConfig.NumCores.Value)
+		memoryMb, memoryOK, message := getMemoryFromInstanceType(ctx, apiClient, accountId, cloud, tier, region, numCores)
+		if !memoryOK {
+			return nil, false, message
+		}
 		clusterNodeInfo := *openapiclient.NewClusterNodeInfo(
-			int32(readReplica.NodeConfig.NumCores.Value),
-			int32(readReplica.NodeConfig.MemoryMb.Value),
+			numCores,
+			memoryMb,
 			int32(readReplica.NodeConfig.DiskSizeGb.Value),
 		)
 		placementInfo := *openapiclient.NewPlacementInfo(
 			*openapiclient.NewCloudInfo(
-				openapiclient.CloudEnum(readReplica.CloudType.Value),
-				readReplica.Region.Value), int32(readReplica.NumNodes.Value))
+				openapiclient.CloudEnum(cloud),
+				region), int32(readReplica.NumNodes.Value))
 		placementInfo.SetNumReplicas(int32(readReplica.NumReplicas.Value))
 		placementInfo.SetVpcId(readReplica.VPCID.Value)
 
@@ -141,7 +147,7 @@ func createReadReplicasSpec(ctx context.Context, plan ReadReplicas) (readReplica
 		readReplicasSpec = append(readReplicasSpec, *openapiclient.NewReadReplicaSpec(clusterNodeInfo, placementInfo))
 
 	}
-	return readReplicasSpec
+	return readReplicasSpec, true, ""
 }
 
 func getReadReplicasPlan(ctx context.Context, plan tfsdk.Plan, readReplicas *ReadReplicas) diag.Diagnostics {
@@ -198,20 +204,24 @@ func (r resourceReadReplicas) Create(ctx context.Context, req tfsdk.CreateResour
 	if !plan.AccountID.Null && !plan.AccountID.Unknown {
 		accountId = plan.AccountID.Value
 	} else {
-		accountId, getAccountOK, message = getAccountId(apiClient)
+		accountId, getAccountOK, message = getAccountId(ctx, apiClient)
 		if !getAccountOK {
 			resp.Diagnostics.AddError("Unable to get account ID", message)
 			return
 		}
 	}
-	projectId, getProjectOK, message := getProjectId(accountId, apiClient)
+	projectId, getProjectOK, message := getProjectId(ctx, apiClient, accountId)
 	if !getProjectOK {
 		resp.Diagnostics.AddError("Unable to get project ID", message)
 		return
 	}
 	clusterId := plan.PrimaryClusterID.Value
 
-	readReplicasSpec := createReadReplicasSpec(ctx, plan)
+	readReplicasSpec, readReplicasOK, message := createReadReplicasSpec(ctx, apiClient, accountId, plan)
+	if !readReplicasOK {
+		resp.Diagnostics.AddError("Unable to create read replicas spec", message)
+		return
+	}
 
 	_, response, err := apiClient.ReadReplicaApi.CreateReadReplica(context.Background(), accountId, projectId, clusterId).ReadReplicaSpec(readReplicasSpec).Execute()
 	if err != nil {
@@ -322,7 +332,6 @@ func resourceReadReplicasRead(ctx context.Context, accountId string, projectId s
 		readReplicaInfo.Region.Value = readReplicaSpec.PlacementInfo.CloudInfo.GetRegion()
 		readReplicaInfo.VPCID.Value = readReplicaSpec.PlacementInfo.GetVpcId()
 		readReplicaInfo.NodeConfig.NumCores.Value = int64(readReplicaSpec.NodeInfo.NumCores)
-		readReplicaInfo.NodeConfig.MemoryMb.Value = int64(readReplicaSpec.NodeInfo.MemoryMb)
 		readReplicaInfo.NodeConfig.DiskSizeGb.Value = int64(readReplicaSpec.NodeInfo.DiskSizeGb)
 		readReplicaInfo.MultiZone.Value = readReplicaSpec.PlacementInfo.GetMultiZone()
 		if getEndpointsOk {
@@ -364,7 +373,11 @@ func (r resourceReadReplicas) Update(ctx context.Context, req tfsdk.UpdateResour
 
 	apiClient := r.p.client
 
-	readReplicasSpec := createReadReplicasSpec(ctx, plan)
+	readReplicasSpec, readReplicasOK, message := createReadReplicasSpec(ctx, apiClient, accountId, plan)
+	if !readReplicasOK {
+		resp.Diagnostics.AddError("Unable to create read replicas spec", message)
+		return
+	}
 
 	tflog.Info(ctx, "Making call to update read replicas...")
 	_, response, err := apiClient.ReadReplicaApi.EditReadReplicas(context.Background(), accountId, projectId, clusterId).ReadReplicaSpec(readReplicasSpec).Execute()

@@ -122,7 +122,7 @@ func (r resourceBackup) Create(ctx context.Context, req tfsdk.CreateResourceRequ
 	if !plan.AccountID.Null && !plan.AccountID.Unknown {
 		accountId = plan.AccountID.Value
 	} else {
-		accountId, getAccountOK, message = getAccountId(apiClient)
+		accountId, getAccountOK, message = getAccountId(ctx, apiClient)
 		if !getAccountOK {
 			resp.Diagnostics.AddError("Unable to get account ID", message)
 			return
@@ -137,7 +137,7 @@ func (r resourceBackup) Create(ctx context.Context, req tfsdk.CreateResourceRequ
 		return
 	}
 
-	projectId, getProjectOK, message := getProjectId(accountId, apiClient)
+	projectId, getProjectOK, message := getProjectId(ctx, apiClient, accountId)
 	if !getProjectOK {
 		resp.Diagnostics.AddError("Unable to get the project ID ", message)
 		return

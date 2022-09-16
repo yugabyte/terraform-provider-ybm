@@ -47,7 +47,6 @@ resource "ybm_cluster" "single_region" {
   fault_tolerance        = "NONE"
   node_config = {
     num_cores    = 2
-    memory_mb    = 8192
     disk_size_gb = 10
   }
   // for custom_backup_schedule to be activated pass true 
@@ -120,7 +119,6 @@ resource "ybm_read_replicas" "myrr" {
       vpc_id       = ybm_vpc.newvpc.vpc_id
       node_config = {
         num_cores    = 2
-        memory_mb    = 8192
         disk_size_gb = 10
       }
     }

@@ -163,11 +163,6 @@ func (r resourceClusterType) GetSchema(_ context.Context) (tfsdk.Schema, diag.Di
 						Type:        types.Int64Type,
 						Required:    true,
 					},
-					"memory_mb": {
-						Description: "Memory of the node.",
-						Type:        types.Int64Type,
-						Required:    true,
-					},
 					"disk_size_gb": {
 						Description: "Disk size of the node.",
 						Type:        types.Int64Type,
@@ -284,7 +279,7 @@ func EditBackupSchedule(ctx context.Context, backupScheduleStruct BackupSchedule
 	return nil
 }
 
-func createClusterSpec(ctx context.Context, plan Cluster, clusterExists bool) (clusterSpec *openapiclient.ClusterSpec, clusterSpecOK bool, errorMessage string) {
+func createClusterSpec(ctx context.Context, apiClient *openapiclient.APIClient, accountId string, plan Cluster, clusterExists bool) (clusterSpec *openapiclient.ClusterSpec, clusterSpecOK bool, errorMessage string) {
 
 	networking := *openapiclient.NewNetworkingWithDefaults()
 
@@ -308,6 +303,7 @@ func createClusterSpec(ctx context.Context, plan Cluster, clusterExists bool) (c
 		if clusterType == "SYNCHRONOUS" {
 			info.PlacementInfo.SetMultiZone(false)
 		}
+		info.SetIsDefault(false)
 		clusterRegionInfo = append(clusterRegionInfo, info)
 	}
 
@@ -321,6 +317,14 @@ func createClusterSpec(ctx context.Context, plan Cluster, clusterExists bool) (c
 		}
 	}
 
+	cloud := plan.CloudType.Value
+	tier := plan.ClusterTier.Value
+	numCores := int32(plan.NodeConfig.NumCores.Value)
+	memoryMb, memoryOK, message := getMemoryFromInstanceType(ctx, apiClient, accountId, cloud, tier, region, numCores)
+	if !memoryOK {
+		return nil, false, message
+	}
+
 	// This is to support a redundant value in the API.
 	// Needs to be removed once API cleans it up.
 	isProduction := true
@@ -329,12 +333,12 @@ func createClusterSpec(ctx context.Context, plan Cluster, clusterExists bool) (c
 	}
 
 	clusterInfo := *openapiclient.NewClusterInfo(
-		openapiclient.ClusterTier(plan.ClusterTier.Value),
+		openapiclient.ClusterTier(tier),
 		int32(totalNodes),
 		openapiclient.ClusterFaultTolerance(plan.FaultTolerance.Value),
 		*openapiclient.NewClusterNodeInfo(
-			int32(plan.NodeConfig.NumCores.Value),
-			int32(plan.NodeConfig.MemoryMb.Value),
+			numCores,
+			memoryMb,
 			int32(plan.NodeConfig.DiskSizeGb.Value),
 		),
 		isProduction,
@@ -424,7 +428,7 @@ func (r resourceCluster) Create(ctx context.Context, req tfsdk.CreateResourceReq
 	if !plan.AccountID.Null && !plan.AccountID.Unknown {
 		accountId = plan.AccountID.Value
 	} else {
-		accountId, getAccountOK, message = getAccountId(apiClient)
+		accountId, getAccountOK, message = getAccountId(ctx, apiClient)
 		if !getAccountOK {
 			resp.Diagnostics.AddError("Unable to get account ID", message)
 			return
@@ -439,13 +443,13 @@ func (r resourceCluster) Create(ctx context.Context, req tfsdk.CreateResourceReq
 		return
 	}
 
-	projectId, getProjectOK, message := getProjectId(accountId, apiClient)
+	projectId, getProjectOK, message := getProjectId(ctx, apiClient, accountId)
 	if !getProjectOK {
 		resp.Diagnostics.AddError("Unable to get project ID ", message)
 		return
 	}
 
-	clusterSpec, clusterOK, message := createClusterSpec(ctx, plan, false)
+	clusterSpec, clusterOK, message := createClusterSpec(ctx, apiClient, accountId, plan, false)
 	if !clusterOK {
 		resp.Diagnostics.AddError("Unable to create cluster spec", message)
 		return
@@ -721,7 +725,6 @@ func resourceClusterRead(accountId string, projectId string, clusterId string, b
 
 	cluster.FaultTolerance.Value = string(clusterResp.Data.Spec.ClusterInfo.FaultTolerance)
 	cluster.NodeConfig.NumCores.Value = int64(clusterResp.Data.Spec.ClusterInfo.NodeInfo.NumCores)
-	cluster.NodeConfig.MemoryMb.Value = int64(clusterResp.Data.Spec.ClusterInfo.NodeInfo.MemoryMb)
 	cluster.NodeConfig.DiskSizeGb.Value = int64(clusterResp.Data.Spec.ClusterInfo.NodeInfo.DiskSizeGb)
 
 	cluster.ClusterInfo.State.Value = clusterResp.Data.Info.GetState()
@@ -884,7 +887,7 @@ func (r resourceCluster) Update(ctx context.Context, req tfsdk.UpdateResourceReq
 	params := list[0].GetInfo().TaskParams
 	backupDescription := params["description"].(string)
 
-	clusterSpec, clusterOK, message := createClusterSpec(ctx, plan, false)
+	clusterSpec, clusterOK, message := createClusterSpec(ctx, apiClient, accountId, plan, false)
 	if !clusterOK {
 		resp.Diagnostics.AddError("Unable to create cluster specification ", message)
 		return
