@@ -170,8 +170,11 @@ Required:
 
 Required:
 
-- `disk_size_gb` (Number) Disk size of the node.
 - `num_cores` (Number) Number of CPU cores in the node.
+
+Optional:
+
+- `disk_size_gb` (Number) Disk size of the node.
 
 
 <a id="nestedatt--backup_schedules"></a>

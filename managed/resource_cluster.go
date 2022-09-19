@@ -166,7 +166,8 @@ func (r resourceClusterType) GetSchema(_ context.Context) (tfsdk.Schema, diag.Di
 					"disk_size_gb": {
 						Description: "Disk size of the node.",
 						Type:        types.Int64Type,
-						Required:    true,
+						Computed:    true,
+						Optional:    true,
 					},
 				}),
 			},
@@ -281,8 +282,13 @@ func EditBackupSchedule(ctx context.Context, backupScheduleStruct BackupSchedule
 
 func createClusterSpec(ctx context.Context, apiClient *openapiclient.APIClient, accountId string, plan Cluster, clusterExists bool) (clusterSpec *openapiclient.ClusterSpec, clusterSpecOK bool, errorMessage string) {
 
-	networking := *openapiclient.NewNetworkingWithDefaults()
+	var diskSizeGb int32
+	var diskSizeOK bool
+	var memoryMb int32
+	var memoryOK bool
+	var message string
 
+	networking := *openapiclient.NewNetworkingWithDefaults()
 	softwareInfo := *openapiclient.NewSoftwareInfoWithDefaults()
 
 	clusterRegionInfo := []openapiclient.ClusterRegionInfo{}
@@ -320,9 +326,19 @@ func createClusterSpec(ctx context.Context, apiClient *openapiclient.APIClient, 
 	cloud := plan.CloudType.Value
 	tier := plan.ClusterTier.Value
 	numCores := int32(plan.NodeConfig.NumCores.Value)
-	memoryMb, memoryOK, message := getMemoryFromInstanceType(ctx, apiClient, accountId, cloud, tier, region, numCores)
+	memoryMb, memoryOK, message = getMemoryFromInstanceType(ctx, apiClient, accountId, cloud, tier, region, numCores)
 	if !memoryOK {
 		return nil, false, message
+	}
+
+	// Computing the default disk size if it is not provided
+	if !plan.NodeConfig.DiskSizeGb.IsUnknown() {
+		diskSizeGb = int32(plan.NodeConfig.DiskSizeGb.Value)
+	} else {
+		diskSizeGb, diskSizeOK, message = getDiskSizeFromInstanceType(ctx, apiClient, accountId, cloud, tier, region, numCores)
+		if !diskSizeOK {
+			return nil, false, message
+		}
 	}
 
 	// This is to support a redundant value in the API.
@@ -339,7 +355,7 @@ func createClusterSpec(ctx context.Context, apiClient *openapiclient.APIClient, 
 		*openapiclient.NewClusterNodeInfo(
 			numCores,
 			memoryMb,
-			int32(plan.NodeConfig.DiskSizeGb.Value),
+			diskSizeGb,
 		),
 		isProduction,
 	)
@@ -418,7 +434,7 @@ func (r resourceCluster) Create(ctx context.Context, req tfsdk.CreateResourceReq
 		return
 	}
 
-	if !isDiskSizeValid(plan.ClusterTier.Value, plan.NodeConfig.DiskSizeGb.Value) {
+	if !plan.NodeConfig.DiskSizeGb.IsUnknown() && !isDiskSizeValid(plan.ClusterTier.Value, plan.NodeConfig.DiskSizeGb.Value) {
 		resp.Diagnostics.AddError("Invalid disk size", "The disk size for a paid cluster must be at least 50 GB.")
 		return
 	}

@@ -51,6 +51,30 @@ func getMemoryFromInstanceType(ctx context.Context, apiClient *openapiclient.API
 	return 0, false, "Node with the given number of CPU cores doesn't exist in the given region."
 }
 
+func getDiskSizeFromInstanceType(ctx context.Context, apiClient *openapiclient.APIClient, accountId string, cloud string, tier string, region string, numCores int32) (diskSize int32, diskSizeOK bool, errorMessage string) {
+	instanceResp, resp, err := apiClient.ClusterApi.GetSupportedInstanceTypes(context.Background()).AccountId(accountId).Cloud(cloud).Tier(tier).Region(region).Execute()
+	if err != nil {
+		b, _ := httputil.DumpResponse(resp, true)
+		return 0, false, string(b)
+	}
+	instanceData := instanceResp.GetData()
+	nodeConfigList, ok := instanceData[region]
+	if !ok || len(nodeConfigList) == 0 {
+		return 0, false, "No instances configured for the given region."
+	}
+	for _, nodeConfig := range nodeConfigList {
+		if nodeConfig.GetNumCores() == numCores {
+			diskSize = nodeConfig.GetIncludedDiskSizeGb()
+			tflog.Debug(ctx, fmt.Sprintf("Found an instance type with %v cores and %v GB disk size in %v cloud in the region %v", numCores, diskSize, cloud, region))
+			return diskSize, true, ""
+		}
+	}
+
+	tflog.Debug(ctx, fmt.Sprintf("Could not find a instance with %v cores in %v cloud in the region %v", numCores, cloud, region))
+
+	return 0, false, "Node with the given number of CPU cores doesn't exist in the given region."
+}
+
 func getAccountId(ctx context.Context, apiClient *openapiclient.APIClient) (accountId string, accountIdOK bool, errorMessage string) {
 	accountResp, resp, err := apiClient.AccountApi.ListAccounts(ctx).Execute()
 	if err != nil {
