@@ -191,8 +191,9 @@ func (r dataClusterNameType) GetSchema(_ context.Context) (tfsdk.Schema, diag.Di
 				}),
 			},
 			"database_version": {
-				Type:     types.StringType,
-				Computed: true,
+				Description: "The version of the database. Stable or Preview.",
+				Type:        types.StringType,
+				Computed:    true,
 			},
 			"cluster_endpoints": {
 				Description: "The endpoints used to connect to the cluster by region.",
