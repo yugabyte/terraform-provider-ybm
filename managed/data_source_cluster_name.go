@@ -176,10 +176,6 @@ func (r dataClusterNameType) GetSchema(_ context.Context) (tfsdk.Schema, diag.Di
 						Type:     types.StringType,
 						Computed: true,
 					},
-					"software_version": {
-						Type:     types.StringType,
-						Computed: true,
-					},
 					"created_time": {
 						Type:     types.StringType,
 						Computed: true,
@@ -189,6 +185,10 @@ func (r dataClusterNameType) GetSchema(_ context.Context) (tfsdk.Schema, diag.Di
 						Computed: true,
 					},
 				}),
+			},
+			"cluster_version": {
+				Type:     types.StringType,
+				Computed: true,
 			},
 			"database_version": {
 				Description: "The version of the database. Stable or Preview.",
