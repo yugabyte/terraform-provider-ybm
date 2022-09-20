@@ -199,6 +199,11 @@ func (r dataClusterNameType) GetSchema(_ context.Context) (tfsdk.Schema, diag.Di
 				Type:        types.StringType,
 				Computed:    true,
 			},
+			"desired_state": {
+				Description: "The desired state of the database, Active or Paused. This parameter can be used to pause/resume a cluster.",
+				Type:        types.StringType,
+				Computed:    true,
+			},
 			"cluster_endpoints": {
 				Description: "The endpoints used to connect to the cluster by region.",
 				Type: types.MapType{

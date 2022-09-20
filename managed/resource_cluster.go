@@ -130,7 +130,6 @@ func (r resourceClusterType) GetSchema(_ context.Context) (tfsdk.Schema, diag.Di
 					},
 				}),
 			},
-
 			"cluster_tier": {
 				Description: "FREE (Sandbox) or PAID (Dedicated).",
 				Type:        types.StringType,
@@ -228,6 +227,16 @@ func (r resourceClusterType) GetSchema(_ context.Context) (tfsdk.Schema, diag.Di
 				Type:        types.StringType,
 				Optional:    true,
 				Computed:    true,
+			},
+			"desired_state": {
+				Description: "The desired state of the database, Active or Paused. This parameter can be used to pause/resume a cluster.",
+				Type:        types.StringType,
+				Optional:    true,
+				Computed:    true,
+				Validators: []tfsdk.AttributeValidator{
+					// Validate string value must be "Active" or "Paused"
+					stringvalidator.OneOf([]string{"Active", "Paused"}...),
+				},
 			},
 			"cluster_endpoints": {
 				Description: "The endpoints used to connect to the cluster by region.",
@@ -417,6 +426,7 @@ func getPlan(ctx context.Context, plan tfsdk.Plan, cluster *Cluster) diag.Diagno
 	diags.Append(plan.GetAttribute(ctx, path.Root("cluster_allow_list_ids"), &cluster.ClusterAllowListIDs)...)
 	diags.Append(plan.GetAttribute(ctx, path.Root("restore_backup_id"), &cluster.RestoreBackupID)...)
 	diags.Append(plan.GetAttribute(ctx, path.Root("database_track"), &cluster.DatabaseTrack)...)
+	diags.Append(plan.GetAttribute(ctx, path.Root("desired_state"), &cluster.DesiredState)...)
 	diags.Append(plan.GetAttribute(ctx, path.Root("node_config"), &cluster.NodeConfig)...)
 	diags.Append(plan.GetAttribute(ctx, path.Root("credentials"), &cluster.Credentials)...)
 	diags.Append(plan.GetAttribute(ctx, path.Root("backup_schedules"), &cluster.BackupSchedules)...)
@@ -510,7 +520,7 @@ func (r resourceCluster) Create(ctx context.Context, req tfsdk.CreateResourceReq
 	}
 	clusterId := clusterResp.Data.Info.Id
 
-	// read status, wait for status to be don
+	// read status, wait for status to be done
 	retryPolicy := retry.NewConstant(10 * time.Second)
 	retryPolicy = retry.WithMaxDuration(2400*time.Second, retryPolicy)
 	err = retry.Do(ctx, retryPolicy, func(ctx context.Context) error {
@@ -609,6 +619,14 @@ func (r resourceCluster) Create(ctx context.Context, req tfsdk.CreateResourceReq
 		regions = append(regions, regionInfo.Region.Value)
 	}
 
+	// Pause the cluster if the desired state is set to 'Paused'
+	if !plan.DesiredState.Unknown && plan.DesiredState.Value == "Paused" {
+		err := pauseCluster(ctx, apiClient, accountId, projectId, clusterId)
+		if err != nil {
+			resp.Diagnostics.AddError("Cluster Creation Failed: ", err.Error())
+		}
+	}
+
 	cluster, readOK, message := resourceClusterRead(ctx, accountId, projectId, clusterId, backUpSchedules, regions, allowListProvided, allowListIDs, false, apiClient)
 
 	if !readOK {
@@ -634,6 +652,76 @@ func (r resourceCluster) Create(ctx context.Context, req tfsdk.CreateResourceReq
 		return
 	}
 }
+
+func pauseCluster(ctx context.Context, apiClient *openapiclient.APIClient, accountId string, projectId string, clusterId string) (err error) {
+
+	_, response, err := apiClient.ClusterApi.PauseCluster(ctx, accountId, projectId, clusterId).Execute()
+	if err != nil {
+		b, _ := httputil.DumpResponse(response, true)
+		if len(string(b)) > 10000 {
+			return errors.New("Could not pause the cluster. " + string(b)[:10000])
+		}
+		return errors.New("Could not pause the cluster. " + string(b))
+
+	}
+
+	// read status, wait for status to be done
+	retryPolicy := retry.NewConstant(10 * time.Second)
+	retryPolicy = retry.WithMaxDuration(1200*time.Second, retryPolicy)
+	err = retry.Do(ctx, retryPolicy, func(ctx context.Context) error {
+		clusterState, readInfoOK, message := getClusterState(ctx, accountId, projectId, clusterId, apiClient)
+		if readInfoOK {
+			if clusterState == "Paused" {
+				return nil
+			}
+		} else {
+			return retry.RetryableError(errors.New("Unable to get cluster state: " + message))
+		}
+		return retry.RetryableError(errors.New("The cluster is being paused."))
+	})
+
+	if err != nil {
+		return errors.New("Unable to pause cluster. " + "The operation timed out waiting to pause the cluster.")
+	}
+
+	return nil
+
+}
+
+func resumeCluster(ctx context.Context, apiClient *openapiclient.APIClient, accountId string, projectId string, clusterId string) (err error) {
+
+	_, response, err := apiClient.ClusterApi.ResumeCluster(ctx, accountId, projectId, clusterId).Execute()
+	if err != nil {
+		b, _ := httputil.DumpResponse(response, true)
+		if len(string(b)) > 10000 {
+			return errors.New("Could not resume the cluster. " + string(b)[:10000])
+		}
+		return errors.New("Could not resume the cluster. " + string(b))
+	}
+
+	// read status, wait for status to be done
+	retryPolicy := retry.NewConstant(10 * time.Second)
+	retryPolicy = retry.WithMaxDuration(1200*time.Second, retryPolicy)
+	err = retry.Do(ctx, retryPolicy, func(ctx context.Context) error {
+		clusterState, readInfoOK, message := getClusterState(ctx, accountId, projectId, clusterId, apiClient)
+		if readInfoOK {
+			if clusterState == "Active" {
+				return nil
+			}
+		} else {
+			return retry.RetryableError(errors.New("Unable to get cluster state: " + message))
+		}
+		return retry.RetryableError(errors.New("The cluster is being resumed."))
+	})
+
+	if err != nil {
+		return errors.New("Unable to resume cluster. " + "The operation timed out waiting to resume the cluster.")
+	}
+
+	return nil
+
+}
+
 func getClusterState(ctx context.Context, accountId string, projectId string, clusterId string, apiClient *openapiclient.APIClient) (state string, readInfoOK bool, errorMessage string) {
 	clusterResp, resp, err := apiClient.ClusterApi.GetCluster(ctx, accountId, projectId, clusterId).Execute()
 	if err != nil {
@@ -754,6 +842,7 @@ func resourceClusterRead(ctx context.Context, accountId string, projectId string
 	cluster.ProjectID.Value = projectId
 	cluster.ClusterID.Value = clusterId
 	cluster.ClusterName.Value = clusterResp.Data.Spec.Name
+	cluster.DesiredState.Value = clusterResp.Data.Info.GetState()
 	cluster.CloudType.Value = string(clusterResp.Data.Spec.CloudInfo.Code)
 	cluster.ClusterType.Value = string(*clusterResp.Data.Spec.ClusterInfo.ClusterType)
 	cluster.ClusterTier.Value = string(clusterResp.Data.Spec.ClusterInfo.ClusterTier)
@@ -944,6 +1033,16 @@ func (r resourceCluster) Update(ctx context.Context, req tfsdk.UpdateResourceReq
 	}
 	clusterSpec.ClusterInfo.SetVersion(int32(clusterVersion))
 
+	// Resume the cluster if the desired state is set to 'Active' and it is paused currently
+	if state.DesiredState.Value == "Paused" && (plan.DesiredState.Unknown || plan.DesiredState.Value == "Active") {
+		// Resume the cluster
+		err := resumeCluster(ctx, apiClient, accountId, projectId, clusterId)
+		if err != nil {
+			resp.Diagnostics.AddError("Cluster update failed: ", err.Error())
+			return
+		}
+	}
+
 	_, response, err := apiClient.ClusterApi.EditCluster(context.Background(), accountId, projectId, clusterId).ClusterSpec(*clusterSpec).Execute()
 	if err != nil {
 		b, _ := httputil.DumpResponse(response, true)
@@ -1040,6 +1139,16 @@ func (r resourceCluster) Update(ctx context.Context, req tfsdk.UpdateResourceReq
 		err = handleRestore(ctx, accountId, projectId, clusterId, backupId, apiClient)
 		if err != nil {
 			resp.Diagnostics.AddError("Error during store: ", err.Error())
+			return
+		}
+	}
+
+	// Pause the cluster if the desired state is set to 'Paused' and it is active currently
+	if state.DesiredState.Value == "Active" && (!plan.DesiredState.Unknown && plan.DesiredState.Value == "Paused") {
+		// Resume the cluster
+		err := resumeCluster(ctx, apiClient, accountId, projectId, clusterId)
+		if err != nil {
+			resp.Diagnostics.AddError("Cluster update failed: ", err.Error())
 			return
 		}
 	}
