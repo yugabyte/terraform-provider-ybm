@@ -41,6 +41,7 @@ data "ybm_cluster" "example_cluster"{
 - `cluster_region_info` (Attributes List) (see [below for nested schema](#nestedatt--cluster_region_info))
 - `cluster_tier` (String) FREE (Sandbox) or PAID (Dedicated).
 - `cluster_type` (String) The type of the cluster.
+- `cluster_version` (String)
 - `credentials` (Attributes) (see [below for nested schema](#nestedatt--credentials))
 - `database_version` (String) The version of the database. Stable or Preview.
 - `fault_tolerance` (String) The fault tolerance of the cluster.
@@ -66,7 +67,6 @@ Read-Only:
 Read-Only:
 
 - `created_time` (String)
-- `software_version` (String)
 - `state` (String)
 - `updated_time` (String)
 

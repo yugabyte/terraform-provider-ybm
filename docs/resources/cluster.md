@@ -140,6 +140,7 @@ resource "ybm_cluster" "multi_region_cluster" {
 
 - `cluster_certificate` (String) The certificate used to connect to the cluster.
 - `cluster_info` (Attributes) (see [below for nested schema](#nestedatt--cluster_info))
+- `cluster_version` (String)
 
 <a id="nestedatt--cluster_region_info"></a>
 ### Nested Schema for `cluster_region_info`
@@ -196,6 +197,5 @@ Optional:
 Read-Only:
 
 - `created_time` (String)
-- `software_version` (String)
 - `state` (String)
 - `updated_time` (String)
