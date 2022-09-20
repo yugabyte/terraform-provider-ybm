@@ -439,6 +439,7 @@ func getIDsFromState(ctx context.Context, state tfsdk.State, cluster *Cluster) {
 	state.GetAttribute(ctx, path.Root("account_id"), &cluster.AccountID)
 	state.GetAttribute(ctx, path.Root("project_id"), &cluster.ProjectID)
 	state.GetAttribute(ctx, path.Root("cluster_id"), &cluster.ClusterID)
+	state.GetAttribute(ctx, path.Root("desired_state"), &cluster.DesiredState)
 	state.GetAttribute(ctx, path.Root("cluster_allow_list_ids"), &cluster.ClusterAllowListIDs)
 	state.GetAttribute(ctx, path.Root("cluster_region_info"), &cluster.ClusterRegionInfo)
 	state.GetAttribute(ctx, path.Root("backup_schedules"), &cluster.BackupSchedules)
@@ -999,8 +1000,8 @@ func (r resourceCluster) Update(ctx context.Context, req tfsdk.UpdateResourceReq
 		return
 	}
 
-	if !isDiskSizeValid(plan.ClusterTier.Value, plan.NodeConfig.DiskSizeGb.Value) {
-		resp.Diagnostics.AddError("Invalid disk size", "The disk size for a paid cluster must be greater than 50 GB.")
+	if !plan.NodeConfig.DiskSizeGb.IsUnknown() && !isDiskSizeValid(plan.ClusterTier.Value, plan.NodeConfig.DiskSizeGb.Value) {
+		resp.Diagnostics.AddError("Invalid disk size", "The disk size for a paid cluster must be at least 50 GB.")
 		return
 	}
 
@@ -1010,6 +1011,17 @@ func (r resourceCluster) Update(ctx context.Context, req tfsdk.UpdateResourceReq
 	accountId := state.AccountID.Value
 	projectId := state.ProjectID.Value
 	clusterId := state.ClusterID.Value
+
+	// Resume the cluster if the desired state is set to 'Active' and it is paused currently
+	if state.DesiredState.Value == "Paused" && (plan.DesiredState.Unknown || plan.DesiredState.Value == "Active") {
+		// Resume the cluster
+		err := resumeCluster(ctx, apiClient, accountId, projectId, clusterId)
+		if err != nil {
+			resp.Diagnostics.AddError("Cluster update failed: ", err.Error())
+			return
+		}
+	}
+
 	scheduleResp, r1, err := apiClient.BackupApi.ListBackupSchedules(ctx, accountId, projectId).EntityId(clusterId).Execute()
 	if err != nil {
 		resp.Diagnostics.AddError("Could not fetch the backup schedule for the cluster "+r1.Status, "Try again")
@@ -1032,16 +1044,6 @@ func (r resourceCluster) Update(ctx context.Context, req tfsdk.UpdateResourceReq
 		return
 	}
 	clusterSpec.ClusterInfo.SetVersion(int32(clusterVersion))
-
-	// Resume the cluster if the desired state is set to 'Active' and it is paused currently
-	if state.DesiredState.Value == "Paused" && (plan.DesiredState.Unknown || plan.DesiredState.Value == "Active") {
-		// Resume the cluster
-		err := resumeCluster(ctx, apiClient, accountId, projectId, clusterId)
-		if err != nil {
-			resp.Diagnostics.AddError("Cluster update failed: ", err.Error())
-			return
-		}
-	}
 
 	_, response, err := apiClient.ClusterApi.EditCluster(context.Background(), accountId, projectId, clusterId).ClusterSpec(*clusterSpec).Execute()
 	if err != nil {
@@ -1145,8 +1147,8 @@ func (r resourceCluster) Update(ctx context.Context, req tfsdk.UpdateResourceReq
 
 	// Pause the cluster if the desired state is set to 'Paused' and it is active currently
 	if state.DesiredState.Value == "Active" && (!plan.DesiredState.Unknown && plan.DesiredState.Value == "Paused") {
-		// Resume the cluster
-		err := resumeCluster(ctx, apiClient, accountId, projectId, clusterId)
+		// Pause the cluster
+		err := pauseCluster(ctx, apiClient, accountId, projectId, clusterId)
 		if err != nil {
 			resp.Diagnostics.AddError("Cluster update failed: ", err.Error())
 			return
