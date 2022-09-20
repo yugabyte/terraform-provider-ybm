@@ -194,8 +194,8 @@ func (r dataClusterNameType) GetSchema(_ context.Context) (tfsdk.Schema, diag.Di
 				Type:     types.StringType,
 				Computed: true,
 			},
-			"database_version": {
-				Description: "The version of the database. Stable or Preview.",
+			"database_track": {
+				Description: "The track of the database. Stable or Preview.",
 				Type:        types.StringType,
 				Computed:    true,
 			},

@@ -43,7 +43,7 @@ data "ybm_cluster" "example_cluster"{
 - `cluster_type` (String) The type of the cluster.
 - `cluster_version` (String)
 - `credentials` (Attributes) (see [below for nested schema](#nestedatt--credentials))
-- `database_version` (String) The version of the database. Stable or Preview.
+- `database_track` (String) The track of the database. Stable or Preview.
 - `fault_tolerance` (String) The fault tolerance of the cluster.
 - `node_config` (Attributes) (see [below for nested schema](#nestedatt--node_config))
 - `restore_backup_id` (String) The ID of the backup to be restored to the cluster.

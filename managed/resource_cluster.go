@@ -223,8 +223,8 @@ func (r resourceClusterType) GetSchema(_ context.Context) (tfsdk.Schema, diag.Di
 				Type:     types.StringType,
 				Computed: true,
 			},
-			"database_version": {
-				Description: "The version of the database. Stable or Preview.",
+			"database_track": {
+				Description: "The track of the database. Stable or Preview.",
 				Type:        types.StringType,
 				Optional:    true,
 				Computed:    true,
@@ -301,17 +301,14 @@ func createClusterSpec(ctx context.Context, apiClient *openapiclient.APIClient, 
 
 	// Compute track ID for database version
 	softwareInfo := *openapiclient.NewSoftwareInfoWithDefaults()
-	if !plan.DatabaseVersion.Unknown {
-		trackName = plan.DatabaseVersion.Value
-	} else {
-		// Set track name to "Stable" by default
-		trackName = "Stable"
+	if !plan.DatabaseTrack.Unknown {
+		trackName = plan.DatabaseTrack.Value
+		trackId, trackIdOK, message = getTrackId(ctx, apiClient, accountId, trackName)
+		if !trackIdOK {
+			return nil, false, message
+		}
+		softwareInfo.SetTrackId(trackId)
 	}
-	trackId, trackIdOK, message = getTrackId(ctx, apiClient, accountId, trackName)
-	if !trackIdOK {
-		return nil, false, message
-	}
-	softwareInfo.SetTrackId(trackId)
 
 	clusterRegionInfo := []openapiclient.ClusterRegionInfo{}
 	totalNodes := 0
@@ -419,7 +416,7 @@ func getPlan(ctx context.Context, plan tfsdk.Plan, cluster *Cluster) diag.Diagno
 	diags.Append(plan.GetAttribute(ctx, path.Root("cluster_tier"), &cluster.ClusterTier)...)
 	diags.Append(plan.GetAttribute(ctx, path.Root("cluster_allow_list_ids"), &cluster.ClusterAllowListIDs)...)
 	diags.Append(plan.GetAttribute(ctx, path.Root("restore_backup_id"), &cluster.RestoreBackupID)...)
-	diags.Append(plan.GetAttribute(ctx, path.Root("database_version"), &cluster.DatabaseVersion)...)
+	diags.Append(plan.GetAttribute(ctx, path.Root("database_track"), &cluster.DatabaseTrack)...)
 	diags.Append(plan.GetAttribute(ctx, path.Root("node_config"), &cluster.NodeConfig)...)
 	diags.Append(plan.GetAttribute(ctx, path.Root("credentials"), &cluster.Credentials)...)
 	diags.Append(plan.GetAttribute(ctx, path.Root("backup_schedules"), &cluster.BackupSchedules)...)
@@ -768,7 +765,7 @@ func resourceClusterRead(ctx context.Context, accountId string, projectId string
 	if !trackNameOK {
 		return cluster, false, message
 	}
-	cluster.DatabaseVersion.Value = trackName
+	cluster.DatabaseTrack.Value = trackName
 
 	cluster.FaultTolerance.Value = string(clusterResp.Data.Spec.ClusterInfo.FaultTolerance)
 	cluster.NodeConfig.NumCores.Value = int64(clusterResp.Data.Spec.ClusterInfo.NodeInfo.NumCores)
