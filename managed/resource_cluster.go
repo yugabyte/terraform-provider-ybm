@@ -219,9 +219,12 @@ func (r resourceClusterType) GetSchema(_ context.Context) (tfsdk.Schema, diag.Di
 					},
 				}),
 			},
-			"cluster_version": {
-				Type:     types.StringType,
-				Computed: true,
+			"database_version": {
+				Description:   "The version of the database. Stable or Preview.",
+				Type:          types.StringType,
+				Optional:      true,
+				Computed:      true,
+				PlanModifiers: tfsdk.AttributePlanModifiers{stringDefaultModifier{"Stable"}},
 			},
 			"cluster_endpoints": {
 				Description: "The endpoints used to connect to the cluster by region.",
@@ -286,10 +289,20 @@ func createClusterSpec(ctx context.Context, apiClient *openapiclient.APIClient, 
 	var diskSizeOK bool
 	var memoryMb int32
 	var memoryOK bool
+	var trackId string
+	var trackIdOK bool
 	var message string
 
 	networking := *openapiclient.NewNetworkingWithDefaults()
+
+	// Compute track ID for database version
 	softwareInfo := *openapiclient.NewSoftwareInfoWithDefaults()
+	trackName := plan.DatabaseVersion.Value
+	trackId, trackIdOK, message = getTrackId(ctx, apiClient, accountId, trackName)
+	if !trackIdOK {
+		return nil, false, message
+	}
+	softwareInfo.SetTrackId(trackId)
 
 	clusterRegionInfo := []openapiclient.ClusterRegionInfo{}
 	totalNodes := 0
@@ -738,13 +751,13 @@ func resourceClusterRead(accountId string, projectId string, clusterId string, b
 	cluster.ClusterType.Value = string(*clusterResp.Data.Spec.ClusterInfo.ClusterType)
 	cluster.ClusterTier.Value = string(clusterResp.Data.Spec.ClusterInfo.ClusterTier)
 	cluster.ClusterVersion.Value = strconv.Itoa(int(clusterResp.Data.Spec.ClusterInfo.GetVersion()))
+	cluster.DatabaseVersion.Value = clusterResp.Data.Info.GetSoftwareVersion()
 
 	cluster.FaultTolerance.Value = string(clusterResp.Data.Spec.ClusterInfo.FaultTolerance)
 	cluster.NodeConfig.NumCores.Value = int64(clusterResp.Data.Spec.ClusterInfo.NodeInfo.NumCores)
 	cluster.NodeConfig.DiskSizeGb.Value = int64(clusterResp.Data.Spec.ClusterInfo.NodeInfo.DiskSizeGb)
 
 	cluster.ClusterInfo.State.Value = clusterResp.Data.Info.GetState()
-	cluster.ClusterInfo.SoftwareVersion.Value = clusterResp.Data.Info.GetSoftwareVersion()
 	cluster.ClusterInfo.CreatedTime.Value = clusterResp.Data.Info.Metadata.GetCreatedOn()
 	cluster.ClusterInfo.UpdatedTime.Value = clusterResp.Data.Info.Metadata.GetUpdatedOn()
 

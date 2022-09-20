@@ -190,7 +190,7 @@ func (r dataClusterNameType) GetSchema(_ context.Context) (tfsdk.Schema, diag.Di
 					},
 				}),
 			},
-			"cluster_version": {
+			"database_version": {
 				Type:     types.StringType,
 				Computed: true,
 			},

@@ -13,6 +13,7 @@ type Cluster struct {
 	ClusterType         types.String         `tfsdk:"cluster_type"`
 	FaultTolerance      types.String         `tfsdk:"fault_tolerance"`
 	ClusterRegionInfo   []RegionInfo         `tfsdk:"cluster_region_info"`
+	DatabaseVersion     types.String         `tfsdk:"database_version"`
 	ClusterTier         types.String         `tfsdk:"cluster_tier"`
 	ClusterAllowListIDs []types.String       `tfsdk:"cluster_allow_list_ids"`
 	RestoreBackupID     types.String         `tfsdk:"restore_backup_id"`
@@ -52,10 +53,9 @@ type Credentials struct {
 }
 
 type ClusterInfo struct {
-	State           types.String `tfsdk:"state"`
-	SoftwareVersion types.String `tfsdk:"software_version"`
-	CreatedTime     types.String `tfsdk:"created_time"`
-	UpdatedTime     types.String `tfsdk:"updated_time"`
+	State       types.String `tfsdk:"state"`
+	CreatedTime types.String `tfsdk:"created_time"`
+	UpdatedTime types.String `tfsdk:"updated_time"`
 }
 
 type AllowList struct {
