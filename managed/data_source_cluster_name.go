@@ -176,6 +176,10 @@ func (r dataClusterNameType) GetSchema(_ context.Context) (tfsdk.Schema, diag.Di
 						Type:     types.StringType,
 						Computed: true,
 					},
+					"software_version": {
+						Type:     types.StringType,
+						Computed: true,
+					},
 					"created_time": {
 						Type:     types.StringType,
 						Computed: true,
@@ -286,7 +290,7 @@ func (r dataClusterName) Read(ctx context.Context, req tfsdk.ReadDataSourceReque
 		ScheduleID: types.String{Value: scheduleId},
 	}
 	backUpSchedule = append(backUpSchedule, backUpInfo)
-	cluster, readOK, message := resourceClusterRead(accountId, projectId, clusterId, backUpSchedule, make([]string, 0), true, make([]string, 0), true, apiClient)
+	cluster, readOK, message := resourceClusterRead(ctx, accountId, projectId, clusterId, backUpSchedule, make([]string, 0), true, make([]string, 0), true, apiClient)
 	if !readOK {
 		resp.Diagnostics.AddError("Unable to read the state of the cluster", message)
 		return

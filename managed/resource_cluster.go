@@ -205,6 +205,10 @@ func (r resourceClusterType) GetSchema(_ context.Context) (tfsdk.Schema, diag.Di
 						Type:     types.StringType,
 						Computed: true,
 					},
+					"software_version": {
+						Type:     types.StringType,
+						Computed: true,
+					},
 					"created_time": {
 						Type:     types.StringType,
 						Computed: true,
@@ -220,11 +224,10 @@ func (r resourceClusterType) GetSchema(_ context.Context) (tfsdk.Schema, diag.Di
 				Computed: true,
 			},
 			"database_version": {
-				Description:   "The version of the database. Stable or Preview.",
-				Type:          types.StringType,
-				Optional:      true,
-				Computed:      true,
-				PlanModifiers: tfsdk.AttributePlanModifiers{stringDefaultModifier{"Stable"}},
+				Description: "The version of the database. Stable or Preview.",
+				Type:        types.StringType,
+				Optional:    true,
+				Computed:    true,
 			},
 			"cluster_endpoints": {
 				Description: "The endpoints used to connect to the cluster by region.",
@@ -290,6 +293,7 @@ func createClusterSpec(ctx context.Context, apiClient *openapiclient.APIClient, 
 	var memoryMb int32
 	var memoryOK bool
 	var trackId string
+	var trackName string
 	var trackIdOK bool
 	var message string
 
@@ -297,7 +301,12 @@ func createClusterSpec(ctx context.Context, apiClient *openapiclient.APIClient, 
 
 	// Compute track ID for database version
 	softwareInfo := *openapiclient.NewSoftwareInfoWithDefaults()
-	trackName := plan.DatabaseVersion.Value
+	if !plan.DatabaseVersion.Unknown {
+		trackName = plan.DatabaseVersion.Value
+	} else {
+		// Set track name to "Stable" by default
+		trackName = "Stable"
+	}
 	trackId, trackIdOK, message = getTrackId(ctx, apiClient, accountId, trackName)
 	if !trackIdOK {
 		return nil, false, message
@@ -410,6 +419,7 @@ func getPlan(ctx context.Context, plan tfsdk.Plan, cluster *Cluster) diag.Diagno
 	diags.Append(plan.GetAttribute(ctx, path.Root("cluster_tier"), &cluster.ClusterTier)...)
 	diags.Append(plan.GetAttribute(ctx, path.Root("cluster_allow_list_ids"), &cluster.ClusterAllowListIDs)...)
 	diags.Append(plan.GetAttribute(ctx, path.Root("restore_backup_id"), &cluster.RestoreBackupID)...)
+	diags.Append(plan.GetAttribute(ctx, path.Root("database_version"), &cluster.DatabaseVersion)...)
 	diags.Append(plan.GetAttribute(ctx, path.Root("node_config"), &cluster.NodeConfig)...)
 	diags.Append(plan.GetAttribute(ctx, path.Root("credentials"), &cluster.Credentials)...)
 	diags.Append(plan.GetAttribute(ctx, path.Root("backup_schedules"), &cluster.BackupSchedules)...)
@@ -602,7 +612,7 @@ func (r resourceCluster) Create(ctx context.Context, req tfsdk.CreateResourceReq
 		regions = append(regions, regionInfo.Region.Value)
 	}
 
-	cluster, readOK, message := resourceClusterRead(accountId, projectId, clusterId, backUpSchedules, regions, allowListProvided, allowListIDs, false, apiClient)
+	cluster, readOK, message := resourceClusterRead(ctx, accountId, projectId, clusterId, backUpSchedules, regions, allowListProvided, allowListIDs, false, apiClient)
 
 	if !readOK {
 		resp.Diagnostics.AddError("Unable to read the state of the cluster ", message)
@@ -670,7 +680,7 @@ func (r resourceCluster) Read(ctx context.Context, req tfsdk.ReadResourceRequest
 	if state.BackupSchedules != nil && len(state.BackupSchedules) > 0 {
 		backUpSchedules = append(backUpSchedules, state.BackupSchedules[0])
 	}
-	cluster, readOK, message := resourceClusterRead(state.AccountID.Value, state.ProjectID.Value, state.ClusterID.Value, backUpSchedules, regions, allowListProvided, allowListIDs, false, r.p.client)
+	cluster, readOK, message := resourceClusterRead(ctx, state.AccountID.Value, state.ProjectID.Value, state.ClusterID.Value, backUpSchedules, regions, allowListProvided, allowListIDs, false, r.p.client)
 
 	if !readOK {
 		resp.Diagnostics.AddError("Unable to read the state of the cluster", message)
@@ -705,7 +715,7 @@ func getClusterRegionIndex(region string, readOnly bool, regionIndexMap map[stri
 	return -1
 }
 
-func resourceClusterRead(accountId string, projectId string, clusterId string, backUpSchedules []BackupScheduleInfo, regions []string, allowListProvided bool, inputAllowListIDs []string, readOnly bool, apiClient *openapiclient.APIClient) (cluster Cluster, readOK bool, errorMessage string) {
+func resourceClusterRead(ctx context.Context, accountId string, projectId string, clusterId string, backUpSchedules []BackupScheduleInfo, regions []string, allowListProvided bool, inputAllowListIDs []string, readOnly bool, apiClient *openapiclient.APIClient) (cluster Cluster, readOK bool, errorMessage string) {
 	clusterResp, response, err := apiClient.ClusterApi.GetCluster(context.Background(), accountId, projectId, clusterId).Execute()
 	if err != nil {
 		b, _ := httputil.DumpResponse(response, true)
@@ -751,13 +761,21 @@ func resourceClusterRead(accountId string, projectId string, clusterId string, b
 	cluster.ClusterType.Value = string(*clusterResp.Data.Spec.ClusterInfo.ClusterType)
 	cluster.ClusterTier.Value = string(clusterResp.Data.Spec.ClusterInfo.ClusterTier)
 	cluster.ClusterVersion.Value = strconv.Itoa(int(clusterResp.Data.Spec.ClusterInfo.GetVersion()))
-	cluster.DatabaseVersion.Value = clusterResp.Data.Info.GetSoftwareVersion()
+
+	// set database track name
+	trackId := clusterResp.Data.Spec.SoftwareInfo.GetTrackId()
+	trackName, trackNameOK, message := getTrackName(ctx, apiClient, accountId, trackId)
+	if !trackNameOK {
+		return cluster, false, message
+	}
+	cluster.DatabaseVersion.Value = trackName
 
 	cluster.FaultTolerance.Value = string(clusterResp.Data.Spec.ClusterInfo.FaultTolerance)
 	cluster.NodeConfig.NumCores.Value = int64(clusterResp.Data.Spec.ClusterInfo.NodeInfo.NumCores)
 	cluster.NodeConfig.DiskSizeGb.Value = int64(clusterResp.Data.Spec.ClusterInfo.NodeInfo.DiskSizeGb)
 
 	cluster.ClusterInfo.State.Value = clusterResp.Data.Info.GetState()
+	cluster.ClusterInfo.SoftwareVersion.Value = clusterResp.Data.Info.GetSoftwareVersion()
 	cluster.ClusterInfo.CreatedTime.Value = clusterResp.Data.Info.Metadata.GetCreatedOn()
 	cluster.ClusterInfo.UpdatedTime.Value = clusterResp.Data.Info.Metadata.GetUpdatedOn()
 
@@ -1034,7 +1052,7 @@ func (r resourceCluster) Update(ctx context.Context, req tfsdk.UpdateResourceReq
 		regions = append(regions, regionInfo.Region.Value)
 	}
 
-	cluster, readOK, message := resourceClusterRead(accountId, projectId, clusterId, backUpSchedules, regions, allowListProvided, allowListIDs, false, apiClient)
+	cluster, readOK, message := resourceClusterRead(ctx, accountId, projectId, clusterId, backUpSchedules, regions, allowListProvided, allowListIDs, false, apiClient)
 	if !readOK {
 		resp.Diagnostics.AddError("Unable to read the state of the cluster ", message)
 		return

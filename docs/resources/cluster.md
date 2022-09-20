@@ -197,5 +197,6 @@ Optional:
 Read-Only:
 
 - `created_time` (String)
+- `software_version` (String)
 - `state` (String)
 - `updated_time` (String)

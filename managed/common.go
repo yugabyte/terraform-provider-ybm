@@ -84,12 +84,26 @@ func getTrackId(ctx context.Context, apiClient *openapiclient.APIClient, account
 	tracksData := tracksResp.GetData()
 
 	for _, track := range tracksData {
+		tflog.Debug(ctx, fmt.Sprintf("Required track name:  %v, current track name: %v", track.Spec.GetName(), trackName))
 		if track.Spec.GetName() == trackName {
 			return track.Info.GetId(), true, ""
 		}
 	}
 
 	return "", false, "The database version doesn't exist."
+}
+
+func getTrackName(ctx context.Context, apiClient *openapiclient.APIClient, accountId string, trackId string) (trackName string, trackNameOK bool, errorMessage string) {
+
+	trackNameResp, resp, err := apiClient.SoftwareReleaseApi.GetTrack(ctx, accountId, trackId).Execute()
+	if err != nil {
+		b, _ := httputil.DumpResponse(resp, true)
+		return "", false, string(b)
+	}
+	trackData := trackNameResp.GetData()
+	trackName = trackData.Spec.GetName()
+
+	return trackName, true, ""
 }
 
 func getAccountId(ctx context.Context, apiClient *openapiclient.APIClient) (accountId string, accountIdOK bool, errorMessage string) {

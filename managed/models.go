@@ -53,9 +53,10 @@ type Credentials struct {
 }
 
 type ClusterInfo struct {
-	State       types.String `tfsdk:"state"`
-	CreatedTime types.String `tfsdk:"created_time"`
-	UpdatedTime types.String `tfsdk:"updated_time"`
+	State           types.String `tfsdk:"state"`
+	SoftwareVersion types.String `tfsdk:"software_version"`
+	CreatedTime     types.String `tfsdk:"created_time"`
+	UpdatedTime     types.String `tfsdk:"updated_time"`
 }
 
 type AllowList struct {
