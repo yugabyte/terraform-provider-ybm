@@ -75,6 +75,37 @@ func getDiskSizeFromInstanceType(ctx context.Context, apiClient *openapiclient.A
 	return 0, false, "Node with the given number of CPU cores doesn't exist in the given region."
 }
 
+func getTrackId(ctx context.Context, apiClient *openapiclient.APIClient, accountId string, trackName string) (trackId string, trackIdOK bool, errorMessage string) {
+	tracksResp, resp, err := apiClient.SoftwareReleaseApi.ListTracks(ctx, accountId).Execute()
+	if err != nil {
+		b, _ := httputil.DumpResponse(resp, true)
+		return "", false, string(b)
+	}
+	tracksData := tracksResp.GetData()
+
+	for _, track := range tracksData {
+		tflog.Debug(ctx, fmt.Sprintf("Required track name:  %v, current track name: %v", track.Spec.GetName(), trackName))
+		if track.Spec.GetName() == trackName {
+			return track.Info.GetId(), true, ""
+		}
+	}
+
+	return "", false, "The database version doesn't exist."
+}
+
+func getTrackName(ctx context.Context, apiClient *openapiclient.APIClient, accountId string, trackId string) (trackName string, trackNameOK bool, errorMessage string) {
+
+	trackNameResp, resp, err := apiClient.SoftwareReleaseApi.GetTrack(ctx, accountId, trackId).Execute()
+	if err != nil {
+		b, _ := httputil.DumpResponse(resp, true)
+		return "", false, string(b)
+	}
+	trackData := trackNameResp.GetData()
+	trackName = trackData.Spec.GetName()
+
+	return trackName, true, ""
+}
+
 func getAccountId(ctx context.Context, apiClient *openapiclient.APIClient) (accountId string, accountIdOK bool, errorMessage string) {
 	accountResp, resp, err := apiClient.AccountApi.ListAccounts(ctx).Execute()
 	if err != nil {

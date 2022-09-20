@@ -13,6 +13,7 @@ type Cluster struct {
 	ClusterType         types.String         `tfsdk:"cluster_type"`
 	FaultTolerance      types.String         `tfsdk:"fault_tolerance"`
 	ClusterRegionInfo   []RegionInfo         `tfsdk:"cluster_region_info"`
+	DatabaseTrack       types.String         `tfsdk:"database_track"`
 	ClusterTier         types.String         `tfsdk:"cluster_tier"`
 	ClusterAllowListIDs []types.String       `tfsdk:"cluster_allow_list_ids"`
 	RestoreBackupID     types.String         `tfsdk:"restore_backup_id"`
