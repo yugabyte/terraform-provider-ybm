@@ -1,3 +1,7 @@
+/*
+ * Copyright © 2022-present Yugabyte, Inc. All Rights Reserved.
+ * SPDX-License-Identifier: Apache-2.0
+ */
 package managed
 
 import (
