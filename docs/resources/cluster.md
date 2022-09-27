@@ -38,16 +38,16 @@ resource "ybm_cluster" "single_region_cluster" {
   cluster_region_info = [
     {
       region    = "us-west1"
-      num_nodes = 1
-      vpc_id    = "example-vpc-id"
+      num_nodes = 3
+      vpc_id    = "example-vpc-id"  #Optional
     }
   ]
   cluster_tier           = "PAID"
-  cluster_allow_list_ids = ["example-allow-list-id-1", "example-allow-list-id-2"] # Optional
-  fault_tolerance        = "NONE"
+  cluster_allow_list_ids = ["example-allow-list-id-1", "example-allow-list-id-2"] #Optional
+  fault_tolerance        = "ZONE"
   node_config = {
     num_cores    = 2
-    disk_size_gb = 10
+    disk_size_gb = 50  #Optional
   }
   backup_schedules = [
     {
@@ -55,7 +55,7 @@ resource "ybm_cluster" "single_region_cluster" {
       retention_period_in_days = 10
       time_interval_in_days    = 10
     }
-  ]
+  ]  #Optional
   credentials = {
     ysql_username = "example_ysql_user"
     ysql_password = var.ysql_password
@@ -74,26 +74,26 @@ resource "ybm_cluster" "multi_region_cluster" {
     {
       region    = "us-west1"
       num_nodes = 1
-      vpc_id    = "example-vpc-id"
+      vpc_id    = "example-vpc-id" #Optional
     },
     {
       region    = "asia-east1"
       num_nodes = 1
-      vpc_id    = "example-vpc-id"
+      vpc_id    = "example-vpc-id"  #Optional
     },
     {
       region    = "europe-central2"
       num_nodes = 1
-      vpc_id    = "example-vpc-id"
+      vpc_id    = "example-vpc-id"  #Optional
     }
   ]
   cluster_tier           = "PAID"
-  cluster_allow_list_ids = ["example-allow-list-id-1", "example-allow-list-id-2"] # Optional
+  cluster_allow_list_ids = ["example-allow-list-id-1", "example-allow-list-id-2"] #Optional
   restore_backup_id      = "example-backup-id"                                    #Optional
   fault_tolerance = "REGION"
   node_config = {
     num_cores       = 2
-    disk_size_gb    = 10
+    disk_size_gb    = 50  #Optional
   }
   backup_schedules = [
     {
@@ -101,7 +101,7 @@ resource "ybm_cluster" "multi_region_cluster" {
       retention_period_in_days = 10
       time_interval_in_days    = 10
     }
-  ]
+  ]     #Optional
   credentials = {
     ysql_username = "example_ysql_user"
     ysql_password = var.ysql_password
@@ -127,13 +127,13 @@ resource "ybm_cluster" "multi_region_cluster" {
 
 - `account_id` (String) The ID of the account this cluster belongs to. To be provided if there are multiple accounts associated with the user.
 - `backup_schedules` (Attributes List) (see [below for nested schema](#nestedatt--backup_schedules))
-- `cloud_type` (String) The cloud provider where the cluster is deployed: AWS or GCP. Default GCP.
+- `cloud_type` (String) The cloud provider where the cluster is deployed: AWS or GCP.
 - `cluster_allow_list_ids` (List of String) List of IDs of the allow lists assigned to the cluster.
 - `cluster_endpoints` (Map of String) The endpoints used to connect to the cluster by region.
 - `cluster_id` (String) The ID of the cluster. Created automatically when a cluster is created. Used to get a specific cluster.
 - `database_track` (String) The track of the database. Stable or Preview.
 - `desired_state` (String) The desired state of the database, Active or Paused. This parameter can be used to pause/resume a cluster.
-- `fault_tolerance` (String) The fault tolerance of the cluster.
+- `fault_tolerance` (String) The fault tolerance of the cluster. NONE, NODE, ZONE or REGION.
 - `project_id` (String) The ID of the project this cluster belongs to.
 - `restore_backup_id` (String) The ID of the backup to be restored to the cluster.
 

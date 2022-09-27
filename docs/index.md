@@ -11,19 +11,16 @@ Terraform provider for YugabyteDB Managed
 ## Example Usage
 
 ```terraform
-terraform {
-  required_providers {
-    ybm = {
-      version = "0.1.0"
-      source = "registry.terraform.io/yugabyte/ybm"
-    }
-  }
+variable "auth_token" {
+  type        = string
+  description = "The authentication token."
+  sensitive   = true
 }
 
 provider "ybm" {
   host = "cloud.yugabyte.com"
   use_secure_host = false # True by default
-  auth_token = "authentication-token"
+  auth_token = var.auth_token
 }
 ```
 

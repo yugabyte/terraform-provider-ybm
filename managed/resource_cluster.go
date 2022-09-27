@@ -63,10 +63,11 @@ func (r resourceClusterType) GetSchema(_ context.Context) (tfsdk.Schema, diag.Di
 				Required:    true,
 			},
 			"cloud_type": {
-				Description: "The cloud provider where the cluster is deployed: AWS or GCP. Default GCP.",
+				Description: "The cloud provider where the cluster is deployed: AWS or GCP.",
 				Type:        types.StringType,
 				Optional:    true,
 				Computed:    true,
+				Validators:  []tfsdk.AttributeValidator{stringvalidator.OneOf("AWS", "GCP")},
 			},
 			"cluster_region_info": {
 				Required: true,
@@ -141,10 +142,11 @@ func (r resourceClusterType) GetSchema(_ context.Context) (tfsdk.Schema, diag.Di
 				Validators:  []tfsdk.AttributeValidator{stringvalidator.OneOf("FREE", "PAID")},
 			},
 			"fault_tolerance": {
-				Description: "The fault tolerance of the cluster.",
+				Description: "The fault tolerance of the cluster. NONE, NODE, ZONE or REGION.",
 				Type:        types.StringType,
 				Optional:    true,
 				Computed:    true,
+				Validators:  []tfsdk.AttributeValidator{stringvalidator.OneOf("NONE", "NODE", "ZONE", "REGION")},
 			},
 			"cluster_allow_list_ids": {
 				Description: "List of IDs of the allow lists assigned to the cluster.",
