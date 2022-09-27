@@ -120,7 +120,9 @@ resource "ybm_cluster" "multi_region_cluster" {
 - `cluster_region_info` (Attributes List) (see [below for nested schema](#nestedatt--cluster_region_info))
 - `cluster_tier` (String) FREE (Sandbox) or PAID (Dedicated).
 - `cluster_type` (String) The type of the cluster. SYNCHRONOUS or GEO_PARTITIONED
-- `credentials` (Attributes) (see [below for nested schema](#nestedatt--credentials))
+- `credentials` (Attributes) Credentials to be used by the database. Please provide 'username' and 'password' 
+				(which would be used in common for both YSQL and YCQL) OR all of 'ysql_username',
+				 'ysql_password', 'ycql_username' and 'ycql_password' but not a mix of both. (see [below for nested schema](#nestedatt--credentials))
 - `node_config` (Attributes) (see [below for nested schema](#nestedatt--node_config))
 
 ### Optional
@@ -159,8 +161,10 @@ Optional:
 <a id="nestedatt--credentials"></a>
 ### Nested Schema for `credentials`
 
-Required:
+Optional:
 
+- `password` (String) The password to be used for both YSQL and YCQL.
+- `username` (String) The username to be used for both YSQL and YCQL.
 - `ycql_password` (String, Sensitive) YCQL password for the database. Note that this will be stored in the state file.
 - `ycql_username` (String) YCQL username for the database.
 - `ysql_password` (String, Sensitive) YSQL password for the database. Note that this will be stored in the state file.

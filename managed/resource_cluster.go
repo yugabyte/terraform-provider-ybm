@@ -177,28 +177,41 @@ func (r resourceClusterType) GetSchema(_ context.Context) (tfsdk.Schema, diag.Di
 				}),
 			},
 			"credentials": {
+				Description: `Credentials to be used by the database. Please provide 'username' and 'password' 
+				(which would be used in common for both YSQL and YCQL) OR all of 'ysql_username',
+				 'ysql_password', 'ycql_username' and 'ycql_password' but not a mix of both.`,
 				Required: true,
 				Attributes: tfsdk.SingleNestedAttributes(map[string]tfsdk.Attribute{
+					"username": {
+						Description: "The username to be used for both YSQL and YCQL.",
+						Type:        types.StringType,
+						Optional:    true,
+					},
+					"password": {
+						Description: "The password to be used for both YSQL and YCQL.",
+						Type:        types.StringType,
+						Optional:    true,
+					},
 					"ysql_username": {
 						Description: "YSQL username for the database.",
 						Type:        types.StringType,
-						Required:    true,
+						Optional:    true,
 					},
 					"ysql_password": {
 						Description: "YSQL password for the database. Note that this will be stored in the state file.",
 						Type:        types.StringType,
-						Required:    true,
+						Optional:    true,
 						Sensitive:   true,
 					},
 					"ycql_username": {
 						Description: "YCQL username for the database.",
 						Type:        types.StringType,
-						Required:    true,
+						Optional:    true,
 					},
 					"ycql_password": {
 						Description: "YCQL password for the database. Note that this will be stored in the state file.",
 						Type:        types.StringType,
-						Required:    true,
+						Optional:    true,
 						Sensitive:   true,
 					},
 				}),
@@ -452,6 +465,24 @@ func getIDsFromState(ctx context.Context, state tfsdk.State, cluster *Cluster) {
 
 }
 
+func validateCredentials(credentials Credentials) bool {
+
+	commonCredentialsProvided := !credentials.Username.IsNull() && !credentials.Password.IsNull()
+	commonCredentialsNotProvided := credentials.Username.IsNull() && credentials.Password.IsNull()
+	ysqlCredentialsProvided := !credentials.YSQLUsername.IsNull() && !credentials.YSQLPassword.IsNull()
+	ysqlCredentialsNotProvided := credentials.YSQLUsername.IsNull() && credentials.YSQLPassword.IsNull()
+	ycqlCredentialsProvided := !credentials.YCQLUsername.IsNull() && !credentials.YCQLPassword.IsNull()
+	ycqlCredentialsNotProvided := credentials.YCQLUsername.IsNull() && credentials.YCQLPassword.IsNull()
+
+	if (commonCredentialsProvided && ysqlCredentialsNotProvided && ycqlCredentialsNotProvided) ||
+		(ysqlCredentialsProvided && ycqlCredentialsProvided && commonCredentialsNotProvided) {
+		return true
+	}
+
+	return false
+
+}
+
 // Create a new resource
 func (r resourceCluster) Create(ctx context.Context, req tfsdk.CreateResourceRequest, resp *tfsdk.CreateResourceResponse) {
 	if !r.p.configured {
@@ -468,6 +499,13 @@ func (r resourceCluster) Create(ctx context.Context, req tfsdk.CreateResourceReq
 	resp.Diagnostics.Append(getPlan(ctx, req.Plan, &plan)...)
 	if resp.Diagnostics.HasError() {
 		tflog.Debug(ctx, "Cluster Resource: Error on Get Plan")
+		return
+	}
+
+	if !validateCredentials(plan.Credentials) {
+		resp.Diagnostics.AddError("Invalid credentials", `Please provide 'username' and 'password' 
+		(which would be used in common for both YSQL and YCQL) OR all of 'ysql_username',
+		 'ysql_password', 'ycql_username' and 'ycql_password' but not a mix of both.`)
 		return
 	}
 
@@ -642,10 +680,17 @@ func (r resourceCluster) Create(ctx context.Context, req tfsdk.CreateResourceReq
 	}
 
 	// set credentials for cluster (not returned by read api)
-	cluster.Credentials.YSQLUsername.Value = plan.Credentials.YSQLUsername.Value
-	cluster.Credentials.YSQLPassword.Value = plan.Credentials.YSQLPassword.Value
-	cluster.Credentials.YCQLUsername.Value = plan.Credentials.YCQLUsername.Value
-	cluster.Credentials.YCQLPassword.Value = plan.Credentials.YCQLPassword.Value
+	if plan.Credentials.Username.IsNull() {
+		cluster.Credentials.YSQLUsername.Value = plan.Credentials.YSQLUsername.Value
+		cluster.Credentials.YSQLPassword.Value = plan.Credentials.YSQLPassword.Value
+		cluster.Credentials.YCQLUsername.Value = plan.Credentials.YCQLUsername.Value
+		cluster.Credentials.YCQLPassword.Value = plan.Credentials.YCQLPassword.Value
+	} else {
+		// common credentials have been used
+		cluster.Credentials.Username.Value = plan.Credentials.YSQLUsername.Value
+		cluster.Credentials.Password.Value = plan.Credentials.YSQLPassword.Value
+	}
+
 	// set restore backup id for cluster (not returned by read api)
 	if restoreRequired {
 		cluster.RestoreBackupID.Value = plan.RestoreBackupID.Value
