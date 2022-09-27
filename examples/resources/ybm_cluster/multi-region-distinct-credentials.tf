@@ -19,17 +19,17 @@ resource "ybm_cluster" "multi_region_cluster" {
     {
       region    = "us-west1"
       num_nodes = 1
-      vpc_id    = "example-vpc-id"
+      vpc_id    = "example-vpc-id"  #Optional
     },
     {
       region    = "asia-east1"
       num_nodes = 1
-      vpc_id    = "example-vpc-id"
+      vpc_id    = "example-vpc-id"  #Optional
     },
     {
       region    = "europe-central2"
       num_nodes = 1
-      vpc_id    = "example-vpc-id"
+      vpc_id    = "example-vpc-id"  #Optional
     }
   ]
   cluster_tier           = "PAID"
