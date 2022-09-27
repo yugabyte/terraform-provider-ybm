@@ -31,10 +31,8 @@ resource "ybm_cluster" "single_region_cluster" {
     }
   ]  #Optional
   credentials = {
-    ysql_username = "example_ysql_user"
-    ysql_password = var.ysql_password
-    ycql_username = "example_ycql_user"
-    ycql_password = var.ycql_password
+    username = "example_user"
+    password = var.password
   }
 
 }
