@@ -188,7 +188,7 @@ func (r resourceClusterType) GetSchema(_ context.Context) (tfsdk.Schema, diag.Di
 						Optional:    true,
 					},
 					"password": {
-						Description: "The password to be used for both YSQL and YCQL.",
+						Description: "The password to be used for both YSQL and YCQL. Note that this will be stored in the state file.",
 						Type:        types.StringType,
 						Optional:    true,
 					},
@@ -547,8 +547,13 @@ func (r resourceCluster) Create(ctx context.Context, req tfsdk.CreateResourceReq
 	}
 
 	credentials := openapiclient.NewCreateClusterRequestDbCredentials()
-	credentials.SetYsql(*openapiclient.NewDBCredentials(plan.Credentials.YSQLPassword.Value, plan.Credentials.YSQLUsername.Value))
-	credentials.SetYcql(*openapiclient.NewDBCredentials(plan.Credentials.YCQLPassword.Value, plan.Credentials.YCQLUsername.Value))
+	if plan.Credentials.Username.IsNull() {
+		credentials.SetYsql(*openapiclient.NewDBCredentials(plan.Credentials.YSQLPassword.Value, plan.Credentials.YSQLUsername.Value))
+		credentials.SetYcql(*openapiclient.NewDBCredentials(plan.Credentials.YCQLPassword.Value, plan.Credentials.YCQLUsername.Value))
+	} else {
+		credentials.SetYsql(*openapiclient.NewDBCredentials(plan.Credentials.Password.Value, plan.Credentials.Username.Value))
+		credentials.SetYcql(*openapiclient.NewDBCredentials(plan.Credentials.Password.Value, plan.Credentials.Username.Value))
+	}
 
 	createClusterRequest := *openapiclient.NewCreateClusterRequest(*clusterSpec, *credentials)
 
