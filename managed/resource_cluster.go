@@ -29,9 +29,9 @@ type resourceClusterType struct{}
 func (r resourceClusterType) GetSchema(_ context.Context) (tfsdk.Schema, diag.Diagnostics) {
 	return tfsdk.Schema{
 		Description: `The resource to create a YugabyteDB cluster. Use this resource to create both 
-		single- and multi-region clusters. You can also use this resource to bind allow lists to the cluster 
-		being created; restore previously taken backups to the cluster being created; 
-		and modify the backup schedule of the cluster being created.`,
+single- and multi-region clusters. You can also use this resource to bind allow lists to the cluster 
+being created; restore previously taken backups to the cluster being created; 
+and modify the backup schedule of the cluster being created.`,
 		Attributes: map[string]tfsdk.Attribute{
 			"account_id": {
 				Description: "The ID of the account this cluster belongs to. To be provided if there are multiple accounts associated with the user.",
@@ -178,8 +178,8 @@ func (r resourceClusterType) GetSchema(_ context.Context) (tfsdk.Schema, diag.Di
 			},
 			"credentials": {
 				Description: `Credentials to be used by the database. Please provide 'username' and 'password' 
-				(which would be used in common for both YSQL and YCQL) OR all of 'ysql_username',
-				 'ysql_password', 'ycql_username' and 'ycql_password' but not a mix of both.`,
+(which would be used in common for both YSQL and YCQL) OR all of 'ysql_username',
+'ysql_password', 'ycql_username' and 'ycql_password' but not a mix of both.`,
 				Required: true,
 				Attributes: tfsdk.SingleNestedAttributes(map[string]tfsdk.Attribute{
 					"username": {
@@ -504,8 +504,8 @@ func (r resourceCluster) Create(ctx context.Context, req tfsdk.CreateResourceReq
 
 	if !validateCredentials(plan.Credentials) {
 		resp.Diagnostics.AddError("Invalid credentials", `Please provide 'username' and 'password' 
-		(which would be used in common for both YSQL and YCQL) OR all of 'ysql_username',
-		 'ysql_password', 'ycql_username' and 'ycql_password' but not a mix of both.`)
+(which would be used in common for both YSQL and YCQL) OR all of 'ysql_username',
+'ysql_password', 'ycql_username' and 'ycql_password' but not a mix of both.`)
 		return
 	}
 
@@ -690,10 +690,16 @@ func (r resourceCluster) Create(ctx context.Context, req tfsdk.CreateResourceReq
 		cluster.Credentials.YSQLPassword.Value = plan.Credentials.YSQLPassword.Value
 		cluster.Credentials.YCQLUsername.Value = plan.Credentials.YCQLUsername.Value
 		cluster.Credentials.YCQLPassword.Value = plan.Credentials.YCQLPassword.Value
+		cluster.Credentials.Username.Null = true
+		cluster.Credentials.Password.Null = true
 	} else {
 		// common credentials have been used
-		cluster.Credentials.Username.Value = plan.Credentials.YSQLUsername.Value
-		cluster.Credentials.Password.Value = plan.Credentials.YSQLPassword.Value
+		cluster.Credentials.Username.Value = plan.Credentials.Username.Value
+		cluster.Credentials.Password.Value = plan.Credentials.Password.Value
+		cluster.Credentials.YSQLUsername.Null = true
+		cluster.Credentials.YSQLPassword.Null = true
+		cluster.Credentials.YCQLUsername.Null = true
+		cluster.Credentials.YCQLPassword.Null = true
 	}
 
 	// set restore backup id for cluster (not returned by read api)
