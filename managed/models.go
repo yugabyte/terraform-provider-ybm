@@ -51,6 +51,8 @@ type NodeConfig struct {
 }
 
 type Credentials struct {
+	Username     types.String `tfsdk:"username"`
+	Password     types.String `tfsdk:"password"`
 	YSQLUsername types.String `tfsdk:"ysql_username"`
 	YSQLPassword types.String `tfsdk:"ysql_password"`
 	YCQLUsername types.String `tfsdk:"ycql_username"`
