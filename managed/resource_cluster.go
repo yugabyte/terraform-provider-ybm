@@ -191,6 +191,7 @@ and modify the backup schedule of the cluster being created.`,
 						Description: "The password to be used for both YSQL and YCQL. Note that this will be stored in the state file.",
 						Type:        types.StringType,
 						Optional:    true,
+						Sensitive:   true,
 					},
 					"ysql_username": {
 						Description: "YSQL username for the database.",
