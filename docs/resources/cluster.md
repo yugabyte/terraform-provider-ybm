@@ -131,21 +131,21 @@ resource "ybm_cluster" "multi_region_cluster" {
     {
       region    = "us-west1"
       num_nodes = 1
-      vpc_id    = "example-vpc-id"
+      vpc_id    = "example-vpc-id" #Optional
     },
     {
       region    = "asia-east1"
       num_nodes = 1
-      vpc_id    = "example-vpc-id"
+      vpc_id    = "example-vpc-id" #Optional
     },
     {
       region    = "europe-central2"
       num_nodes = 1
-      vpc_id    = "example-vpc-id"
+      vpc_id    = "example-vpc-id" #Optional
     }
   ]
   cluster_tier           = "PAID"
-  cluster_allow_list_ids = ["example-allow-list-id-1", "example-allow-list-id-2"] # Optional
+  cluster_allow_list_ids = ["example-allow-list-id-1", "example-allow-list-id-2"] #Optional
   restore_backup_id      = "example-backup-id"                                    #Optional
   fault_tolerance = "REGION"
   node_config = {
@@ -190,17 +190,17 @@ resource "ybm_cluster" "multi_region_cluster" {
     {
       region    = "us-west1"
       num_nodes = 1
-      vpc_id    = "example-vpc-id"
+      vpc_id    = "example-vpc-id"  #Optional
     },
     {
       region    = "asia-east1"
       num_nodes = 1
-      vpc_id    = "example-vpc-id"
+      vpc_id    = "example-vpc-id"  #Optional
     },
     {
       region    = "europe-central2"
       num_nodes = 1
-      vpc_id    = "example-vpc-id"
+      vpc_id    = "example-vpc-id"  #Optional
     }
   ]
   cluster_tier           = "PAID"
