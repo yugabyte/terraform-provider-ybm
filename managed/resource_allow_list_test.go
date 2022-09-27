@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	mocks "github.com/yugabyte/terraform-provider-ybm/mock_yugabytedb_managed_go_client_internal"
+	openapi "github.com/yugabyte/yugabytedb-managed-go-client-internal"
 
 	gomock "github.com/golang/mock/gomock"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
@@ -45,7 +46,8 @@ func getCreateAllowListRequest(ctx context.Context, cfg *openapiclient.Configura
 }
 
 func getCreateAllowListResponse(allowListID string, projectID string, cidrList []string, allowListDescription string, allowListName string) *openapiclient.NetworkAllowListResponse {
-	allowListInfo := openapiclient.NewNetworkAllowListInfo(allowListID, projectID, []string{})
+	allowListClusterInfo := []openapi.NetworkAllowListClusterInfo{*openapi.NewNetworkAllowListClusterInfoWithDefaults()}
+	allowListInfo := openapiclient.NewNetworkAllowListInfo(allowListID, projectID, []string{}, allowListClusterInfo)
 	allowListSpec := openapiclient.NewNetworkAllowListSpec(allowListName, allowListDescription, cidrList)
 	allowListData := openapiclient.NewNetworkAllowListData(*allowListSpec, *allowListInfo)
 	createAllowListResponse := openapiclient.NewNetworkAllowListResponse(*allowListData)

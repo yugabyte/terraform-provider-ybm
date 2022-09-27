@@ -32,7 +32,7 @@ resource "ybm_cluster" "multi_region_cluster" {
   fault_tolerance = "REGION"
   node_config = {
     num_cores       = 2
-    disk_size_gb    = 10
+    disk_size_gb    = 50 #Optional
   }
   backup_schedules = [
     {
@@ -40,7 +40,7 @@ resource "ybm_cluster" "multi_region_cluster" {
       retention_period_in_days = 10
       time_interval_in_days    = 10
     }
-  ]
+  ] #Optional
   credentials = {
     username = "example_user"
     password = var.password

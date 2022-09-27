@@ -33,12 +33,12 @@ resource "ybm_cluster" "multi_region_cluster" {
     }
   ]
   cluster_tier           = "PAID"
-  cluster_allow_list_ids = ["example-allow-list-id-1", "example-allow-list-id-2"] # Optional
+  cluster_allow_list_ids = ["example-allow-list-id-1", "example-allow-list-id-2"] #Optional
   restore_backup_id      = "example-backup-id"                                    #Optional
   fault_tolerance = "REGION"
   node_config = {
     num_cores       = 2
-    disk_size_gb    = 10
+    disk_size_gb    = 50 #Optional
   }
   backup_schedules = [
     {
@@ -46,7 +46,7 @@ resource "ybm_cluster" "multi_region_cluster" {
       retention_period_in_days = 10
       time_interval_in_days    = 10
     }
-  ]
+  ] #Optional
   credentials = {
     ysql_username = "example_ysql_user"
     ysql_password = var.ysql_password
