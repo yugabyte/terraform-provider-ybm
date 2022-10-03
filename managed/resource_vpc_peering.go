@@ -7,7 +7,6 @@ package managed
 import (
 	"context"
 	"errors"
-	"net/http/httputil"
 	"time"
 
 	"github.com/hashicorp/terraform-plugin-framework/diag"
@@ -214,8 +213,8 @@ func (r resourceVPCPeering) Create(ctx context.Context, req tfsdk.CreateResource
 
 	vpcPeeringResp, response, err := apiClient.NetworkApi.CreateVpcPeering(ctx, accountId, projectId).VpcPeeringSpec(vpcPeeringSpec).Execute()
 	if err != nil {
-		b, _ := httputil.DumpResponse(response, true)
-		resp.Diagnostics.AddError("Unable to create VPC peering", string(b))
+		errMsg := getErrorMessage(response, err)
+		resp.Diagnostics.AddError("Unable to create VPC peering", errMsg)
 		return
 	}
 	vpcPeeringId := vpcPeeringResp.Data.Info.Id
@@ -267,8 +266,8 @@ func getIDsFromVPCPeeringState(ctx context.Context, state tfsdk.State, vpcPeerin
 func resourceVPCPeeringRead(accountId string, projectId string, vpcPeeringId string, apiClient *openapiclient.APIClient) (vpcPeering VPCPeering, readOK bool, errorMessage string) {
 	vpcPeeringResp, response, err := apiClient.NetworkApi.GetVpcPeering(context.Background(), accountId, projectId, vpcPeeringId).Execute()
 	if err != nil {
-		b, _ := httputil.DumpResponse(response, true)
-		return vpcPeering, false, string(b)
+		errMsg := getErrorMessage(response, err)
+		return vpcPeering, false, errMsg
 	}
 
 	vpcPeering.AccountID.Value = accountId
@@ -333,8 +332,8 @@ func (r resourceVPCPeering) Delete(ctx context.Context, req tfsdk.DeleteResource
 
 	response, err := apiClient.NetworkApi.DeleteVpcPeering(ctx, accountId, projectId, vpcPeeringId).Execute()
 	if err != nil {
-		b, _ := httputil.DumpResponse(response, true)
-		resp.Diagnostics.AddError("Unable to delete the VPC peering", string(b))
+		errMsg := getErrorMessage(response, err)
+		resp.Diagnostics.AddError("Unable to delete the VPC peering", errMsg)
 		return
 	}
 

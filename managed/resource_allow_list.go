@@ -6,7 +6,6 @@ package managed
 
 import (
 	"context"
-	"net/http/httputil"
 
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/path"
@@ -151,8 +150,8 @@ func (r resourceAllowList) Create(ctx context.Context, req tfsdk.CreateResourceR
 
 	allowListResp, response, err := apiClient.NetworkApi.CreateNetworkAllowList(context.Background(), accountId, projectId).NetworkAllowListSpec(networkAllowListSpec).Execute()
 	if err != nil {
-		b, _ := httputil.DumpResponse(response, true)
-		resp.Diagnostics.AddError("Unable to create allow list ", string(b))
+		errMsg := getErrorMessage(response, err)
+		resp.Diagnostics.AddError("Unable to create allow list ", errMsg)
 		return
 	}
 	allowListId := allowListResp.Data.Info.Id
@@ -182,8 +181,8 @@ func getIDsFromAllowListState(ctx context.Context, state tfsdk.State, allowList 
 func resourceAllowListRead(accountId string, projectId string, allowListId string, apiClient *openapiclient.APIClient) (allowList AllowList, readOK bool, errorMessage string) {
 	allowListResp, response, err := apiClient.NetworkApi.GetNetworkAllowList(context.Background(), accountId, projectId, allowListId).Execute()
 	if err != nil {
-		b, _ := httputil.DumpResponse(response, true)
-		return allowList, false, string(b)
+		errMsg := getErrorMessage(response, err)
+		return allowList, false, errMsg
 	}
 
 	allowList.AccountID.Value = accountId
@@ -256,8 +255,8 @@ func (r resourceAllowList) Delete(ctx context.Context, req tfsdk.DeleteResourceR
 
 	response, err := apiClient.NetworkApi.DeleteNetworkAllowList(context.Background(), accountId, projectId, allowListId).Execute()
 	if err != nil {
-		b, _ := httputil.DumpResponse(response, true)
-		resp.Diagnostics.AddError("Unable to delete the allow list ", string(b))
+		errMsg := getErrorMessage(response, err)
+		resp.Diagnostics.AddError("Unable to delete the allow list ", errMsg)
 		return
 	}
 

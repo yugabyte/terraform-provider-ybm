@@ -7,7 +7,6 @@ package managed
 import (
 	"context"
 	"fmt"
-	"net/http/httputil"
 
 	"github.com/hashicorp/terraform-plugin-log/tflog"
 	openapiclient "github.com/yugabyte/yugabytedb-managed-go-client-internal"
@@ -16,8 +15,8 @@ import (
 func getProjectId(ctx context.Context, apiClient *openapiclient.APIClient, accountId string) (projectId string, projectIdOK bool, errorMessage string) {
 	projectResp, resp, err := apiClient.ProjectApi.ListProjects(ctx, accountId).Execute()
 	if err != nil {
-		b, _ := httputil.DumpResponse(resp, true)
-		return "", false, string(b)
+		errMsg := getErrorMessage(resp, err)
+		return "", false, errMsg
 	}
 	projectData := projectResp.GetData()
 	if len(projectData) == 0 {
@@ -34,8 +33,8 @@ func getProjectId(ctx context.Context, apiClient *openapiclient.APIClient, accou
 func getMemoryFromInstanceType(ctx context.Context, apiClient *openapiclient.APIClient, accountId string, cloud string, tier string, region string, numCores int32) (memory int32, memoryOK bool, errorMessage string) {
 	instanceResp, resp, err := apiClient.ClusterApi.GetSupportedInstanceTypes(context.Background()).AccountId(accountId).Cloud(cloud).Tier(tier).Region(region).Execute()
 	if err != nil {
-		b, _ := httputil.DumpResponse(resp, true)
-		return 0, false, string(b)
+		errMsg := getErrorMessage(resp, err)
+		return 0, false, errMsg
 	}
 	instanceData := instanceResp.GetData()
 	nodeConfigList, ok := instanceData[region]
@@ -58,8 +57,8 @@ func getMemoryFromInstanceType(ctx context.Context, apiClient *openapiclient.API
 func getDiskSizeFromInstanceType(ctx context.Context, apiClient *openapiclient.APIClient, accountId string, cloud string, tier string, region string, numCores int32) (diskSize int32, diskSizeOK bool, errorMessage string) {
 	instanceResp, resp, err := apiClient.ClusterApi.GetSupportedInstanceTypes(context.Background()).AccountId(accountId).Cloud(cloud).Tier(tier).Region(region).Execute()
 	if err != nil {
-		b, _ := httputil.DumpResponse(resp, true)
-		return 0, false, string(b)
+		errMsg := getErrorMessage(resp, err)
+		return 0, false, errMsg
 	}
 	instanceData := instanceResp.GetData()
 	nodeConfigList, ok := instanceData[region]
@@ -82,8 +81,8 @@ func getDiskSizeFromInstanceType(ctx context.Context, apiClient *openapiclient.A
 func getTrackId(ctx context.Context, apiClient *openapiclient.APIClient, accountId string, trackName string) (trackId string, trackIdOK bool, errorMessage string) {
 	tracksResp, resp, err := apiClient.SoftwareReleaseApi.ListTracks(ctx, accountId).Execute()
 	if err != nil {
-		b, _ := httputil.DumpResponse(resp, true)
-		return "", false, string(b)
+		errMsg := getErrorMessage(resp, err)
+		return "", false, errMsg
 	}
 	tracksData := tracksResp.GetData()
 
@@ -101,8 +100,8 @@ func getTrackName(ctx context.Context, apiClient *openapiclient.APIClient, accou
 
 	trackNameResp, resp, err := apiClient.SoftwareReleaseApi.GetTrack(ctx, accountId, trackId).Execute()
 	if err != nil {
-		b, _ := httputil.DumpResponse(resp, true)
-		return "", false, string(b)
+		errMsg := getErrorMessage(resp, err)
+		return "", false, errMsg
 	}
 	trackData := trackNameResp.GetData()
 	trackName = trackData.Spec.GetName()
@@ -113,8 +112,8 @@ func getTrackName(ctx context.Context, apiClient *openapiclient.APIClient, accou
 func getAccountId(ctx context.Context, apiClient *openapiclient.APIClient) (accountId string, accountIdOK bool, errorMessage string) {
 	accountResp, resp, err := apiClient.AccountApi.ListAccounts(ctx).Execute()
 	if err != nil {
-		b, _ := httputil.DumpResponse(resp, true)
-		return "", false, string(b)
+		errMsg := getErrorMessage(resp, err)
+		return "", false, errMsg
 	}
 	accountData := accountResp.GetData()
 	if len(accountData) == 0 {

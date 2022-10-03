@@ -7,7 +7,6 @@ package managed
 import (
 	"context"
 	"errors"
-	"net/http/httputil"
 
 	"time"
 
@@ -229,13 +228,13 @@ func (r resourceReadReplicas) Create(ctx context.Context, req tfsdk.CreateResour
 
 	_, response, err := apiClient.ReadReplicaApi.CreateReadReplica(context.Background(), accountId, projectId, clusterId).ReadReplicaSpec(readReplicasSpec).Execute()
 	if err != nil {
-		b, _ := httputil.DumpResponse(response, true)
-		if len(string(b)) > 10000 {
+		errMsg := getErrorMessage(response, err)
+		if len(errMsg) > 10000 {
 			resp.Diagnostics.AddError("Unable to create read replicas. NOTE: The length of the HTML output indicates your authentication token may be out of date. A truncated response follows: ",
-				string(b)[:10000])
+				errMsg[:10000])
 			return
 		}
-		resp.Diagnostics.AddError("Unable to create read replicas ", string(b))
+		resp.Diagnostics.AddError("Unable to create read replicas ", errMsg)
 		return
 	}
 
@@ -307,8 +306,8 @@ func resourceReadReplicasRead(ctx context.Context, accountId string, projectId s
 
 	listReadReplicasResp, response, err := apiClient.ReadReplicaApi.ListReadReplicas(context.Background(), accountId, projectId, clusterId).Execute()
 	if err != nil {
-		b, _ := httputil.DumpResponse(response, true)
-		return readReplicas, false, string(b)
+		errMsg := getErrorMessage(response, err)
+		return readReplicas, false, errMsg
 	}
 
 	readReplicas.AccountID.Value = accountId
@@ -386,13 +385,13 @@ func (r resourceReadReplicas) Update(ctx context.Context, req tfsdk.UpdateResour
 	tflog.Info(ctx, "Making call to update read replicas...")
 	_, response, err := apiClient.ReadReplicaApi.EditReadReplicas(context.Background(), accountId, projectId, clusterId).ReadReplicaSpec(readReplicasSpec).Execute()
 	if err != nil {
-		b, _ := httputil.DumpResponse(response, true)
-		if len(string(b)) > 10000 {
+		errMsg := getErrorMessage(response, err)
+		if len(errMsg) > 10000 {
 			resp.Diagnostics.AddError("Unable to update read replicas. NOTE: The length of the HTML output indicates your authentication token may be out of date. A truncated response follows: ",
-				string(b)[:10000])
+				errMsg[:10000])
 			return
 		}
-		resp.Diagnostics.AddError("Unable to update read replicas ", string(b))
+		resp.Diagnostics.AddError("Unable to update read replicas ", errMsg)
 		return
 	}
 
@@ -449,8 +448,8 @@ func (r resourceReadReplicas) Delete(ctx context.Context, req tfsdk.DeleteResour
 
 	response, err := apiClient.ReadReplicaApi.DeleteReadReplica(ctx, accountId, projectId, clusterId).Execute()
 	if err != nil {
-		b, _ := httputil.DumpResponse(response, true)
-		resp.Diagnostics.AddError("Unable to list the read replicas", string(b))
+		errMsg := getErrorMessage(response, err)
+		resp.Diagnostics.AddError("Unable to list the read replicas", errMsg)
 		return
 	}
 

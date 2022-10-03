@@ -6,7 +6,6 @@ package managed
 
 import (
 	"context"
-	"net/http/httputil"
 
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
@@ -84,8 +83,8 @@ func dataSourceBackupRead(ctx context.Context, accountId string, projectId strin
 	state := "SUCCEEDED"
 	backupsResp, response, err := apiClient.BackupApi.ListBackups(ctx, accountId, projectId).ClusterId(clusterId).State(state).Execute()
 	if err != nil {
-		b, _ := httputil.DumpResponse(response, true)
-		return backup, false, string(b)
+		errMsg := getErrorMessage(response, err)
+		return backup, false, errMsg
 	}
 	backupCount := len(backupsResp.Data)
 	if backupCount == 0 {
@@ -127,8 +126,8 @@ func dataSourceBackupRead(ctx context.Context, accountId string, projectId strin
 			continuationToken := backupsResp.Metadata.GetContinuationToken()
 			backupsResp, response, err = apiClient.BackupApi.ListBackups(ctx, accountId, projectId).ClusterId(clusterId).State(state).ContinuationToken(continuationToken).Execute()
 			if err != nil {
-				b, _ := httputil.DumpResponse(response, true)
-				return backup, false, string(b)
+				errMsg := getErrorMessage(response, err)
+				return backup, false, errMsg
 			}
 		}
 		if !backupFound {
