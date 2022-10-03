@@ -5,7 +5,7 @@ resource "ybm_vpc_peering" "example_vpc_peering" {
   yugabytedb_vpc_id = "example_vpc_id"
   application_vpc_info = {
     cloud = "AWS"
-    project = "example_project"
+    account_id = "example_account_id"
     region = "us-west1"
     vpc_id = "application_vpc_id"
     cidr = "example_cidr"

@@ -19,7 +19,7 @@ resource "ybm_vpc_peering" "example_vpc_peering" {
   yugabytedb_vpc_id = "example_vpc_id"
   application_vpc_info = {
     cloud = "AWS"
-    project = "example_project"
+    account_id = "example_account_id"
     region = "us-west1"
     vpc_id = "application_vpc_id"
     cidr = "example_cidr"
@@ -63,10 +63,11 @@ resource "ybm_vpc_peering" "example_vpc_peering" {
 Required:
 
 - `cloud` (String) The cloud provider (AWS or GCP) where the application is deployed.
-- `project` (String) The account ID (AWS) or project ID (GCP).
 - `vpc_id` (String) The ID of the VPC in which the application is deployed.
 
 Optional:
 
+- `account_id` (String) The account ID for AWS.
 - `cidr` (String) The CIDR of the VPC in which the application is deployed.
+- `project` (String) The project ID for GCP.
 - `region` (String) The region where the application is deployed.
