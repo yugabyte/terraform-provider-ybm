@@ -282,8 +282,10 @@ func resourceVPCPeeringRead(accountId string, projectId string, vpcPeeringId str
 	vpcPeering.ApplicationVPCInfo.Cloud.Value = cloud
 	if cloud == "AWS" {
 		vpcPeering.ApplicationVPCInfo.AccountID.Value = vpcPeeringResp.Data.Spec.CustomerVpc.GetCloudProviderProject()
+		vpcPeering.ApplicationVPCInfo.Project.Null = true
 	} else {
 		vpcPeering.ApplicationVPCInfo.Project.Value = vpcPeeringResp.Data.Spec.CustomerVpc.GetCloudProviderProject()
+		vpcPeering.ApplicationVPCInfo.AccountID.Null = true
 	}
 
 	vpcPeering.ApplicationVPCInfo.Region.Value = vpcPeeringResp.Data.Spec.CustomerVpc.CloudInfo.GetRegion()

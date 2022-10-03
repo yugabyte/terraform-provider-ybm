@@ -133,7 +133,7 @@ type VPCPeering struct {
 type ApplicationVPCInfo struct {
 	Cloud     types.String `tfsdk:"cloud"`
 	Project   types.String `tfsdk:"project"`
-	AccountID types.String `tfsdk:account_id"`
+	AccountID types.String `tfsdk:"account_id"`
 	Region    types.String `tfsdk:"region"`
 	VPCID     types.String `tfsdk:"vpc_id"`
 	CIDR      types.String `tfsdk:"cidr"`
