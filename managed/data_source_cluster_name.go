@@ -6,7 +6,6 @@ package managed
 
 import (
 	"context"
-	"net/http/httputil"
 
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/path"
@@ -275,8 +274,8 @@ func (r dataClusterName) Read(ctx context.Context, req tfsdk.ReadDataSourceReque
 	res, r1, err := apiClient.ClusterApi.ListClusters(context.Background(), accountId, projectId).Name(attr.cluster_name).Execute()
 
 	if err != nil {
-		b, _ := httputil.DumpResponse(r1, true)
-		resp.Diagnostics.AddError("Unable to extract the following cluster information: ", string(b))
+		errMsg := getErrorMessage(r1, err)
+		resp.Diagnostics.AddError("Unable to extract the following cluster information: ", errMsg)
 		return
 	}
 

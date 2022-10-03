@@ -7,7 +7,6 @@ package managed
 import (
 	"context"
 	"errors"
-	"net/http/httputil"
 	"time"
 
 	"github.com/hashicorp/terraform-plugin-framework/diag"
@@ -157,8 +156,8 @@ func (r resourceBackup) Create(ctx context.Context, req tfsdk.CreateResourceRequ
 
 	backupResp, response, err := apiClient.BackupApi.CreateBackup(context.Background(), accountId, projectId).BackupSpec(backupSpec).Execute()
 	if err != nil {
-		b, _ := httputil.DumpResponse(response, true)
-		resp.Diagnostics.AddError("Unable to create backup ", string(b))
+		errMsg := getErrorMessage(response, err)
+		resp.Diagnostics.AddError("Unable to create backup ", errMsg)
 		return
 	}
 	backupId := *(backupResp.Data.Info.Id)
@@ -202,8 +201,8 @@ func getIDsFromBackupState(ctx context.Context, state tfsdk.State, backup *Backu
 func resourceBackupRead(accountId string, projectId string, backupId string, apiClient *openapiclient.APIClient) (backup Backup, readOK bool, errorMessage string) {
 	backupResp, response, err := apiClient.BackupApi.GetBackup(context.Background(), accountId, projectId, backupId).Execute()
 	if err != nil {
-		b, _ := httputil.DumpResponse(response, true)
-		return backup, false, string(b)
+		errMsg := getErrorMessage(response, err)
+		return backup, false, errMsg
 	}
 
 	backup.AccountID.Value = accountId
@@ -255,8 +254,8 @@ func (r resourceBackup) Delete(ctx context.Context, req tfsdk.DeleteResourceRequ
 
 	response, err := apiClient.BackupApi.DeleteBackup(context.Background(), accountId, projectId, backupId).Execute()
 	if err != nil {
-		b, _ := httputil.DumpResponse(response, true)
-		resp.Diagnostics.AddError("Could not delete the backup", string(b))
+		errMsg := getErrorMessage(response, err)
+		resp.Diagnostics.AddError("Could not delete the backup", errMsg)
 		return
 	}
 

@@ -7,7 +7,6 @@ package managed
 import (
 	"context"
 	"errors"
-	"net/http/httputil"
 	"time"
 
 	"github.com/hashicorp/terraform-plugin-framework/diag"
@@ -212,8 +211,8 @@ func (r resourceVPC) Create(ctx context.Context, req tfsdk.CreateResourceRequest
 
 	vpcResp, response, err := apiClient.NetworkApi.CreateVpc(ctx, accountId, projectId).SingleTenantVpcRequest(vpcRequest).Execute()
 	if err != nil {
-		b, _ := httputil.DumpResponse(response, true)
-		resp.Diagnostics.AddError("Unable to create VPC", string(b))
+		errMsg := getErrorMessage(response, err)
+		resp.Diagnostics.AddError("Unable to create VPC", errMsg)
 		return
 	}
 	vpcId := vpcResp.Data.Info.Id
@@ -262,8 +261,8 @@ func getIDsFromVPCState(ctx context.Context, state tfsdk.State, vpc *VPC) {
 func resourceVPCRead(accountId string, projectId string, vpcId string, regionMap map[string]int, apiClient *openapiclient.APIClient) (vpc VPC, readOK bool, errorMessage string) {
 	vpcResp, response, err := apiClient.NetworkApi.GetSingleTenantVpc(context.Background(), accountId, projectId, vpcId).Execute()
 	if err != nil {
-		b, _ := httputil.DumpResponse(response, true)
-		return vpc, false, string(b)
+		errMsg := getErrorMessage(response, err)
+		return vpc, false, errMsg
 	}
 
 	vpc.AccountID.Value = accountId
@@ -341,8 +340,8 @@ func (r resourceVPC) Delete(ctx context.Context, req tfsdk.DeleteResourceRequest
 
 	response, err := apiClient.NetworkApi.DeleteVpc(context.Background(), accountId, projectId, vpcId).Execute()
 	if err != nil {
-		b, _ := httputil.DumpResponse(response, true)
-		resp.Diagnostics.AddError("Unable to delete the VPC", string(b))
+		errMsg := getErrorMessage(response, err)
+		resp.Diagnostics.AddError("Unable to delete the VPC", errMsg)
 		return
 	}
 

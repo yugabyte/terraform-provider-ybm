@@ -8,7 +8,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"net/http/httputil"
 	"strconv"
 
 	"time"
@@ -308,8 +307,8 @@ func EditBackupSchedule(ctx context.Context, backupScheduleStruct BackupSchedule
 		backupScheduleSpec := *openapiclient.NewBackupScheduleSpec(backupSpec, scheduleSpec)
 		_, res, err := apiClient.BackupApi.ModifyBackupSchedule(ctx, accountId, projectId, scheduleId).BackupScheduleSpec(backupScheduleSpec).Execute()
 		if err != nil {
-			b, _ := httputil.DumpResponse(res, true)
-			return errors.New("Unable to modify the backup schedule. " + string(b))
+			errMsg := getErrorMessage(res, err)
+			return errors.New("Unable to modify the backup schedule. " + errMsg)
 		}
 	}
 	return nil
@@ -560,13 +559,13 @@ func (r resourceCluster) Create(ctx context.Context, req tfsdk.CreateResourceReq
 
 	clusterResp, response, err := apiClient.ClusterApi.CreateCluster(ctx, accountId, projectId).CreateClusterRequest(createClusterRequest).Execute()
 	if err != nil {
-		b, _ := httputil.DumpResponse(response, true)
-		if len(string(b)) > 10000 {
+		errMsg := getErrorMessage(response, err)
+		if len(errMsg) > 10000 {
 			resp.Diagnostics.AddError("Could not create cluster. NOTE: The length of the HTML output indicates your authentication token may be out of date. A truncated response follows:",
-				string(b)[:10000])
+				errMsg[:10000])
 			return
 		}
-		resp.Diagnostics.AddError("Could not create cluster", string(b))
+		resp.Diagnostics.AddError("Could not create cluster", errMsg)
 		return
 	}
 	clusterId := clusterResp.Data.Info.Id
@@ -645,8 +644,8 @@ func (r resourceCluster) Create(ctx context.Context, req tfsdk.CreateResourceReq
 
 		_, response, err := apiClient.ClusterApi.EditClusterNetworkAllowLists(ctx, accountId, projectId, clusterId).RequestBody(allowListIDs).Execute()
 		if err != nil {
-			b, _ := httputil.DumpResponse(response, true)
-			resp.Diagnostics.AddError("Unable to assign allow list to cluster", string(b))
+			errMsg := getErrorMessage(response, err)
+			resp.Diagnostics.AddError("Unable to assign allow list to cluster", errMsg)
 			return
 		}
 		allowListProvided = true
@@ -721,11 +720,11 @@ func pauseCluster(ctx context.Context, apiClient *openapiclient.APIClient, accou
 
 	_, response, err := apiClient.ClusterApi.PauseCluster(ctx, accountId, projectId, clusterId).Execute()
 	if err != nil {
-		b, _ := httputil.DumpResponse(response, true)
-		if len(string(b)) > 10000 {
-			return errors.New("Could not pause the cluster. " + string(b)[:10000])
+		errMsg := getErrorMessage(response, err)
+		if len(errMsg) > 10000 {
+			return errors.New("Could not pause the cluster. " + errMsg[:10000])
 		}
-		return errors.New("Could not pause the cluster. " + string(b))
+		return errors.New("Could not pause the cluster. " + errMsg)
 
 	}
 
@@ -756,11 +755,11 @@ func resumeCluster(ctx context.Context, apiClient *openapiclient.APIClient, acco
 
 	_, response, err := apiClient.ClusterApi.ResumeCluster(ctx, accountId, projectId, clusterId).Execute()
 	if err != nil {
-		b, _ := httputil.DumpResponse(response, true)
-		if len(string(b)) > 10000 {
-			return errors.New("Could not resume the cluster. " + string(b)[:10000])
+		errMsg := getErrorMessage(response, err)
+		if len(errMsg) > 10000 {
+			return errors.New("Could not resume the cluster. " + errMsg[:10000])
 		}
-		return errors.New("Could not resume the cluster. " + string(b))
+		return errors.New("Could not resume the cluster. " + errMsg)
 	}
 
 	// read status, wait for status to be done
@@ -789,8 +788,8 @@ func resumeCluster(ctx context.Context, apiClient *openapiclient.APIClient, acco
 func getClusterState(ctx context.Context, accountId string, projectId string, clusterId string, apiClient *openapiclient.APIClient) (state string, readInfoOK bool, errorMessage string) {
 	clusterResp, resp, err := apiClient.ClusterApi.GetCluster(ctx, accountId, projectId, clusterId).Execute()
 	if err != nil {
-		b, _ := httputil.DumpResponse(resp, true)
-		return "", false, string(b)
+		errMsg := getErrorMessage(resp, err)
+		return "", false, errMsg
 	}
 
 	return clusterResp.Data.Info.GetState(), true, ""
@@ -799,8 +798,8 @@ func getClusterState(ctx context.Context, accountId string, projectId string, cl
 func getRestoreState(ctx context.Context, accountId string, projectId string, clusterId string, backupId string, restoreId string, apiClient *openapiclient.APIClient) (state string, readInfoOK bool, errorMessage string) {
 	restoreResp, resp, err := apiClient.BackupApi.GetRestore(ctx, accountId, projectId, restoreId).Execute()
 	if err != nil {
-		b, _ := httputil.DumpResponse(resp, true)
-		return "", false, string(b)
+		errMsg := getErrorMessage(resp, err)
+		return "", false, errMsg
 	}
 	//ListRestores(ctx, accountId, projectId).BackupId(backupId).ClusterId(clusterId).Execute()
 	return string(restoreResp.Data.Info.GetState()), true, ""
@@ -867,8 +866,8 @@ func getClusterRegionIndex(region string, readOnly bool, regionIndexMap map[stri
 func resourceClusterRead(ctx context.Context, accountId string, projectId string, clusterId string, backUpSchedules []BackupScheduleInfo, regions []string, allowListProvided bool, inputAllowListIDs []string, readOnly bool, apiClient *openapiclient.APIClient) (cluster Cluster, readOK bool, errorMessage string) {
 	clusterResp, response, err := apiClient.ClusterApi.GetCluster(context.Background(), accountId, projectId, clusterId).Execute()
 	if err != nil {
-		b, _ := httputil.DumpResponse(response, true)
-		return cluster, false, string(b)
+		errMsg := getErrorMessage(response, err)
+		return cluster, false, errMsg
 	}
 
 	if len(backUpSchedules) > 0 {
@@ -880,8 +879,8 @@ func resourceClusterRead(ctx context.Context, accountId string, projectId string
 		if backUpSchedules[0].ScheduleID.Value != "" {
 			backupScheduleResp, res, err := apiClient.BackupApi.GetBackupSchedule(context.Background(), accountId, projectId, backUpSchedules[0].ScheduleID.Value).Execute()
 			if err != nil {
-				b, _ := httputil.DumpResponse(res, true)
-				return cluster, false, string(b)
+				errMsg := getErrorMessage(res, err)
+				return cluster, false, errMsg
 			}
 			// fill all fields of schema except credentials - credentials are not returned by api call
 
@@ -941,8 +940,8 @@ func resourceClusterRead(ctx context.Context, accountId string, projectId string
 	// Cluster certificate
 	certResponse, certHttpResp, err := apiClient.ClusterApi.GetConnectionCertificate(context.Background()).Execute()
 	if err != nil {
-		b, _ := httputil.DumpResponse(certHttpResp, true)
-		return cluster, false, string(b)
+		errMsg := getErrorMessage(certHttpResp, err)
+		return cluster, false, errMsg
 	}
 	cluster.ClusterCertificate.Value = *certResponse.Data
 
@@ -972,8 +971,8 @@ func resourceClusterRead(ctx context.Context, accountId string, projectId string
 		for {
 			clusterAllowListMappingResp, response, err := apiClient.ClusterApi.ListClusterNetworkAllowLists(context.Background(), accountId, projectId, clusterId).Execute()
 			if err != nil {
-				b, _ := httputil.DumpResponse(response, true)
-				return cluster, false, string(b)
+				errMsg := getErrorMessage(response, err)
+				return cluster, false, errMsg
 			}
 			allowListIDMap := map[string]bool{}
 			allowListIDs := []types.String{}
@@ -1013,8 +1012,8 @@ func resourceClusterRead(ctx context.Context, accountId string, projectId string
 func getClusterVersion(accountId string, projectId string, clusterId string, apiClient *openapiclient.APIClient) (version int, readOK bool, errorMessage string) {
 	clusterResp, response, err := apiClient.ClusterApi.GetCluster(context.Background(), accountId, projectId, clusterId).Execute()
 	if err != nil {
-		b, _ := httputil.DumpResponse(response, true)
-		return 0, false, string(b)
+		errMsg := getErrorMessage(response, err)
+		return 0, false, errMsg
 	}
 
 	return int(clusterResp.Data.Spec.ClusterInfo.GetVersion()), true, ""
@@ -1028,8 +1027,8 @@ func handleRestore(ctx context.Context, accountId string, projectId string, clus
 
 	restoreResp, response, err := apiClient.BackupApi.RestoreBackup(ctx, accountId, projectId).RestoreSpec(restoreSpec).Execute()
 	if err != nil {
-		b, _ := httputil.DumpResponse(response, true)
-		return errors.New("Unable to restore backup to cluster: " + string(b))
+		errMsg := getErrorMessage(response, err)
+		return errors.New("Unable to restore backup to cluster: " + errMsg)
 	}
 
 	restoreId := *restoreResp.Data.Info.Id
@@ -1110,13 +1109,13 @@ func (r resourceCluster) Update(ctx context.Context, req tfsdk.UpdateResourceReq
 
 	_, response, err := apiClient.ClusterApi.EditCluster(context.Background(), accountId, projectId, clusterId).ClusterSpec(*clusterSpec).Execute()
 	if err != nil {
-		b, _ := httputil.DumpResponse(response, true)
-		if len(string(b)) > 10000 {
+		errMsg := getErrorMessage(response, err)
+		if len(errMsg) > 10000 {
 			resp.Diagnostics.AddError("Unable to edit cluster. NOTE: The length of the HTML output indicates your authentication token may be out of date. A truncated response follows: ",
-				string(b)[:10000])
+				errMsg[:10000])
 			return
 		}
-		resp.Diagnostics.AddError("Unable to edit cluster ", string(b))
+		resp.Diagnostics.AddError("Unable to edit cluster ", errMsg)
 		return
 	}
 
@@ -1181,8 +1180,8 @@ func (r resourceCluster) Update(ctx context.Context, req tfsdk.UpdateResourceReq
 
 		_, response, err := apiClient.ClusterApi.EditClusterNetworkAllowLists(context.Background(), accountId, projectId, clusterId).RequestBody(allowListIDs).Execute()
 		if err != nil {
-			b, _ := httputil.DumpResponse(response, true)
-			resp.Diagnostics.AddError("Unable to assign allow list to cluster ", string(b))
+			errMsg := getErrorMessage(response, err)
+			resp.Diagnostics.AddError("Unable to assign allow list to cluster ", errMsg)
 			return
 		}
 		allowListProvided = true
@@ -1258,8 +1257,8 @@ func (r resourceCluster) Delete(ctx context.Context, req tfsdk.DeleteResourceReq
 
 	response, err := apiClient.ClusterApi.DeleteCluster(context.Background(), accountId, projectId, clusterId).Execute()
 	if err != nil {
-		b, _ := httputil.DumpResponse(response, true)
-		resp.Diagnostics.AddError("Unable to delete the cluster ", string(b))
+		errMsg := getErrorMessage(response, err)
+		resp.Diagnostics.AddError("Unable to delete the cluster ", errMsg)
 		return
 	}
 
