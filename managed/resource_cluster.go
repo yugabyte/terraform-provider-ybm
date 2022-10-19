@@ -287,9 +287,9 @@ type resourceCluster struct {
 func EditBackupSchedule(ctx context.Context, backupScheduleStruct BackupScheduleInfo, scheduleId string, backupDes string, accountId string, projectId string, clusterId string, apiClient *openapiclient.APIClient) error {
 	if backupScheduleStruct.State.Value != "" && backupScheduleStruct.RetentionPeriodInDays.Value != 0 {
 		backupRetentionPeriodInDays := int32(backupScheduleStruct.RetentionPeriodInDays.Value)
-		backupDescription := backupDes
+
 		backupSpec := *openapiclient.NewBackupSpec(clusterId)
-		backupSpec.Description = &backupDescription
+		backupSpec.SetDescription(backupDes)
 		backupSpec.RetentionPeriodInDays = &backupRetentionPeriodInDays
 		scheduleSpec := *openapiclient.NewScheduleSpec(openapiclient.ScheduleStateEnum(backupScheduleStruct.State.Value))
 		if backupScheduleStruct.TimeIntervalInDays.Value != 0 {
@@ -616,8 +616,14 @@ func (r resourceCluster) Create(ctx context.Context, req tfsdk.CreateResourceReq
 			return
 		}
 		description := params["description"].(string)
+		user_defined_description := plan.BackupSchedules[0].BackupDescription.Value
 		//Edit Backup Schedule
-		err = EditBackupSchedule(ctx, plan.BackupSchedules[0], scheduleId, description, accountId, projectId, clusterId, apiClient)
+		if plan.BackupSchedules[0].BackupDescription.Value == "" {
+			err = EditBackupSchedule(ctx, plan.BackupSchedules[0], scheduleId, description, accountId, projectId, clusterId, apiClient)
+		}
+		if user_defined_description != "" {
+			err = EditBackupSchedule(ctx, plan.BackupSchedules[0], scheduleId, user_defined_description, accountId, projectId, clusterId, apiClient)
+		}
 		if err != nil {
 			resp.Diagnostics.AddError("Error duing store: ", err.Error())
 			return
