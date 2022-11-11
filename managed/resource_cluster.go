@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"strconv"
+	"strings"
 
 	"time"
 
@@ -254,7 +255,7 @@ and modify the backup schedule of the cluster being created.`,
 				Computed:    true,
 				Validators: []tfsdk.AttributeValidator{
 					// Validate string value must be "Active" or "Paused"
-					stringvalidator.OneOf([]string{"Active", "Paused"}...),
+					stringvalidator.OneOfCaseInsensitive([]string{"Active", "Paused"}...),
 				},
 			},
 			"cluster_endpoints": {
@@ -576,7 +577,7 @@ func (r resourceCluster) Create(ctx context.Context, req tfsdk.CreateResourceReq
 	err = retry.Do(ctx, retryPolicy, func(ctx context.Context) error {
 		clusterState, readInfoOK, message := getClusterState(ctx, accountId, projectId, clusterId, apiClient)
 		if readInfoOK {
-			if clusterState == "Active" || clusterState == "Create Failed" {
+			if strings.EqualFold(clusterState, "Active") || clusterState == "Create Failed" || clusterState == "CREATE_FAILED" {
 				return nil
 			}
 		} else {
@@ -670,10 +671,10 @@ func (r resourceCluster) Create(ctx context.Context, req tfsdk.CreateResourceReq
 	}
 
 	// Pause the cluster if the desired state is set to 'Paused'
-	if !plan.DesiredState.Unknown && plan.DesiredState.Value == "Paused" {
+	if !plan.DesiredState.Unknown && strings.EqualFold(plan.DesiredState.Value, "Paused") {
 		err := pauseCluster(ctx, apiClient, accountId, projectId, clusterId)
 		if err != nil {
-			resp.Diagnostics.AddError("Cluster Creation Failed: ", err.Error())
+			resp.Diagnostics.AddError("Pausing the cluster Failed: ", err.Error())
 		}
 	}
 
@@ -709,6 +710,11 @@ func (r resourceCluster) Create(ctx context.Context, req tfsdk.CreateResourceReq
 		cluster.RestoreBackupID.Null = true
 	}
 
+	// support backward compatibility during pause and resume flows
+	if strings.EqualFold(plan.DesiredState.Value, "Active") || strings.EqualFold(plan.DesiredState.Value, "Paused") {
+		cluster.DesiredState.Value = plan.DesiredState.Value
+	}
+
 	diags := resp.State.Set(ctx, &cluster)
 	resp.Diagnostics.Append(diags...)
 	if resp.Diagnostics.HasError() {
@@ -734,7 +740,7 @@ func pauseCluster(ctx context.Context, apiClient *openapiclient.APIClient, accou
 	err = retry.Do(ctx, retryPolicy, func(ctx context.Context) error {
 		clusterState, readInfoOK, message := getClusterState(ctx, accountId, projectId, clusterId, apiClient)
 		if readInfoOK {
-			if clusterState == "Paused" {
+			if strings.EqualFold(clusterState, "Paused") {
 				return nil
 			}
 		} else {
@@ -768,7 +774,7 @@ func resumeCluster(ctx context.Context, apiClient *openapiclient.APIClient, acco
 	err = retry.Do(ctx, retryPolicy, func(ctx context.Context) error {
 		clusterState, readInfoOK, message := getClusterState(ctx, accountId, projectId, clusterId, apiClient)
 		if readInfoOK {
-			if clusterState == "Active" {
+			if strings.EqualFold(clusterState, "Active") {
 				return nil
 			}
 		} else {
@@ -1075,7 +1081,7 @@ func (r resourceCluster) Update(ctx context.Context, req tfsdk.UpdateResourceReq
 	clusterId := state.ClusterID.Value
 
 	// Resume the cluster if the desired state is set to 'Active' and it is paused currently
-	if state.DesiredState.Value == "Paused" && (plan.DesiredState.Unknown || plan.DesiredState.Value == "Active") {
+	if strings.EqualFold(plan.DesiredState.Value, "Paused") && (plan.DesiredState.Unknown || strings.EqualFold(plan.DesiredState.Value, "Active")) {
 		// Resume the cluster
 		err := resumeCluster(ctx, apiClient, accountId, projectId, clusterId)
 		if err != nil {
@@ -1125,7 +1131,7 @@ func (r resourceCluster) Update(ctx context.Context, req tfsdk.UpdateResourceReq
 	err = retry.Do(ctx, retryPolicy, func(ctx context.Context) error {
 		clusterState, readInfoOK, message := getClusterState(ctx, accountId, projectId, clusterId, apiClient)
 		if readInfoOK {
-			if clusterState == "Active" || clusterState == "Create Failed" {
+			if strings.EqualFold(clusterState, "Active") || clusterState == "Create Failed" || clusterState == "CREATE_FAILED" {
 				return nil
 			}
 		} else {
@@ -1208,7 +1214,7 @@ func (r resourceCluster) Update(ctx context.Context, req tfsdk.UpdateResourceReq
 	}
 
 	// Pause the cluster if the desired state is set to 'Paused' and it is active currently
-	if state.DesiredState.Value == "Active" && (!plan.DesiredState.Unknown && plan.DesiredState.Value == "Paused") {
+	if strings.EqualFold(state.DesiredState.Value, "Active") && (!plan.DesiredState.Unknown && strings.EqualFold(plan.DesiredState.Value, "Paused")) {
 		// Pause the cluster
 		err := pauseCluster(ctx, apiClient, accountId, projectId, clusterId)
 		if err != nil {
@@ -1238,6 +1244,11 @@ func (r resourceCluster) Update(ctx context.Context, req tfsdk.UpdateResourceReq
 	} else {
 		cluster.RestoreBackupID.Null = true
 	}
+	// support backward compatibility during pause and resume flows
+	if strings.EqualFold(plan.DesiredState.Value, "Active") || strings.EqualFold(plan.DesiredState.Value, "Paused") {
+		cluster.DesiredState.Value = plan.DesiredState.Value
+	}
+
 	diags := resp.State.Set(ctx, &cluster)
 	resp.Diagnostics.Append(diags...)
 	if resp.Diagnostics.HasError() {
