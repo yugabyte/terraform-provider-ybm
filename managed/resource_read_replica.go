@@ -7,6 +7,7 @@ package managed
 import (
 	"context"
 	"errors"
+	"strings"
 
 	"time"
 
@@ -244,7 +245,7 @@ func (r resourceReadReplicas) Create(ctx context.Context, req tfsdk.CreateResour
 	err = retry.Do(ctx, retryPolicy, func(ctx context.Context) error {
 		primaryClusterState, readInfoOK, message := getClusterState(ctx, accountId, projectId, clusterId, apiClient)
 		if readInfoOK {
-			if primaryClusterState == "Active" {
+			if strings.EqualFold(primaryClusterState, "Active") {
 				return nil
 			}
 		} else {
@@ -402,7 +403,7 @@ func (r resourceReadReplicas) Update(ctx context.Context, req tfsdk.UpdateResour
 		primaryClusterState, readInfoOK, message := getClusterState(ctx, accountId, projectId, clusterId, apiClient)
 		if readInfoOK {
 			tflog.Debug(ctx, "Read Replica current state = "+primaryClusterState)
-			if primaryClusterState == "Active" {
+			if strings.EqualFold(primaryClusterState, "Active") {
 				return nil
 			}
 		} else {
@@ -459,7 +460,7 @@ func (r resourceReadReplicas) Delete(ctx context.Context, req tfsdk.DeleteResour
 	err = retry.Do(ctx, retryPolicy, func(ctx context.Context) error {
 		primaryClusterState, readInfoOK, message := getClusterState(ctx, accountId, projectId, clusterId, apiClient)
 		if readInfoOK {
-			if primaryClusterState == "Active" {
+			if strings.EqualFold(primaryClusterState, "Active") {
 				return nil
 			}
 		} else {
