@@ -326,8 +326,6 @@ func createClusterSpec(ctx context.Context, apiClient *openapiclient.APIClient, 
 	var trackIdOK bool
 	var message string
 
-	networking := *openapiclient.NewNetworkingWithDefaults()
-
 	// Compute track ID for database version
 	softwareInfo := *openapiclient.NewSoftwareInfoWithDefaults()
 	if !plan.DatabaseTrack.Unknown {
@@ -361,7 +359,7 @@ func createClusterSpec(ctx context.Context, apiClient *openapiclient.APIClient, 
 		clusterRegionInfo = append(clusterRegionInfo, info)
 	}
 
-	// This is to populate region in top level cloud info
+	// This is to pass in the region information to fetch memory and disk size
 	region := ""
 	regionCount := len(clusterRegionInfo)
 	if regionCount > 0 {
@@ -416,11 +414,7 @@ func createClusterSpec(ctx context.Context, apiClient *openapiclient.APIClient, 
 
 	clusterSpec = openapiclient.NewClusterSpec(
 		plan.ClusterName.Value,
-		*openapiclient.NewCloudInfo(
-			openapiclient.CloudEnum(plan.CloudType.Value),
-			region),
 		clusterInfo,
-		networking,
 		softwareInfo)
 
 	clusterSpec.SetClusterRegionInfo(clusterRegionInfo)
@@ -798,7 +792,7 @@ func getClusterState(ctx context.Context, accountId string, projectId string, cl
 		return "", false, errMsg
 	}
 
-	return clusterResp.Data.Info.GetState(), true, ""
+	return string(clusterResp.Data.Info.GetState()), true, ""
 }
 
 func getRestoreState(ctx context.Context, accountId string, projectId string, clusterId string, backupId string, restoreId string, apiClient *openapiclient.APIClient) (state string, readInfoOK bool, errorMessage string) {
@@ -911,8 +905,7 @@ func resourceClusterRead(ctx context.Context, accountId string, projectId string
 	cluster.ProjectID.Value = projectId
 	cluster.ClusterID.Value = clusterId
 	cluster.ClusterName.Value = clusterResp.Data.Spec.Name
-	cluster.DesiredState.Value = clusterResp.Data.Info.GetState()
-	cluster.CloudType.Value = string(clusterResp.Data.Spec.CloudInfo.Code)
+	cluster.DesiredState.Value = string(clusterResp.Data.Info.GetState())
 	cluster.ClusterType.Value = string(*clusterResp.Data.Spec.ClusterInfo.ClusterType)
 	cluster.ClusterTier.Value = string(clusterResp.Data.Spec.ClusterInfo.ClusterTier)
 	cluster.ClusterVersion.Value = strconv.Itoa(int(clusterResp.Data.Spec.ClusterInfo.GetVersion()))
@@ -929,7 +922,7 @@ func resourceClusterRead(ctx context.Context, accountId string, projectId string
 	cluster.NodeConfig.NumCores.Value = int64(clusterResp.Data.Spec.ClusterInfo.NodeInfo.NumCores)
 	cluster.NodeConfig.DiskSizeGb.Value = int64(clusterResp.Data.Spec.ClusterInfo.NodeInfo.DiskSizeGb)
 
-	cluster.ClusterInfo.State.Value = clusterResp.Data.Info.GetState()
+	cluster.ClusterInfo.State.Value = string(clusterResp.Data.Info.GetState())
 	cluster.ClusterInfo.SoftwareVersion.Value = clusterResp.Data.Info.GetSoftwareVersion()
 	cluster.ClusterInfo.CreatedTime.Value = clusterResp.Data.Info.Metadata.GetCreatedOn()
 	cluster.ClusterInfo.UpdatedTime.Value = clusterResp.Data.Info.Metadata.GetUpdatedOn()
@@ -972,6 +965,9 @@ func resourceClusterRead(ctx context.Context, accountId string, projectId string
 		}
 	}
 	cluster.ClusterRegionInfo = clusterRegionInfo
+	if len(respClusterRegionInfo) > 0 {
+		cluster.CloudType.Value = string(respClusterRegionInfo[0].PlacementInfo.CloudInfo.GetCode())
+	}
 
 	if allowListProvided {
 		for {
