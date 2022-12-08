@@ -6,9 +6,9 @@ description: |-
           data correctness and require at least one of the following: scalability, high tolerance to failures, or
           globally-distributed deployments. YugabyteDB Managed https://www.yugabyte.com/managed/ is a fully managed YugabyteDB-as-a-Service without
           the operational overhead of managing a database.
-      The YugabyteDB Managed Provider can be used to interact with the resources provided by YugabyteDB Managed like the YugabyteDB Clusters, Allow lists, VPCs, 
-      VPC Peerings, Read Replicas and so on. The provider needs to be configured with appropriate credentials before it can base used. The navigation bar on the left 
-      hand side provides the details about all the resources supported by the provider and the guides to use the provider.
+          The YugabyteDB Managed Provider can be used to interact with the resources provided by YugabyteDB Managed like the YugabyteDB Clusters, Allow lists, VPCs,
+          VPC Peerings, Read Replicas and so on. The provider needs to be configured with appropriate credentials before it can base used. The navigation bar on the left
+          hand side provides the details about all the resources supported by the provider and the guides to use the provider.
 ---
 
 # YugabyteDB Managed Provider
@@ -18,7 +18,6 @@ description: |-
 		data correctness and require at least one of the following: scalability, high tolerance to failures, or
 		globally-distributed deployments. [YugabyteDB Managed](https://www.yugabyte.com/managed/) is a fully managed YugabyteDB-as-a-Service without
 		the operational overhead of managing a database.
-		
 		The YugabyteDB Managed Provider can be used to interact with the resources provided by YugabyteDB Managed like the YugabyteDB Clusters, Allow lists, VPCs, 
 		VPC Peerings, Read Replicas and so on. The provider needs to be configured with appropriate credentials before it can base used. The navigation bar on the left 
 		hand side provides the details about all the resources supported by the provider and the guides to use the provider.
