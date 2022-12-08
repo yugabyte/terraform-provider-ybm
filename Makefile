@@ -1,7 +1,7 @@
 HOSTNAME=registry.terraform.io
 NAMESPACE=yugabyte
 NAME=ybm
-VERSION=0.1.0-dev
+VERSION=0.0.1
 OS_ARCH=darwin_arm64
 BINARY=terraform-provider-${NAME}
 
