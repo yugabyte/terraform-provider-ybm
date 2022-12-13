@@ -543,11 +543,11 @@ func (r resourceCluster) Create(ctx context.Context, req tfsdk.CreateResourceReq
 
 	credentials := openapiclient.NewCreateClusterRequestDbCredentials()
 	if plan.Credentials.Username.IsNull() {
-		credentials.SetYsql(*openapiclient.NewDBCredentials(plan.Credentials.YSQLPassword.Value, plan.Credentials.YSQLUsername.Value))
-		credentials.SetYcql(*openapiclient.NewDBCredentials(plan.Credentials.YCQLPassword.Value, plan.Credentials.YCQLUsername.Value))
+		credentials.SetYsql(*openapiclient.NewDBCredentials(plan.Credentials.YSQLUsername.Value, plan.Credentials.YSQLPassword.Value))
+		credentials.SetYcql(*openapiclient.NewDBCredentials(plan.Credentials.YCQLUsername.Value, plan.Credentials.YCQLPassword.Value))
 	} else {
-		credentials.SetYsql(*openapiclient.NewDBCredentials(plan.Credentials.Password.Value, plan.Credentials.Username.Value))
-		credentials.SetYcql(*openapiclient.NewDBCredentials(plan.Credentials.Password.Value, plan.Credentials.Username.Value))
+		credentials.SetYsql(*openapiclient.NewDBCredentials(plan.Credentials.Username.Value, plan.Credentials.Password.Value))
+		credentials.SetYcql(*openapiclient.NewDBCredentials(plan.Credentials.Username.Value, plan.Credentials.Password.Value))
 	}
 
 	createClusterRequest := *openapiclient.NewCreateClusterRequest(*clusterSpec, *credentials)
