@@ -612,11 +612,22 @@ func (r resourceCluster) Create(ctx context.Context, req tfsdk.CreateResourceReq
 		}
 		description := params["description"].(string)
 		//Edit Backup Schedule
+		tflog.Error(ctx, fmt.Sprintf("User defined description %v default description %v",plan.BackupSchedules[0].BackupDescription.Value  , description))
+		if plan.BackupSchedules[0].BackupDescription.Value ==""{
 		err = EditBackupSchedule(ctx, plan.BackupSchedules[0], scheduleId, description, accountId, projectId, clusterId, apiClient)
 		if err != nil {
 			resp.Diagnostics.AddError("Error duing store: ", err.Error())
 			return
+		}}
+		if plan.BackupSchedules[0].BackupDescription.Value != ""{
+			err = EditBackupSchedule(ctx, plan.BackupSchedules[0], scheduleId,  plan.BackupSchedules[0].BackupDescription.Value, accountId, projectId, clusterId, apiClient)
+			if err != nil {
+				resp.Diagnostics.AddError("Error duing store: ", err.Error())
+				return
+			}
 		}
+		//err = EditBackupSchedule(ctx, plan.BackupSchedules[0], scheduleId, description, accountId, projectId, clusterId, apiClient)
+		
 		backupScheduleStruct := BackupScheduleInfo{
 			ScheduleID: types.String{Value: scheduleId},
 		}
@@ -1059,6 +1070,7 @@ func handleRestore(ctx context.Context, accountId string, projectId string, clus
 // Update resource
 func (r resourceCluster) Update(ctx context.Context, req tfsdk.UpdateResourceRequest, resp *tfsdk.UpdateResourceResponse) {
 	var plan Cluster
+	tflog.Error(ctx, "default description")
 	resp.Diagnostics.Append(getPlan(ctx, req.Plan, &plan)...)
 	if resp.Diagnostics.HasError() {
 		return
@@ -1140,7 +1152,7 @@ func (r resourceCluster) Update(ctx context.Context, req tfsdk.UpdateResourceReq
 		resp.Diagnostics.AddError("Unable to create cluster", "The operation timed out waiting for cluster creation.")
 		return
 	}
-
+	tflog.Error(ctx, fmt.Sprintf("default description %v", backupDescription))
 	var backUpSchedules []BackupScheduleInfo
 	if plan.BackupSchedules != nil && len(plan.BackupSchedules) > 0 {
 		if len(plan.BackupSchedules) > 1 {
@@ -1155,8 +1167,22 @@ func (r resourceCluster) Update(ctx context.Context, req tfsdk.UpdateResourceReq
 			resp.Diagnostics.AddError("Unable to modify backup schedule", "You must provide both state and retention period in days.")
 			return
 		}
+		tflog.Error(ctx, fmt.Sprintf("User defined description %v default description %v",plan.BackupSchedules[0].BackupDescription.Value  , backupDescription))
+		if plan.BackupSchedules[0].BackupDescription.Value ==""{
+			err = EditBackupSchedule(ctx, plan.BackupSchedules[0], scheduleId, backupDescription, accountId, projectId, clusterId, apiClient)
+			if err != nil {
+				resp.Diagnostics.AddError("Error duing store: ", err.Error())
+				return
+			}}
+		if plan.BackupSchedules[0].BackupDescription.Value != ""{
+				err = EditBackupSchedule(ctx, plan.BackupSchedules[0], scheduleId,  plan.BackupSchedules[0].BackupDescription.Value, accountId, projectId, clusterId, apiClient)
+				if err != nil {
+					resp.Diagnostics.AddError("Error duing store: ", err.Error())
+					return
+				}
+			}
 		//Edit Backup Schedule
-		err = EditBackupSchedule(ctx, plan.BackupSchedules[0], scheduleId, backupDescription, accountId, projectId, clusterId, apiClient)
+		//err = EditBackupSchedule(ctx, plan.BackupSchedules[0], scheduleId, backupDescription, accountId, projectId, clusterId, apiClient)
 		if err != nil {
 			resp.Diagnostics.AddError("Error duing store: ", err.Error())
 			return
