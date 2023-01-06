@@ -612,11 +612,19 @@ func (r resourceCluster) Create(ctx context.Context, req tfsdk.CreateResourceReq
 		}
 		description := params["description"].(string)
 		//Edit Backup Schedule
-		err = EditBackupSchedule(ctx, plan.BackupSchedules[0], scheduleId, description, accountId, projectId, clusterId, apiClient)
+		tflog.Info(ctx, fmt.Sprintf("User defined description '%v' default description '%v'", plan.BackupSchedules[0].BackupDescription.Value, description))
+		newDescription := ""
+		if plan.BackupSchedules[0].BackupDescription.Value == "" {
+			newDescription = description
+		} else {
+			newDescription = plan.BackupSchedules[0].BackupDescription.Value
+		}
+		err = EditBackupSchedule(ctx, plan.BackupSchedules[0], scheduleId, newDescription, accountId, projectId, clusterId, apiClient)
 		if err != nil {
 			resp.Diagnostics.AddError("Error duing store: ", err.Error())
 			return
 		}
+
 		backupScheduleStruct := BackupScheduleInfo{
 			ScheduleID: types.String{Value: scheduleId},
 		}
@@ -1155,12 +1163,20 @@ func (r resourceCluster) Update(ctx context.Context, req tfsdk.UpdateResourceReq
 			resp.Diagnostics.AddError("Unable to modify backup schedule", "You must provide both state and retention period in days.")
 			return
 		}
-		//Edit Backup Schedule
-		err = EditBackupSchedule(ctx, plan.BackupSchedules[0], scheduleId, backupDescription, accountId, projectId, clusterId, apiClient)
+		tflog.Info(ctx, fmt.Sprintf("User defined description '%v' default description '%v'", plan.BackupSchedules[0].BackupDescription.Value, backupDescription))
+		newDescription := ""
+
+		if plan.BackupSchedules[0].BackupDescription.Value == "" {
+			newDescription = backupDescription
+		} else {
+			newDescription = plan.BackupSchedules[0].BackupDescription.Value
+		}
+		err = EditBackupSchedule(ctx, plan.BackupSchedules[0], scheduleId, newDescription, accountId, projectId, clusterId, apiClient)
 		if err != nil {
 			resp.Diagnostics.AddError("Error duing store: ", err.Error())
 			return
 		}
+
 		backupScheduleStruct := BackupScheduleInfo{
 			ScheduleID: types.String{Value: scheduleId},
 		}
