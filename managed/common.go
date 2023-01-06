@@ -7,6 +7,7 @@ package managed
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/hashicorp/terraform-plugin-log/tflog"
 	openapiclient "github.com/yugabyte/yugabytedb-managed-go-client-internal"
@@ -113,7 +114,13 @@ func getAccountId(ctx context.Context, apiClient *openapiclient.APIClient) (acco
 	accountResp, resp, err := apiClient.AccountApi.ListAccounts(ctx).Execute()
 	if err != nil {
 		errMsg := getErrorMessage(resp, err)
-		return "", false, errMsg
+		if strings.Contains(err.Error(), "is not a valid") {
+			tflog.Warn(ctx, "The deserialization of the response failed due to following error. "+
+				"Skipping as this should not impact the functionality of the provider.",
+				map[string]interface{}{"errMsg": err.Error()})
+		} else {
+			return "", false, errMsg
+		}
 	}
 	accountData := accountResp.GetData()
 	if len(accountData) == 0 {
