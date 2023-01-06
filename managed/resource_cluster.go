@@ -1148,7 +1148,7 @@ func (r resourceCluster) Update(ctx context.Context, req tfsdk.UpdateResourceReq
 		resp.Diagnostics.AddError("Unable to create cluster", "The operation timed out waiting for cluster creation.")
 		return
 	}
-	tflog.Error(ctx, fmt.Sprintf("default description %v", backupDescription))
+
 	var backUpSchedules []BackupScheduleInfo
 	if plan.BackupSchedules != nil && len(plan.BackupSchedules) > 0 {
 		if len(plan.BackupSchedules) > 1 {
