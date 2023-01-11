@@ -26,15 +26,13 @@ func (r resourceVPCPeeringType) GetSchema(_ context.Context) (tfsdk.Schema, diag
 		Description: `The resource to create a VPC peering in YugabyteDB Managed.`,
 		Attributes: map[string]tfsdk.Attribute{
 			"account_id": {
-				Description: "The ID of the account this VPC peering belongs to. To be provided if there are multiple accounts associated with the user.",
+				Description: "The ID of the account this VPC peering belongs to.",
 				Type:        types.StringType,
-				Optional:    true,
 				Computed:    true,
 			},
 			"project_id": {
 				Description: "The ID of the project this VPC peering belongs to.",
 				Type:        types.StringType,
-				Optional:    true,
 				Computed:    true,
 			},
 			"vpc_peering_id": {
@@ -114,7 +112,6 @@ func getVPCPeeringPlan(ctx context.Context, plan tfsdk.Plan, vpcPeering *VPCPeer
 	// I tried implementing Unknownable instead but could not get it to work.
 	var diags diag.Diagnostics
 
-	diags.Append(plan.GetAttribute(ctx, path.Root("account_id"), &vpcPeering.AccountID)...)
 	diags.Append(plan.GetAttribute(ctx, path.Root("vpc_peering_id"), &vpcPeering.VPCPeeringID)...)
 	diags.Append(plan.GetAttribute(ctx, path.Root("yugabytedb_vpc_id"), &vpcPeering.YugabyteDBVPCID)...)
 	diags.Append(plan.GetAttribute(ctx, path.Root("name"), &vpcPeering.Name)...)
@@ -145,14 +142,11 @@ func (r resourceVPCPeering) Create(ctx context.Context, req tfsdk.CreateResource
 	}
 
 	apiClient := r.p.client
-	if !plan.AccountID.Null && !plan.AccountID.Unknown {
-		accountId = plan.AccountID.Value
-	} else {
-		accountId, getAccountOK, message = getAccountId(ctx, apiClient)
-		if !getAccountOK {
-			resp.Diagnostics.AddError("Unable to get account ID", message)
-			return
-		}
+
+	accountId, getAccountOK, message = getAccountId(ctx, apiClient)
+	if !getAccountOK {
+		resp.Diagnostics.AddError("Unable to get account ID", message)
+		return
 	}
 
 	if (!plan.VPCPeeringID.Unknown && !plan.VPCPeeringID.Null) || plan.VPCPeeringID.Value != "" {

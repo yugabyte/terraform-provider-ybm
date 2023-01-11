@@ -20,11 +20,12 @@ import (
 	openapiclient "github.com/yugabyte/yugabytedb-managed-go-client-internal"
 )
 
-func getMockAllowList(cfg *openapiclient.Configuration, mockNetworkApi *mocks.MockNetworkApi, mockProjectApi *mocks.MockProjectApi) *resourceAllowList {
+func getMockAllowList(cfg *openapiclient.Configuration, mockNetworkApi *mocks.MockNetworkApi, mockProjectApi *mocks.MockProjectApi, mockAccountApi *mocks.MockAccountApi) *resourceAllowList {
 
 	apiClient := openapiclient.NewAPIClient(cfg)
 	apiClient.NetworkApi = mockNetworkApi
 	apiClient.ProjectApi = mockProjectApi
+	apiClient.AccountApi = mockAccountApi
 
 	p := provider{
 		configured: true,
@@ -73,6 +74,7 @@ func TestCreateAllowList(t *testing.T) {
 	mockCtrl := gomock.NewController(t)
 	defer mockCtrl.Finish()
 	mockNetworkApi := mocks.NewMockNetworkApi(mockCtrl)
+	mockAccountApi := mocks.NewMockAccountApi(mockCtrl)
 	mockProjectApi := mocks.NewMockProjectApi(mockCtrl)
 	ctx := context.Background()
 	cfg := openapiclient.NewConfiguration()
@@ -84,9 +86,12 @@ func TestCreateAllowList(t *testing.T) {
 	allowListName := "allow-all"
 	allowListDescription := "Allow connections from any IP address"
 	allowListID := "test-allow-list-id"
-	allowList := getMockAllowList(cfg, mockNetworkApi, mockProjectApi)
+	allowList := getMockAllowList(cfg, mockNetworkApi, mockProjectApi, mockAccountApi)
+	listAccountsRequest := getListAccountsRequest(ctx, cfg, mockAccountApi)
+	listAccountsResponse := getListAccountsResponse(accountID)
 	listProjectsRequest := getListProjectsRequest(ctx, cfg, accountID, mockProjectApi)
 	listProjectsResponse := getListProjectsResponse(projectID)
+
 	createAllowListRequest := getCreateAllowListRequest(ctx, cfg, accountID, projectID, mockNetworkApi)
 	createAllowListSpec := *openapiclient.NewNetworkAllowListSpec(allowListName, allowListDescription, cidrList)
 	createAllowListRequestFinal := createAllowListRequest.NetworkAllowListSpec(createAllowListSpec)
@@ -101,7 +106,6 @@ func TestCreateAllowList(t *testing.T) {
 	resp.State.Schema = schema
 
 	plan := AllowList{
-		AccountID:            types.String{Value: accountID},
 		AllowListName:        types.String{Value: allowListName},
 		AllowListDescription: types.String{Value: allowListDescription},
 		CIDRList:             cidrListSchema,
@@ -138,8 +142,11 @@ func TestCreateAllowList(t *testing.T) {
 
 	for _, testCase := range testCases {
 		t.Run(testCase.TestName, func(t *testing.T) {
+
 			mockProjectApi.EXPECT().ListProjects(ctx, accountID).Return(*listProjectsRequest).Times(1)
 			mockProjectApi.EXPECT().ListProjectsExecute(*listProjectsRequest).Return(*listProjectsResponse, httpSuccessResponse, nil).Times(1)
+			mockAccountApi.EXPECT().ListAccounts(ctx).Return(*listAccountsRequest).Times(1)
+			mockAccountApi.EXPECT().ListAccountsExecute(*listAccountsRequest).Return(*listAccountsResponse, httpSuccessResponse, nil).Times(1)
 			mockNetworkApi.EXPECT().CreateNetworkAllowList(ctx, accountID, projectID).Return(*createAllowListRequest).Times(1)
 			mockNetworkApi.EXPECT().CreateNetworkAllowListExecute(createAllowListRequestFinal).Return(*createAllowListResponse, httpSuccessResponse, nil).Times(1)
 			mockNetworkApi.EXPECT().GetNetworkAllowList(ctx, accountID, projectID, allowListID).Return(*getAllowListRequest).Times(1)
@@ -160,6 +167,7 @@ func TestReadAllowList(t *testing.T) {
 	defer mockCtrl.Finish()
 	mockNetworkApi := mocks.NewMockNetworkApi(mockCtrl)
 	mockProjectApi := mocks.NewMockProjectApi(mockCtrl)
+	mockAccountApi := mocks.NewMockAccountApi(mockCtrl)
 	ctx := context.Background()
 	cfg := openapiclient.NewConfiguration()
 
@@ -170,7 +178,7 @@ func TestReadAllowList(t *testing.T) {
 	allowListName := "allow-all"
 	allowListDescription := "Allows all the IP addresses"
 	allowListID := "test-allow-list-id"
-	allowList := getMockAllowList(cfg, mockNetworkApi, mockProjectApi)
+	allowList := getMockAllowList(cfg, mockNetworkApi, mockProjectApi, mockAccountApi)
 	createAllowListResponse := getCreateAllowListResponse(allowListID, projectID, cidrList, allowListDescription, allowListName)
 	getAllowListRequest := getGetAllowListRequest(ctx, cfg, accountID, projectID, allowListID, mockNetworkApi)
 
@@ -230,9 +238,10 @@ func TestUpdateAllowList(t *testing.T) {
 	defer mockCtrl.Finish()
 	mockNetworkApi := mocks.NewMockNetworkApi(mockCtrl)
 	mockProjectApi := mocks.NewMockProjectApi(mockCtrl)
+	mockAccountApi := mocks.NewMockAccountApi(mockCtrl)
 	ctx := context.Background()
 	cfg := openapiclient.NewConfiguration()
-	allowList := getMockAllowList(cfg, mockNetworkApi, mockProjectApi)
+	allowList := getMockAllowList(cfg, mockNetworkApi, mockProjectApi, mockAccountApi)
 	req := tfsdk.UpdateResourceRequest{}
 	resp := &tfsdk.UpdateResourceResponse{}
 	diags := diag.Diagnostics{}
@@ -267,13 +276,14 @@ func TestDeleteAllowList(t *testing.T) {
 	defer mockCtrl.Finish()
 	mockNetworkApi := mocks.NewMockNetworkApi(mockCtrl)
 	mockProjectApi := mocks.NewMockProjectApi(mockCtrl)
+	mockAccountApi := mocks.NewMockAccountApi(mockCtrl)
 	ctx := context.Background()
 	cfg := openapiclient.NewConfiguration()
 
 	accountID := "test-account-id"
 	projectID := "test-project-id"
 	allowListID := "test-allow-list-id"
-	allowList := getMockAllowList(cfg, mockNetworkApi, mockProjectApi)
+	allowList := getMockAllowList(cfg, mockNetworkApi, mockProjectApi, mockAccountApi)
 	deleteAllowListRequest := getDeleteAllowListRequest(ctx, cfg, accountID, projectID, allowListID, mockNetworkApi)
 
 	req := tfsdk.DeleteResourceRequest{}
@@ -315,12 +325,10 @@ func TestDeleteAllowList(t *testing.T) {
 			mockNetworkApi.EXPECT().DeleteNetworkAllowList(ctx, accountID, projectID, allowListID).Return(*deleteAllowListRequest).Times(1)
 			mockNetworkApi.EXPECT().DeleteNetworkAllowListExecute(*deleteAllowListRequest).Return(httpSuccessResponse, nil).Times(1)
 			allowList.Delete(ctx, req, resp)
-
 			if !reflect.DeepEqual(resp.State, testCase.ExpectedState) {
 				t.Errorf("Got State: %v, Expected State: %v", resp.State, testCase.ExpectedState)
 			}
 		})
-
 	}
 }
 
@@ -330,10 +338,11 @@ func TestImportStateAllowList(t *testing.T) {
 	defer mockCtrl.Finish()
 	mockNetworkApi := mocks.NewMockNetworkApi(mockCtrl)
 	mockProjectApi := mocks.NewMockProjectApi(mockCtrl)
+	mockAccountApi := mocks.NewMockAccountApi(mockCtrl)
 	ctx := context.Background()
 	cfg := openapiclient.NewConfiguration()
 	req := tfsdk.ImportResourceStateRequest{}
 	resp := &tfsdk.ImportResourceStateResponse{}
-	allowList := getMockAllowList(cfg, mockNetworkApi, mockProjectApi)
+	allowList := getMockAllowList(cfg, mockNetworkApi, mockProjectApi, mockAccountApi)
 	allowList.ImportState(ctx, req, resp)
 }

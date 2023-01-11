@@ -28,15 +28,13 @@ func (r resourceReadReplicasType) GetSchema(ctx context.Context) (tfsdk.Schema, 
 		in different regions using a single resource.`,
 		Attributes: map[string]tfsdk.Attribute{
 			"account_id": {
-				Description: "The ID of the account this read replica belongs to. To be provided if there are multiple accounts associated with the user.",
+				Description: "The ID of the account this read replica belongs to.",
 				Type:        types.StringType,
-				Optional:    true,
 				Computed:    true,
 			},
 			"project_id": {
 				Description: "The ID of the project this read replica belongs to.",
 				Type:        types.StringType,
-				Optional:    true,
 				Computed:    true,
 			},
 			"read_replicas_info": {
@@ -161,7 +159,6 @@ func getReadReplicasPlan(ctx context.Context, plan tfsdk.Plan, readReplicas *Rea
 	// I tried implementing Unknownable instead but could not get it to work.
 	var diags diag.Diagnostics
 
-	diags.Append(plan.GetAttribute(ctx, path.Root("account_id"), &readReplicas.AccountID)...)
 	diags.Append(plan.GetAttribute(ctx, path.Root("read_replicas_info"), &readReplicas.ReadReplicasInfo)...)
 	diags.Append(plan.GetAttribute(ctx, path.Root("primary_cluster_id"), &readReplicas.PrimaryClusterID)...)
 
@@ -205,15 +202,13 @@ func (r resourceReadReplicas) Create(ctx context.Context, req tfsdk.CreateResour
 	}
 
 	apiClient := r.p.client
-	if !plan.AccountID.Null && !plan.AccountID.Unknown {
-		accountId = plan.AccountID.Value
-	} else {
-		accountId, getAccountOK, message = getAccountId(ctx, apiClient)
-		if !getAccountOK {
-			resp.Diagnostics.AddError("Unable to get account ID", message)
-			return
-		}
+
+	accountId, getAccountOK, message = getAccountId(ctx, apiClient)
+	if !getAccountOK {
+		resp.Diagnostics.AddError("Unable to get account ID", message)
+		return
 	}
+
 	projectId, getProjectOK, message := getProjectId(ctx, apiClient, accountId)
 	if !getProjectOK {
 		resp.Diagnostics.AddError("Unable to get project ID", message)

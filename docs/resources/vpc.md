@@ -40,11 +40,14 @@ resource "ybm_vpc" "example-vpc" {
 
 ### Optional
 
-- `account_id` (String) The ID of the account this VPC belongs to. To be provided if there are multiple accounts associated with the user.
 - `global_cidr` (String) The global CIDR of the VPC (GCP only).
-- `project_id` (String) The ID of the project this VPC belongs to.
 - `region_cidr_info` (Attributes List) The CIDR information for all the regions for the VPC. (see [below for nested schema](#nestedatt--region_cidr_info))
 - `vpc_id` (String) The ID of the VPC. Created automatically when the VPC is created. Used to get a specific VPC.
+
+### Read-Only
+
+- `account_id` (String) The ID of the account this VPC belongs to.
+- `project_id` (String) The ID of the project this VPC belongs to.
 
 <a id="nestedatt--region_cidr_info"></a>
 ### Nested Schema for `region_cidr_info`

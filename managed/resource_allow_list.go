@@ -22,15 +22,13 @@ func (r resourceAllowListType) GetSchema(_ context.Context) (tfsdk.Schema, diag.
 		Description: `The resource to create an allow list in YugabyteDB Managed.`,
 		Attributes: map[string]tfsdk.Attribute{
 			"account_id": {
-				Description: "The ID of the account this allow list belongs to. To be provided if there are multiple accounts associated with the user.",
+				Description: "The ID of the account this allow list belongs to.",
 				Type:        types.StringType,
-				Optional:    true,
 				Computed:    true,
 			},
 			"project_id": {
 				Description: "The ID of the project this allow list belongs to.",
 				Type:        types.StringType,
-				Optional:    true,
 				Computed:    true,
 			},
 			"allow_list_id": {
@@ -84,7 +82,6 @@ func getAllowListPlan(ctx context.Context, plan tfsdk.Plan, allowList *AllowList
 	// I tried implementing Unknownable instead but could not get it to work.
 	var diags diag.Diagnostics
 
-	diags.Append(plan.GetAttribute(ctx, path.Root("account_id"), &allowList.AccountID)...)
 	diags.Append(plan.GetAttribute(ctx, path.Root("allow_list_id"), &allowList.AllowListID)...)
 	diags.Append(plan.GetAttribute(ctx, path.Root("allow_list_description"), &allowList.AllowListDescription)...)
 	diags.Append(plan.GetAttribute(ctx, path.Root("allow_list_name"), &allowList.AllowListName)...)
@@ -110,19 +107,16 @@ func (r resourceAllowList) Create(ctx context.Context, req tfsdk.CreateResourceR
 	diags := req.Plan.Get(ctx, &plan)
 	resp.Diagnostics.Append(getAllowListPlan(ctx, req.Plan, &plan)...)
 	if resp.Diagnostics.HasError() {
+		tflog.Debug(ctx, "Error while getting the plan for the allow list")
 		return
 	}
 
 	apiClient := r.p.client
 
-	if !plan.AccountID.Null && !plan.AccountID.Unknown {
-		accountId = plan.AccountID.Value
-	} else {
-		accountId, getAccountOK, message = getAccountId(ctx, apiClient)
-		if !getAccountOK {
-			resp.Diagnostics.AddError("Unable to get account ID", message)
-			return
-		}
+	accountId, getAccountOK, message = getAccountId(ctx, apiClient)
+	if !getAccountOK {
+		resp.Diagnostics.AddError("Unable to get account ID", message)
+		return
 	}
 
 	if (!plan.AllowListID.Unknown && !plan.AllowListID.Null) || plan.AllowListID.Value != "" {

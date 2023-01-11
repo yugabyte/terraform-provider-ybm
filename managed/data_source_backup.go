@@ -23,9 +23,8 @@ func (r dataSourceBackupType) GetSchema(_ context.Context) (tfsdk.Schema, diag.D
 		Description: "The data source to fetch the backup ID and other information about the most recent backup.",
 		Attributes: map[string]tfsdk.Attribute{
 			"account_id": {
-				Description: "The ID of the account this backup belongs to. To be provided if there are multiple accounts associated with the user.",
+				Description: "The ID of the account this backup belongs to.",
 				Type:        types.StringType,
-				Optional:    true,
 				Computed:    true,
 			},
 			"cluster_id": {
@@ -46,7 +45,6 @@ func (r dataSourceBackupType) GetSchema(_ context.Context) (tfsdk.Schema, diag.D
 			"project_id": {
 				Description: "The ID of the project this backup belongs to.",
 				Type:        types.StringType,
-				Optional:    true,
 				Computed:    true,
 			},
 			"backup_id": {
@@ -163,14 +161,10 @@ func (r dataSourceBackup) Read(ctx context.Context, req tfsdk.ReadDataSourceRequ
 
 	apiClient := r.p.client
 
-	if !config.AccountID.Null && !config.AccountID.Unknown {
-		accountId = config.AccountID.Value
-	} else {
-		accountId, getAccountOK, message = getAccountId(ctx, apiClient)
-		if !getAccountOK {
-			resp.Diagnostics.AddError("Unable to get account ID", message)
-			return
-		}
+	accountId, getAccountOK, message = getAccountId(ctx, apiClient)
+	if !getAccountOK {
+		resp.Diagnostics.AddError("Unable to get account ID", message)
+		return
 	}
 
 	if (!config.BackupID.Unknown && !config.BackupID.Null) || config.BackupID.Value != "" {

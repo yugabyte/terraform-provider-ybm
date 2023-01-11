@@ -23,18 +23,15 @@ func (r dataClusterNameType) GetSchema(_ context.Context) (tfsdk.Schema, diag.Di
 		Description: "The data source to fetch the cluster ID and other information about a cluster given the cluster name.",
 		Attributes: map[string]tfsdk.Attribute{
 			"account_id": {
-				Description: "The ID of the account this cluster belongs to. To be provided if there are multiple accounts associated with the user.",
+				Description: "The ID of the account this cluster belongs to.",
 				Type:        types.StringType,
-				Optional:    true,
 				Computed:    true,
 			},
 			"project_id": {
 				Description: "The ID of the project this cluster belongs to.",
 				Type:        types.StringType,
-				Optional:    true,
 				Computed:    true,
 			},
-
 			"cluster_id": {
 				Description: "The ID of the cluster. Created automatically when a cluster is created. Used to get a specific cluster.",
 				Type:        types.StringType,
@@ -253,18 +250,15 @@ func (r dataClusterName) Read(ctx context.Context, req tfsdk.ReadDataSourceReque
 	var getAccountOK bool
 
 	attr1 := &attr
-	req.Config.GetAttribute(ctx, path.Root("account_id"), &attr1.account_id)
 	req.Config.GetAttribute(ctx, path.Root("cluster_name"), &attr1.cluster_name)
 	apiClient := r.p.client
-	if attr.account_id != "" {
-		accountId = attr.account_id
-	} else {
-		accountId, getAccountOK, message = getAccountId(ctx, apiClient)
-		if !getAccountOK {
-			resp.Diagnostics.AddError("Unable to get account ID", message)
-			return
-		}
+
+	accountId, getAccountOK, message = getAccountId(ctx, apiClient)
+	if !getAccountOK {
+		resp.Diagnostics.AddError("Unable to get account ID", message)
+		return
 	}
+
 	projectId, getProjectOK, message := getProjectId(ctx, apiClient, accountId)
 	if !getProjectOK {
 		resp.Diagnostics.AddError("Unable to get the project ID", message)

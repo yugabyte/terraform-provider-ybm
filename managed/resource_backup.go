@@ -27,9 +27,8 @@ func (r resourceBackupType) GetSchema(_ context.Context) (tfsdk.Schema, diag.Dia
 		Ensure that the cluster for which the backup is being taken has data.`,
 		Attributes: map[string]tfsdk.Attribute{
 			"account_id": {
-				Description: "The ID of the account this backup belongs to. To be provided if there are multiple accounts associated with the user.",
+				Description: "The ID of the account this backup belongs to.",
 				Type:        types.StringType,
-				Optional:    true,
 				Computed:    true,
 			},
 			"cluster_id": {
@@ -40,7 +39,6 @@ func (r resourceBackupType) GetSchema(_ context.Context) (tfsdk.Schema, diag.Dia
 			"project_id": {
 				Description: "The ID of the project this backup belongs to.",
 				Type:        types.StringType,
-				Optional:    true,
 				Computed:    true,
 			},
 			"backup_id": {
@@ -90,7 +88,6 @@ func getBackupPlan(ctx context.Context, plan tfsdk.Plan, backup *Backup) diag.Di
 	// I tried implementing Unknownable instead but could not get it to work.
 	var diags diag.Diagnostics
 
-	diags.Append(plan.GetAttribute(ctx, path.Root("account_id"), &backup.AccountID)...)
 	diags.Append(plan.GetAttribute(ctx, path.Root("cluster_id"), &backup.ClusterID)...)
 	diags.Append(plan.GetAttribute(ctx, path.Root("backup_id"), &backup.BackupID)...)
 	diags.Append(plan.GetAttribute(ctx, path.Root("backup_description"), &backup.BackupDescription)...)
@@ -122,14 +119,10 @@ func (r resourceBackup) Create(ctx context.Context, req tfsdk.CreateResourceRequ
 
 	apiClient := r.p.client
 
-	if !plan.AccountID.Null && !plan.AccountID.Unknown {
-		accountId = plan.AccountID.Value
-	} else {
-		accountId, getAccountOK, message = getAccountId(ctx, apiClient)
-		if !getAccountOK {
-			resp.Diagnostics.AddError("Unable to get account ID", message)
-			return
-		}
+	accountId, getAccountOK, message = getAccountId(ctx, apiClient)
+	if !getAccountOK {
+		resp.Diagnostics.AddError("Unable to get account ID", message)
+		return
 	}
 
 	if (!plan.BackupID.Unknown && !plan.BackupID.Null) || plan.BackupID.Value != "" {
