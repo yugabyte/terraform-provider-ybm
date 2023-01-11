@@ -241,7 +241,6 @@ resource "ybm_cluster" "multi_region_cluster" {
 
 ### Optional
 
-- `account_id` (String) The ID of the account this cluster belongs to. To be provided if there are multiple accounts associated with the user.
 - `backup_schedules` (Attributes List) (see [below for nested schema](#nestedatt--backup_schedules))
 - `cloud_type` (String) The cloud provider where the cluster is deployed: AWS or GCP.
 - `cluster_allow_list_ids` (List of String) List of IDs of the allow lists assigned to the cluster.
@@ -250,14 +249,15 @@ resource "ybm_cluster" "multi_region_cluster" {
 - `database_track` (String) The track of the database. Stable or Preview.
 - `desired_state` (String) The desired state of the database, Active or Paused. This parameter can be used to pause/resume a cluster.
 - `fault_tolerance` (String) The fault tolerance of the cluster. NONE, NODE, ZONE or REGION.
-- `project_id` (String) The ID of the project this cluster belongs to.
 - `restore_backup_id` (String) The ID of the backup to be restored to the cluster.
 
 ### Read-Only
 
+- `account_id` (String) The ID of the account this cluster belongs to. To be provided if there are multiple accounts associated with the user.
 - `cluster_certificate` (String) The certificate used to connect to the cluster.
 - `cluster_info` (Attributes) (see [below for nested schema](#nestedatt--cluster_info))
 - `cluster_version` (String)
+- `project_id` (String) The ID of the project this cluster belongs to.
 
 <a id="nestedatt--cluster_region_info"></a>
 ### Nested Schema for `cluster_region_info`

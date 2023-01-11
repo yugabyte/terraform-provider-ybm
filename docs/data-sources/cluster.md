@@ -26,12 +26,11 @@ data "ybm_cluster" "example_cluster"{
 
 ### Optional
 
-- `account_id` (String) The ID of the account this cluster belongs to. To be provided if there are multiple accounts associated with the user.
 - `cluster_endpoints` (Map of String) The endpoints used to connect to the cluster by region.
-- `project_id` (String) The ID of the project this cluster belongs to.
 
 ### Read-Only
 
+- `account_id` (String) The ID of the account this cluster belongs to. To be provided if there are multiple accounts associated with the user.
 - `backup_schedules` (Attributes List) (see [below for nested schema](#nestedatt--backup_schedules))
 - `cloud_type` (String) The cloud provider where the cluster is deployed: AWS or GCP. Default GCP.
 - `cluster_allow_list_ids` (List of String) List of IDs of the allow lists assigned to the cluster.
@@ -47,6 +46,7 @@ data "ybm_cluster" "example_cluster"{
 - `desired_state` (String) The desired state of the database, Active or Paused. This parameter can be used to pause/resume a cluster.
 - `fault_tolerance` (String) The fault tolerance of the cluster.
 - `node_config` (Attributes) (see [below for nested schema](#nestedatt--node_config))
+- `project_id` (String) The ID of the project this cluster belongs to.
 - `restore_backup_id` (String) The ID of the backup to be restored to the cluster.
 
 <a id="nestedatt--backup_schedules"></a>

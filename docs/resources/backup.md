@@ -32,8 +32,11 @@ resource "ybm_backup" "example_backup" {
 
 ### Optional
 
-- `account_id` (String) The ID of the account this backup belongs to. To be provided if there are multiple accounts associated with the user.
 - `backup_id` (String) The ID of the backup. Created automatically when the backup is created. Used to get a specific backup.
 - `most_recent` (Boolean) Set to true to fetch the most recent backup.
-- `project_id` (String) The ID of the project this backup belongs to.
 - `timestamp` (String) The timestamp of the backup to be fetched
+
+### Read-Only
+
+- `account_id` (String) The ID of the account this backup belongs to. To be provided if there are multiple accounts associated with the user.
+- `project_id` (String) The ID of the project this backup belongs to.
