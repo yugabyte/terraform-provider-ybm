@@ -202,15 +202,13 @@ func (r resourceReadReplicas) Create(ctx context.Context, req tfsdk.CreateResour
 	}
 
 	apiClient := r.p.client
-	if !plan.AccountID.Null && !plan.AccountID.Unknown {
-		accountId = plan.AccountID.Value
-	} else {
-		accountId, getAccountOK, message = getAccountId(ctx, apiClient)
-		if !getAccountOK {
-			resp.Diagnostics.AddError("Unable to get account ID", message)
-			return
-		}
+
+	accountId, getAccountOK, message = getAccountId(ctx, apiClient)
+	if !getAccountOK {
+		resp.Diagnostics.AddError("Unable to get account ID", message)
+		return
 	}
+
 	projectId, getProjectOK, message := getProjectId(ctx, apiClient, accountId)
 	if !getProjectOK {
 		resp.Diagnostics.AddError("Unable to get project ID", message)

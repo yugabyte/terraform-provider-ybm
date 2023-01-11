@@ -119,14 +119,10 @@ func (r resourceBackup) Create(ctx context.Context, req tfsdk.CreateResourceRequ
 
 	apiClient := r.p.client
 
-	if !plan.AccountID.Null && !plan.AccountID.Unknown {
-		accountId = plan.AccountID.Value
-	} else {
-		accountId, getAccountOK, message = getAccountId(ctx, apiClient)
-		if !getAccountOK {
-			resp.Diagnostics.AddError("Unable to get account ID", message)
-			return
-		}
+	accountId, getAccountOK, message = getAccountId(ctx, apiClient)
+	if !getAccountOK {
+		resp.Diagnostics.AddError("Unable to get account ID", message)
+		return
 	}
 
 	if (!plan.BackupID.Unknown && !plan.BackupID.Null) || plan.BackupID.Value != "" {

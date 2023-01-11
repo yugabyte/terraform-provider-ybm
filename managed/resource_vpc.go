@@ -122,14 +122,11 @@ func (r resourceVPC) Create(ctx context.Context, req tfsdk.CreateResourceRequest
 	}
 
 	apiClient := r.p.client
-	if !plan.AccountID.Null && !plan.AccountID.Unknown {
-		accountId = plan.AccountID.Value
-	} else {
-		accountId, getAccountOK, message = getAccountId(ctx, apiClient)
-		if !getAccountOK {
-			resp.Diagnostics.AddError("Unable to get account ID", message)
-			return
-		}
+
+	accountId, getAccountOK, message = getAccountId(ctx, apiClient)
+	if !getAccountOK {
+		resp.Diagnostics.AddError("Unable to get account ID", message)
+		return
 	}
 
 	if (!plan.VPCID.Unknown && !plan.VPCID.Null) || plan.VPCID.Value != "" {
