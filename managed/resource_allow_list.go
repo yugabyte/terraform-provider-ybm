@@ -24,13 +24,11 @@ func (r resourceAllowListType) GetSchema(_ context.Context) (tfsdk.Schema, diag.
 			"account_id": {
 				Description: "The ID of the account this allow list belongs to. To be provided if there are multiple accounts associated with the user.",
 				Type:        types.StringType,
-				Optional:    true,
 				Computed:    true,
 			},
 			"project_id": {
 				Description: "The ID of the project this allow list belongs to.",
 				Type:        types.StringType,
-				Optional:    true,
 				Computed:    true,
 			},
 			"allow_list_id": {
@@ -84,7 +82,6 @@ func getAllowListPlan(ctx context.Context, plan tfsdk.Plan, allowList *AllowList
 	// I tried implementing Unknownable instead but could not get it to work.
 	var diags diag.Diagnostics
 
-	diags.Append(plan.GetAttribute(ctx, path.Root("account_id"), &allowList.AccountID)...)
 	diags.Append(plan.GetAttribute(ctx, path.Root("allow_list_id"), &allowList.AllowListID)...)
 	diags.Append(plan.GetAttribute(ctx, path.Root("allow_list_description"), &allowList.AllowListDescription)...)
 	diags.Append(plan.GetAttribute(ctx, path.Root("allow_list_name"), &allowList.AllowListName)...)

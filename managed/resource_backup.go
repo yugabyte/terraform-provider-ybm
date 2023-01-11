@@ -29,7 +29,6 @@ func (r resourceBackupType) GetSchema(_ context.Context) (tfsdk.Schema, diag.Dia
 			"account_id": {
 				Description: "The ID of the account this backup belongs to. To be provided if there are multiple accounts associated with the user.",
 				Type:        types.StringType,
-				Optional:    true,
 				Computed:    true,
 			},
 			"cluster_id": {
@@ -40,7 +39,6 @@ func (r resourceBackupType) GetSchema(_ context.Context) (tfsdk.Schema, diag.Dia
 			"project_id": {
 				Description: "The ID of the project this backup belongs to.",
 				Type:        types.StringType,
-				Optional:    true,
 				Computed:    true,
 			},
 			"backup_id": {
@@ -90,7 +88,6 @@ func getBackupPlan(ctx context.Context, plan tfsdk.Plan, backup *Backup) diag.Di
 	// I tried implementing Unknownable instead but could not get it to work.
 	var diags diag.Diagnostics
 
-	diags.Append(plan.GetAttribute(ctx, path.Root("account_id"), &backup.AccountID)...)
 	diags.Append(plan.GetAttribute(ctx, path.Root("cluster_id"), &backup.ClusterID)...)
 	diags.Append(plan.GetAttribute(ctx, path.Root("backup_id"), &backup.BackupID)...)
 	diags.Append(plan.GetAttribute(ctx, path.Root("backup_description"), &backup.BackupDescription)...)

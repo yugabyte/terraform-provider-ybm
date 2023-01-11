@@ -28,13 +28,11 @@ func (r resourceVPCType) GetSchema(_ context.Context) (tfsdk.Schema, diag.Diagno
 			"account_id": {
 				Description: "The ID of the account this VPC belongs to. To be provided if there are multiple accounts associated with the user.",
 				Type:        types.StringType,
-				Optional:    true,
 				Computed:    true,
 			},
 			"project_id": {
 				Description: "The ID of the project this VPC belongs to.",
 				Type:        types.StringType,
-				Optional:    true,
 				Computed:    true,
 			},
 			"vpc_id": {
@@ -93,7 +91,6 @@ func getVPCPlan(ctx context.Context, plan tfsdk.Plan, vpc *VPC) diag.Diagnostics
 	// I tried implementing Unknownable instead but could not get it to work.
 	var diags diag.Diagnostics
 
-	diags.Append(plan.GetAttribute(ctx, path.Root("account_id"), &vpc.AccountID)...)
 	diags.Append(plan.GetAttribute(ctx, path.Root("vpc_id"), &vpc.VPCID)...)
 	diags.Append(plan.GetAttribute(ctx, path.Root("name"), &vpc.Name)...)
 	diags.Append(plan.GetAttribute(ctx, path.Root("cloud"), &vpc.Cloud)...)
