@@ -30,7 +30,7 @@ data "ybm_cluster" "example_cluster"{
 
 ### Read-Only
 
-- `account_id` (String) The ID of the account this cluster belongs to. To be provided if there are multiple accounts associated with the user.
+- `account_id` (String) The ID of the account this cluster belongs to.
 - `backup_schedules` (Attributes List) (see [below for nested schema](#nestedatt--backup_schedules))
 - `cloud_type` (String) The cloud provider where the cluster is deployed: AWS or GCP. Default GCP.
 - `cluster_allow_list_ids` (List of String) List of IDs of the allow lists assigned to the cluster.

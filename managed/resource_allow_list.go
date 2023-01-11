@@ -6,6 +6,7 @@ package managed
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/path"
@@ -22,7 +23,7 @@ func (r resourceAllowListType) GetSchema(_ context.Context) (tfsdk.Schema, diag.
 		Description: `The resource to create an allow list in YugabyteDB Managed.`,
 		Attributes: map[string]tfsdk.Attribute{
 			"account_id": {
-				Description: "The ID of the account this allow list belongs to. To be provided if there are multiple accounts associated with the user.",
+				Description: "The ID of the account this allow list belongs to.",
 				Type:        types.StringType,
 				Computed:    true,
 			},
@@ -93,6 +94,7 @@ func getAllowListPlan(ctx context.Context, plan tfsdk.Plan, allowList *AllowList
 // Create allow list
 func (r resourceAllowList) Create(ctx context.Context, req tfsdk.CreateResourceRequest, resp *tfsdk.CreateResourceResponse) {
 
+	fmt.Println("Reached here")
 	if !r.p.configured {
 		resp.Diagnostics.AddError(
 			"Provider not configured",
@@ -105,6 +107,7 @@ func (r resourceAllowList) Create(ctx context.Context, req tfsdk.CreateResourceR
 	var accountId, message string
 	var getAccountOK bool
 	diags := req.Plan.Get(ctx, &plan)
+	resp.Diagnostics.Append(diags...)
 	resp.Diagnostics.Append(getAllowListPlan(ctx, req.Plan, &plan)...)
 	if resp.Diagnostics.HasError() {
 		return
@@ -112,11 +115,17 @@ func (r resourceAllowList) Create(ctx context.Context, req tfsdk.CreateResourceR
 
 	apiClient := r.p.client
 
+	fmt.Println("Reached here")
+
 	accountId, getAccountOK, message = getAccountId(ctx, apiClient)
 	if !getAccountOK {
+		fmt.Println("Errored here")
 		resp.Diagnostics.AddError("Unable to get account ID", message)
+		fmt.Println(message)
 		return
 	}
+
+	fmt.Println("Reached here")
 
 	if (!plan.AllowListID.Unknown && !plan.AllowListID.Null) || plan.AllowListID.Value != "" {
 		resp.Diagnostics.AddError(
@@ -162,6 +171,7 @@ func (r resourceAllowList) Create(ctx context.Context, req tfsdk.CreateResourceR
 	if resp.Diagnostics.HasError() {
 		return
 	}
+	fmt.Println("Reached here")
 }
 
 func getIDsFromAllowListState(ctx context.Context, state tfsdk.State, allowList *AllowList) {

@@ -34,6 +34,6 @@ data "ybm_backup" "example_backup" {
 
 ### Read-Only
 
-- `account_id` (String) The ID of the account this backup belongs to. To be provided if there are multiple accounts associated with the user.
+- `account_id` (String) The ID of the account this backup belongs to.
 - `backup_id` (String) The ID of the backup. Fetched from read.
 - `project_id` (String) The ID of the project this backup belongs to.

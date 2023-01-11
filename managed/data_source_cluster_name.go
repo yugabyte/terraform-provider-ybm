@@ -23,7 +23,7 @@ func (r dataClusterNameType) GetSchema(_ context.Context) (tfsdk.Schema, diag.Di
 		Description: "The data source to fetch the cluster ID and other information about a cluster given the cluster name.",
 		Attributes: map[string]tfsdk.Attribute{
 			"account_id": {
-				Description: "The ID of the account this cluster belongs to. To be provided if there are multiple accounts associated with the user.",
+				Description: "The ID of the account this cluster belongs to.",
 				Type:        types.StringType,
 				Computed:    true,
 			},

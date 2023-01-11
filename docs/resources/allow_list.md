@@ -34,6 +34,6 @@ resource "ybm_allow_list" "example_allow_list" {
 
 ### Read-Only
 
-- `account_id` (String) The ID of the account this allow list belongs to. To be provided if there are multiple accounts associated with the user.
+- `account_id` (String) The ID of the account this allow list belongs to.
 - `cluster_ids` (Set of String) List of the IDs of the clusters the allow list is assigned to.
 - `project_id` (String) The ID of the project this allow list belongs to.

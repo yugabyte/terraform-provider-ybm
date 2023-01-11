@@ -46,7 +46,7 @@ resource "ybm_vpc" "example-vpc" {
 
 ### Read-Only
 
-- `account_id` (String) The ID of the account this VPC belongs to. To be provided if there are multiple accounts associated with the user.
+- `account_id` (String) The ID of the account this VPC belongs to.
 - `project_id` (String) The ID of the project this VPC belongs to.
 
 <a id="nestedatt--region_cidr_info"></a>

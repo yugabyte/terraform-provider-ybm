@@ -28,7 +28,7 @@ func (r resourceReadReplicasType) GetSchema(ctx context.Context) (tfsdk.Schema, 
 		in different regions using a single resource.`,
 		Attributes: map[string]tfsdk.Attribute{
 			"account_id": {
-				Description: "The ID of the account this read replica belongs to. To be provided if there are multiple accounts associated with the user.",
+				Description: "The ID of the account this read replica belongs to.",
 				Type:        types.StringType,
 				Computed:    true,
 			},

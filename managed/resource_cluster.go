@@ -34,7 +34,7 @@ being created; restore previously taken backups to the cluster being created;
 and modify the backup schedule of the cluster being created.`,
 		Attributes: map[string]tfsdk.Attribute{
 			"account_id": {
-				Description: "The ID of the account this cluster belongs to. To be provided if there are multiple accounts associated with the user.",
+				Description: "The ID of the account this cluster belongs to.",
 				Type:        types.StringType,
 				Computed:    true,
 			},

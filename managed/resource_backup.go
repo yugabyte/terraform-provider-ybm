@@ -27,7 +27,7 @@ func (r resourceBackupType) GetSchema(_ context.Context) (tfsdk.Schema, diag.Dia
 		Ensure that the cluster for which the backup is being taken has data.`,
 		Attributes: map[string]tfsdk.Attribute{
 			"account_id": {
-				Description: "The ID of the account this backup belongs to. To be provided if there are multiple accounts associated with the user.",
+				Description: "The ID of the account this backup belongs to.",
 				Type:        types.StringType,
 				Computed:    true,
 			},

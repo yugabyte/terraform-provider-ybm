@@ -15,6 +15,24 @@ import (
 	openapiclient "github.com/yugabyte/yugabytedb-managed-go-client-internal"
 )
 
+func getListAccountsRequest(ctx context.Context, cfg *openapiclient.Configuration, mockAccountApi *mocks.MockAccountApi) *openapiclient.ApiListAccountsRequest {
+	testClient := openapiclient.NewAPIClient(cfg)
+	listAccountsRequest := testClient.AccountApi.ListAccounts(ctx)
+	listAccountsRequest.ApiService = mockAccountApi
+	return &listAccountsRequest
+}
+
+func getListAccountsResponse(accountID string) *openapiclient.AccountListResponse {
+	listAccountsResponse := openapiclient.NewAccountListResponseWithDefaults()
+	accountData := []openapiclient.AccountData{}
+	accountDatum := openapiclient.NewAccountDataWithDefaults()
+	accountDatum.SetInfo(*openapiclient.NewAccountInfoWithDefaults())
+	accountDatum.Info.SetId(accountID)
+	accountData = append(accountData, *accountDatum)
+	listAccountsResponse.SetData(accountData)
+	return listAccountsResponse
+}
+
 func getListProjectsRequest(ctx context.Context, cfg *openapiclient.Configuration, accountID string, mockProjectApi *mocks.MockProjectApi) *openapiclient.ApiListProjectsRequest {
 	testClient := openapiclient.NewAPIClient(cfg)
 	listProjectsRequest := testClient.ProjectApi.ListProjects(ctx, accountID)

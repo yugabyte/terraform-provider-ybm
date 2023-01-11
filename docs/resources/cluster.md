@@ -253,7 +253,7 @@ resource "ybm_cluster" "multi_region_cluster" {
 
 ### Read-Only
 
-- `account_id` (String) The ID of the account this cluster belongs to. To be provided if there are multiple accounts associated with the user.
+- `account_id` (String) The ID of the account this cluster belongs to.
 - `cluster_certificate` (String) The certificate used to connect to the cluster.
 - `cluster_info` (Attributes) (see [below for nested schema](#nestedatt--cluster_info))
 - `cluster_version` (String)

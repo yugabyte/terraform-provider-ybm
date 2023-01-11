@@ -23,7 +23,7 @@ func (r dataSourceBackupType) GetSchema(_ context.Context) (tfsdk.Schema, diag.D
 		Description: "The data source to fetch the backup ID and other information about the most recent backup.",
 		Attributes: map[string]tfsdk.Attribute{
 			"account_id": {
-				Description: "The ID of the account this backup belongs to. To be provided if there are multiple accounts associated with the user.",
+				Description: "The ID of the account this backup belongs to.",
 				Type:        types.StringType,
 				Computed:    true,
 			},

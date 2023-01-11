@@ -49,7 +49,7 @@ resource "ybm_vpc_peering" "example_vpc_peering" {
 
 ### Read-Only
 
-- `account_id` (String) The ID of the account this VPC peering belongs to. To be provided if there are multiple accounts associated with the user.
+- `account_id` (String) The ID of the account this VPC peering belongs to.
 - `project_id` (String) The ID of the project this VPC peering belongs to.
 - `vpc_peering_id` (String) The ID of the VPC peering.
 - `vpc_peering_state` (String) The state of the VPC peering.

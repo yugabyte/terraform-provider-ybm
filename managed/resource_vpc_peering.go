@@ -26,7 +26,7 @@ func (r resourceVPCPeeringType) GetSchema(_ context.Context) (tfsdk.Schema, diag
 		Description: `The resource to create a VPC peering in YugabyteDB Managed.`,
 		Attributes: map[string]tfsdk.Attribute{
 			"account_id": {
-				Description: "The ID of the account this VPC peering belongs to. To be provided if there are multiple accounts associated with the user.",
+				Description: "The ID of the account this VPC peering belongs to.",
 				Type:        types.StringType,
 				Computed:    true,
 			},

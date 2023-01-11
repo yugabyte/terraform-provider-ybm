@@ -26,7 +26,7 @@ func (r resourceVPCType) GetSchema(_ context.Context) (tfsdk.Schema, diag.Diagno
 		Description: `The resource to create a VPC in YugabyteDB Managed.`,
 		Attributes: map[string]tfsdk.Attribute{
 			"account_id": {
-				Description: "The ID of the account this VPC belongs to. To be provided if there are multiple accounts associated with the user.",
+				Description: "The ID of the account this VPC belongs to.",
 				Type:        types.StringType,
 				Computed:    true,
 			},
