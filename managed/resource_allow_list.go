@@ -6,7 +6,6 @@ package managed
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/path"
@@ -94,7 +93,6 @@ func getAllowListPlan(ctx context.Context, plan tfsdk.Plan, allowList *AllowList
 // Create allow list
 func (r resourceAllowList) Create(ctx context.Context, req tfsdk.CreateResourceRequest, resp *tfsdk.CreateResourceResponse) {
 
-	fmt.Println("Reached here")
 	if !r.p.configured {
 		resp.Diagnostics.AddError(
 			"Provider not configured",
@@ -115,17 +113,11 @@ func (r resourceAllowList) Create(ctx context.Context, req tfsdk.CreateResourceR
 
 	apiClient := r.p.client
 
-	fmt.Println("Reached here")
-
 	accountId, getAccountOK, message = getAccountId(ctx, apiClient)
 	if !getAccountOK {
-		fmt.Println("Errored here")
 		resp.Diagnostics.AddError("Unable to get account ID", message)
-		fmt.Println(message)
 		return
 	}
-
-	fmt.Println("Reached here")
 
 	if (!plan.AllowListID.Unknown && !plan.AllowListID.Null) || plan.AllowListID.Value != "" {
 		resp.Diagnostics.AddError(
@@ -171,7 +163,6 @@ func (r resourceAllowList) Create(ctx context.Context, req tfsdk.CreateResourceR
 	if resp.Diagnostics.HasError() {
 		return
 	}
-	fmt.Println("Reached here")
 }
 
 func getIDsFromAllowListState(ctx context.Context, state tfsdk.State, allowList *AllowList) {
