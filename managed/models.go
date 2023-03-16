@@ -66,16 +66,6 @@ type ClusterInfo struct {
 	UpdatedTime     types.String `tfsdk:"updated_time"`
 }
 
-type AllowList struct {
-	AccountID            types.String   `tfsdk:"account_id"`
-	ProjectID            types.String   `tfsdk:"project_id"`
-	AllowListID          types.String   `tfsdk:"allow_list_id"`
-	AllowListName        types.String   `tfsdk:"allow_list_name"`
-	AllowListDescription types.String   `tfsdk:"allow_list_description"`
-	CIDRList             []types.String `tfsdk:"cidr_list"`
-	ClusterIDs           []types.String `tfsdk:"cluster_ids"`
-}
-
 type Backup struct {
 	AccountID             types.String `tfsdk:"account_id"`
 	ProjectID             types.String `tfsdk:"project_id"`

@@ -534,7 +534,7 @@ func (r resourceCluster) Create(ctx context.Context, req tfsdk.CreateResourceReq
 		return
 	}
 
-	credentials := openapiclient.NewCreateClusterRequestDbCredentials()
+	credentials := openapiclient.NewCreateClusterRequestDbCredentialsWithDefaults()
 	if plan.Credentials.Username.IsNull() {
 		credentials.SetYsql(*openapiclient.NewDBCredentials(plan.Credentials.YSQLUsername.Value, plan.Credentials.YSQLPassword.Value))
 		credentials.SetYcql(*openapiclient.NewDBCredentials(plan.Credentials.YCQLUsername.Value, plan.Credentials.YCQLPassword.Value))
