@@ -142,6 +142,7 @@ func (p *provider) Configure(ctx context.Context, req tfsdk.ConfigureProviderReq
 func (p *provider) GetResources(_ context.Context) (map[string]tfsdk.ResourceType, diag.Diagnostics) {
 	return map[string]tfsdk.ResourceType{
 		"ybm_cluster":       resourceClusterType{},
+		"ybm_allow_list":    resourceAllowListType{},
 		"ybm_backup":        resourceBackupType{},
 		"ybm_vpc":           resourceVPCType{},
 		"ybm_read_replicas": resourceReadReplicasType{},
