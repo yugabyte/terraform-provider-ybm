@@ -72,7 +72,7 @@ variable "auth_token" {
 # }
 
 resource "ybm_allow_list" "mylist" {
-  allow_list_name        = "all"
+  allow_list_name        = "all-new"
   allow_list_description = "allow all the ip addresses"
   cidr_list              = ["0.0.0.0/0"]
 }
