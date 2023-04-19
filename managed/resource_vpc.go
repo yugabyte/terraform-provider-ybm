@@ -266,7 +266,11 @@ func resourceVPCRead(accountId string, projectId string, vpcId string, regionMap
 
 	vpc.Name.Value = vpcResp.Data.Spec.GetName()
 	vpc.Cloud.Value = string(vpcResp.Data.Spec.GetCloud())
-	vpc.GlobalCIDR.Value = vpcResp.Data.Spec.GetParentCidr()
+	if vpcResp.Data.Spec.GetParentCidr() != "" {
+		vpc.GlobalCIDR.Value = vpcResp.Data.Spec.GetParentCidr()
+	} else {
+		vpc.GlobalCIDR.Null = true
+	}
 
 	if len(regionMap) > 0 {
 		regionInfo := make([]VPCRegionInfo, len(regionMap))
