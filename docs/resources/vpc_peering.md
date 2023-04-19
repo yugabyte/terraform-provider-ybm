@@ -59,7 +59,7 @@ resource "ybm_vpc_peering" "example_vpc_peering" {
 
 Required:
 
-- `cloud` (String) The cloud provider (AWS or GCP) where the application is deployed.
+- `cloud` (String) The cloud provider (AWS, AZURE or GCP) where the application is deployed.
 - `vpc_id` (String) The ID of the VPC in which the application is deployed.
 
 Optional:

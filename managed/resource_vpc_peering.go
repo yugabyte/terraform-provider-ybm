@@ -55,7 +55,7 @@ func (r resourceVPCPeeringType) GetSchema(_ context.Context) (tfsdk.Schema, diag
 				Required:    true,
 				Attributes: tfsdk.SingleNestedAttributes(map[string]tfsdk.Attribute{
 					"cloud": {
-						Description: "The cloud provider (AWS or GCP) where the application is deployed.",
+						Description: "The cloud provider (AWS, AZURE or GCP) where the application is deployed.",
 						Type:        types.StringType,
 						Required:    true,
 					},

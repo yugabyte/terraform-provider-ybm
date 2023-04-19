@@ -14,7 +14,6 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 
-	//"github.com/hashicorp/terraform-plugin-log/tflog"
 	retry "github.com/sethvargo/go-retry"
 	openapiclient "github.com/yugabyte/yugabytedb-managed-go-client-internal"
 )
@@ -47,7 +46,7 @@ func (r resourceVPCType) GetSchema(_ context.Context) (tfsdk.Schema, diag.Diagno
 				Required:    true,
 			},
 			"cloud": {
-				Description: "The cloud provider (AWS or GCP) where the VPC is to be created.",
+				Description: "The cloud provider (AWS, AZURE or GCP) where the VPC is to be created.",
 				Type:        types.StringType,
 				Required:    true,
 			},
@@ -250,6 +249,8 @@ func getIDsFromVPCState(ctx context.Context, state tfsdk.State, vpc *VPC) {
 	state.GetAttribute(ctx, path.Root("account_id"), &vpc.AccountID)
 	state.GetAttribute(ctx, path.Root("project_id"), &vpc.ProjectID)
 	state.GetAttribute(ctx, path.Root("vpc_id"), &vpc.VPCID)
+	state.GetAttribute(ctx, path.Root("region_cidr_info"), &vpc.RegionCIDRInfo)
+	state.GetAttribute(ctx, path.Root("global_cidr"), &vpc.GlobalCIDR)
 }
 
 func resourceVPCRead(accountId string, projectId string, vpcId string, regionMap map[string]int, apiClient *openapiclient.APIClient) (vpc VPC, readOK bool, errorMessage string) {

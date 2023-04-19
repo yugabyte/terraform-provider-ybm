@@ -4,8 +4,12 @@ NAME=ybm
 VERSION=0.1.0-dev
 OS_ARCH=darwin_arm64
 BINARY=terraform-provider-${NAME}
+export GOPRIVATE := github.com/yugabyte
 
 default: install
+
+vet:
+	go vet ./...
 
 build:
 	go build -ldflags="-X 'main.version=v${VERSION}'" -o ${BINARY}
@@ -37,6 +41,10 @@ testacc:
 doc:
 	./scripts/install_tfplugindocs.sh ${OS_ARCH}
 	tfplugindocs generate --rendered-provider-name 'YugabyteDB Managed' --provider-name ybm
+
+update-client:
+	go get github.com/yugabyte/yugabytedb-managed-go-client-internal
+	go mod tidy
 
 clean:
 	rm -rf terraform-provider-ybm

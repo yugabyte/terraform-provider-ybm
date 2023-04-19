@@ -60,11 +60,11 @@ and modify the backup schedule of the cluster being created.`,
 				Required:    true,
 			},
 			"cloud_type": {
-				Description: "The cloud provider where the cluster is deployed: AWS or GCP.",
+				Description: "The cloud provider where the cluster is deployed: AWS, AZURE or GCP.",
 				Type:        types.StringType,
 				Optional:    true,
 				Computed:    true,
-				Validators:  []tfsdk.AttributeValidator{stringvalidator.OneOf("AWS", "GCP")},
+				Validators:  []tfsdk.AttributeValidator{stringvalidator.OneOf("AWS", "GCP", "AZURE")},
 			},
 			"cluster_region_info": {
 				Required: true,
@@ -534,7 +534,7 @@ func (r resourceCluster) Create(ctx context.Context, req tfsdk.CreateResourceReq
 		return
 	}
 
-	credentials := openapiclient.NewCreateClusterRequestDbCredentials()
+	credentials := openapiclient.NewCreateClusterRequestDbCredentialsWithDefaults()
 	if plan.Credentials.Username.IsNull() {
 		credentials.SetYsql(*openapiclient.NewDBCredentials(plan.Credentials.YSQLUsername.Value, plan.Credentials.YSQLPassword.Value))
 		credentials.SetYcql(*openapiclient.NewDBCredentials(plan.Credentials.YCQLUsername.Value, plan.Credentials.YCQLPassword.Value))

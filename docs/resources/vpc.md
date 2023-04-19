@@ -35,7 +35,7 @@ resource "ybm_vpc" "example-vpc" {
 
 ### Required
 
-- `cloud` (String) The cloud provider (AWS or GCP) where the VPC is to be created.
+- `cloud` (String) The cloud provider (AWS, AZURE or GCP) where the VPC is to be created.
 - `name` (String) The description of the VPC.
 
 ### Optional

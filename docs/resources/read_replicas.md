@@ -58,7 +58,7 @@ Required:
 
 Optional:
 
-- `cloud_type` (String) The cloud provider where the read replica is deployed: AWS or GCP. Default GCP.
+- `cloud_type` (String) The cloud provider where the read replica is deployed: AWS, AZURE or GCP. Default GCP.
 - `multi_zone` (Boolean) Set whether to spread the nodes in this region across zones. Defaults to true.
 
 Read-Only:

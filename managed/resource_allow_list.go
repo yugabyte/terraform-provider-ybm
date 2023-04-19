@@ -105,6 +105,7 @@ func (r resourceAllowList) Create(ctx context.Context, req tfsdk.CreateResourceR
 	var accountId, message string
 	var getAccountOK bool
 	diags := req.Plan.Get(ctx, &plan)
+	resp.Diagnostics.Append(diags...)
 	resp.Diagnostics.Append(getAllowListPlan(ctx, req.Plan, &plan)...)
 	if resp.Diagnostics.HasError() {
 		tflog.Debug(ctx, "Error while getting the plan for the allow list")
