@@ -151,6 +151,14 @@ func (r dataClusterNameType) GetSchema(_ context.Context) (tfsdk.Schema, diag.Di
 			"credentials": {
 				Computed: true,
 				Attributes: tfsdk.SingleNestedAttributes(map[string]tfsdk.Attribute{
+					"username": {
+						Type:     types.StringType,
+						Computed: true,
+					},
+					"password": {
+						Type:     types.StringType,
+						Computed: true,
+					},
 					"ysql_username": {
 						Type:     types.StringType,
 						Computed: true,
@@ -297,6 +305,7 @@ func (r dataClusterName) Read(ctx context.Context, req tfsdk.ReadDataSourceReque
 		resp.Diagnostics.AddError("Unable to read the state of the cluster", message)
 		return
 	}
+
 	diags := resp.State.Set(ctx, &cluster)
 	resp.Diagnostics.Append(diags...)
 	if resp.Diagnostics.HasError() {
