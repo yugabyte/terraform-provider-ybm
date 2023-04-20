@@ -14,7 +14,6 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 
-	//"github.com/hashicorp/terraform-plugin-log/tflog"
 	retry "github.com/sethvargo/go-retry"
 	openapiclient "github.com/yugabyte/yugabytedb-managed-go-client-internal"
 )
@@ -47,7 +46,7 @@ func (r resourceVPCType) GetSchema(_ context.Context) (tfsdk.Schema, diag.Diagno
 				Required:    true,
 			},
 			"cloud": {
-				Description: "The cloud provider (AWS or GCP) where the VPC is to be created.",
+				Description: "The cloud provider (AWS, AZURE or GCP) where the VPC is to be created.",
 				Type:        types.StringType,
 				Required:    true,
 			},
@@ -114,8 +113,6 @@ func (r resourceVPC) Create(ctx context.Context, req tfsdk.CreateResourceRequest
 	var plan VPC
 	var accountId, message string
 	var getAccountOK bool
-	diags := req.Plan.Get(ctx, &plan)
-	resp.Diagnostics.Append(diags...)
 	resp.Diagnostics.Append(getVPCPlan(ctx, req.Plan, &plan)...)
 	if resp.Diagnostics.HasError() {
 		return
@@ -239,7 +236,7 @@ func (r resourceVPC) Create(ctx context.Context, req tfsdk.CreateResourceRequest
 		vpc.RegionCIDRInfo = nil
 	}
 
-	diags = resp.State.Set(ctx, &vpc)
+	diags := resp.State.Set(ctx, &vpc)
 	resp.Diagnostics.Append(diags...)
 	if resp.Diagnostics.HasError() {
 		return
@@ -250,6 +247,8 @@ func getIDsFromVPCState(ctx context.Context, state tfsdk.State, vpc *VPC) {
 	state.GetAttribute(ctx, path.Root("account_id"), &vpc.AccountID)
 	state.GetAttribute(ctx, path.Root("project_id"), &vpc.ProjectID)
 	state.GetAttribute(ctx, path.Root("vpc_id"), &vpc.VPCID)
+	state.GetAttribute(ctx, path.Root("region_cidr_info"), &vpc.RegionCIDRInfo)
+	state.GetAttribute(ctx, path.Root("global_cidr"), &vpc.GlobalCIDR)
 }
 
 func resourceVPCRead(accountId string, projectId string, vpcId string, regionMap map[string]int, apiClient *openapiclient.APIClient) (vpc VPC, readOK bool, errorMessage string) {
@@ -265,7 +264,11 @@ func resourceVPCRead(accountId string, projectId string, vpcId string, regionMap
 
 	vpc.Name.Value = vpcResp.Data.Spec.GetName()
 	vpc.Cloud.Value = string(vpcResp.Data.Spec.GetCloud())
-	vpc.GlobalCIDR.Value = vpcResp.Data.Spec.GetParentCidr()
+	if vpcResp.Data.Spec.GetParentCidr() != "" {
+		vpc.GlobalCIDR.Value = vpcResp.Data.Spec.GetParentCidr()
+	} else {
+		vpc.GlobalCIDR.Null = true
+	}
 
 	if len(regionMap) > 0 {
 		regionInfo := make([]VPCRegionInfo, len(regionMap))

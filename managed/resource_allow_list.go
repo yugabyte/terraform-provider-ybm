@@ -104,7 +104,6 @@ func (r resourceAllowList) Create(ctx context.Context, req tfsdk.CreateResourceR
 	var plan AllowList
 	var accountId, message string
 	var getAccountOK bool
-	diags := req.Plan.Get(ctx, &plan)
 	resp.Diagnostics.Append(getAllowListPlan(ctx, req.Plan, &plan)...)
 	if resp.Diagnostics.HasError() {
 		tflog.Debug(ctx, "Error while getting the plan for the allow list")
@@ -158,7 +157,7 @@ func (r resourceAllowList) Create(ctx context.Context, req tfsdk.CreateResourceR
 	tflog.Debug(ctx, "Allow List Create: Allow list on read from API server", map[string]interface{}{
 		"Allow List": allowList})
 
-	diags = resp.State.Set(ctx, &allowList)
+	diags := resp.State.Set(ctx, &allowList)
 	resp.Diagnostics.Append(diags...)
 	if resp.Diagnostics.HasError() {
 		return

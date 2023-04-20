@@ -42,7 +42,7 @@ func (r resourceReadReplicasType) GetSchema(ctx context.Context) (tfsdk.Schema, 
 				Description: "Information about multiple read replicas.",
 				Attributes: tfsdk.ListNestedAttributes(map[string]tfsdk.Attribute{
 					"cloud_type": {
-						Description: "The cloud provider where the read replica is deployed: AWS or GCP. Default GCP.",
+						Description: "The cloud provider where the read replica is deployed: AWS, AZURE or GCP. Default GCP.",
 						Type:        types.StringType,
 						Optional:    true,
 						Computed:    true,

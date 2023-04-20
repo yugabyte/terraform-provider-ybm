@@ -242,7 +242,7 @@ resource "ybm_cluster" "multi_region_cluster" {
 ### Optional
 
 - `backup_schedules` (Attributes List) (see [below for nested schema](#nestedatt--backup_schedules))
-- `cloud_type` (String) The cloud provider where the cluster is deployed: AWS or GCP.
+- `cloud_type` (String) The cloud provider where the cluster is deployed: AWS, AZURE or GCP.
 - `cluster_allow_list_ids` (List of String) List of IDs of the allow lists assigned to the cluster.
 - `cluster_endpoints` (Map of String) The endpoints used to connect to the cluster by region.
 - `cluster_id` (String) The ID of the cluster. Created automatically when a cluster is created. Used to get a specific cluster.

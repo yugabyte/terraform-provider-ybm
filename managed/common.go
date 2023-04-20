@@ -32,7 +32,7 @@ func getProjectId(ctx context.Context, apiClient *openapiclient.APIClient, accou
 }
 
 func getMemoryFromInstanceType(ctx context.Context, apiClient *openapiclient.APIClient, accountId string, cloud string, tier string, region string, numCores int32) (memory int32, memoryOK bool, errorMessage string) {
-	instanceResp, resp, err := apiClient.ClusterApi.GetSupportedInstanceTypes(context.Background()).AccountId(accountId).Cloud(cloud).Tier(tier).Region(region).Execute()
+	instanceResp, resp, err := apiClient.ClusterApi.GetSupportedNodeConfigurations(context.Background()).AccountId(accountId).Cloud(cloud).Tier(tier).Regions([]string{region}).Execute()
 	if err != nil {
 		errMsg := getErrorMessage(resp, err)
 		return 0, false, errMsg
@@ -56,7 +56,7 @@ func getMemoryFromInstanceType(ctx context.Context, apiClient *openapiclient.API
 }
 
 func getDiskSizeFromInstanceType(ctx context.Context, apiClient *openapiclient.APIClient, accountId string, cloud string, tier string, region string, numCores int32) (diskSize int32, diskSizeOK bool, errorMessage string) {
-	instanceResp, resp, err := apiClient.ClusterApi.GetSupportedInstanceTypes(context.Background()).AccountId(accountId).Cloud(cloud).Tier(tier).Region(region).Execute()
+	instanceResp, resp, err := apiClient.ClusterApi.GetSupportedNodeConfigurations(context.Background()).AccountId(accountId).Cloud(cloud).Tier(tier).Regions([]string{region}).Execute()
 	if err != nil {
 		errMsg := getErrorMessage(resp, err)
 		return 0, false, errMsg
