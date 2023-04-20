@@ -113,8 +113,6 @@ func (r resourceVPC) Create(ctx context.Context, req tfsdk.CreateResourceRequest
 	var plan VPC
 	var accountId, message string
 	var getAccountOK bool
-	diags := req.Plan.Get(ctx, &plan)
-	resp.Diagnostics.Append(diags...)
 	resp.Diagnostics.Append(getVPCPlan(ctx, req.Plan, &plan)...)
 	if resp.Diagnostics.HasError() {
 		return
@@ -238,7 +236,7 @@ func (r resourceVPC) Create(ctx context.Context, req tfsdk.CreateResourceRequest
 		vpc.RegionCIDRInfo = nil
 	}
 
-	diags = resp.State.Set(ctx, &vpc)
+	diags := resp.State.Set(ctx, &vpc)
 	resp.Diagnostics.Append(diags...)
 	if resp.Diagnostics.HasError() {
 		return
