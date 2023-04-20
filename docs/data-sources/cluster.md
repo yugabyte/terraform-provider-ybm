@@ -88,6 +88,8 @@ Read-Only:
 
 Read-Only:
 
+- `password` (String)
+- `username` (String)
 - `ycql_password` (String)
 - `ycql_username` (String)
 - `ysql_password` (String)
