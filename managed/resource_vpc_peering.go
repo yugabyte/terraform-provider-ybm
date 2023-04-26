@@ -247,13 +247,6 @@ func (r resourceVPCPeering) Create(ctx context.Context, req tfsdk.CreateResource
 		return
 	}
 
-	if plan.ApplicationVPCInfo.Region.Null {
-		vpcPeering.ApplicationVPCInfo.Region.Null = true
-	}
-	if plan.ApplicationVPCInfo.CIDR.Null {
-		vpcPeering.ApplicationVPCInfo.CIDR.Null = true
-	}
-
 	diags = resp.State.Set(ctx, &vpcPeering)
 	resp.Diagnostics.Append(diags...)
 	if resp.Diagnostics.HasError() {
