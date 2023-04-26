@@ -188,7 +188,7 @@ func (r resourceVPCPeering) Create(ctx context.Context, req tfsdk.CreateResource
 			resp.Diagnostics.AddError("No CIDR specified", "You must specify the CIDR of the application VPC for AWS.")
 			return
 		}
-		if plan.ApplicationVPCInfo.CIDR.IsNull() {
+		if plan.ApplicationVPCInfo.CIDR.IsNull() || plan.ApplicationVPCInfo.CIDR.Value == "" {
 			resp.Diagnostics.AddError("No Application VPC CIDR specified", "The application VPC CIDR must be provided for AWS cloud.")
 			return
 		}
