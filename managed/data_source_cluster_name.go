@@ -6,6 +6,7 @@ package managed
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/path"
@@ -260,6 +261,7 @@ func (r dataClusterName) Read(ctx context.Context, req tfsdk.ReadDataSourceReque
 	attr1 := &attr
 	req.Config.GetAttribute(ctx, path.Root("cluster_name"), &attr1.cluster_name)
 	apiClient := r.p.client
+	clusterName := attr.cluster_name
 
 	accountId, getAccountOK, message = getAccountId(ctx, apiClient)
 	if !getAccountOK {
@@ -273,7 +275,7 @@ func (r dataClusterName) Read(ctx context.Context, req tfsdk.ReadDataSourceReque
 		return
 	}
 
-	res, r1, err := apiClient.ClusterApi.ListClusters(context.Background(), accountId, projectId).Name(attr.cluster_name).Execute()
+	res, r1, err := apiClient.ClusterApi.ListClusters(context.Background(), accountId, projectId).Name(clusterName).Execute()
 
 	if err != nil {
 		errMsg := getErrorMessage(r1, err)
@@ -282,6 +284,10 @@ func (r dataClusterName) Read(ctx context.Context, req tfsdk.ReadDataSourceReque
 	}
 
 	list := res.GetData()
+	if len(list) == 0 {
+		resp.Diagnostics.AddError("Unable to extract the following cluster information: ", fmt.Sprintf("The cluster %v doesn't exist", clusterName))
+		return
+	}
 	Info := list[0].GetInfo()
 	clusterId := Info.GetId()
 
@@ -293,8 +299,13 @@ func (r dataClusterName) Read(ctx context.Context, req tfsdk.ReadDataSourceReque
 
 	var cluster Cluster
 	list1 := scheduleResp.GetData()
+	if len(list1) == 0 {
+		resp.Diagnostics.AddError("The default backup schedule was not found for the cluster ", clusterName)
+		return
+	}
 	scheduleId := list1[0].GetInfo().Id
 	var backUpSchedule []BackupScheduleInfo
+
 	backUpInfo := BackupScheduleInfo{
 
 		ScheduleID: types.String{Value: scheduleId},

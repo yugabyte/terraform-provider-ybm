@@ -72,6 +72,7 @@ func (r resourceVPCPeeringType) GetSchema(_ context.Context) (tfsdk.Schema, diag
 					"region": {
 						Description: "The region where the application is deployed.",
 						Type:        types.StringType,
+						Computed:    true,
 						Optional:    true,
 					},
 					"vpc_id": {
@@ -82,6 +83,7 @@ func (r resourceVPCPeeringType) GetSchema(_ context.Context) (tfsdk.Schema, diag
 					"cidr": {
 						Description: "The CIDR of the VPC in which the application is deployed.",
 						Type:        types.StringType,
+						Computed:    true,
 						Optional:    true,
 					},
 				}),
@@ -173,6 +175,10 @@ func (r resourceVPCPeering) Create(ctx context.Context, req tfsdk.CreateResource
 
 	// The Region, CIDR and Account ID are required only for AWS. They are not required for GCP. Project is required only in GCP.
 	if applicationCloud == "AWS" {
+		if !plan.ApplicationVPCInfo.Project.IsNull() {
+			resp.Diagnostics.AddError("Project needs to specified only in GCP", "You must not specify the application VPC project for AWS.")
+			return
+		}
 		if plan.ApplicationVPCInfo.Region.IsNull() {
 			resp.Diagnostics.AddError("No region specified", "You must specify the application VPC region for AWS.")
 			return
@@ -192,6 +198,10 @@ func (r resourceVPCPeering) Create(ctx context.Context, req tfsdk.CreateResource
 		applicationVPCAccountID := plan.ApplicationVPCInfo.AccountID.Value
 		applicationVPCSpec.SetCloudProviderProject(applicationVPCAccountID)
 	} else if applicationCloud == "GCP" {
+		if !plan.ApplicationVPCInfo.AccountID.IsNull() {
+			resp.Diagnostics.AddError("Account ID needs to specifid only in AWS", "You must not specify the application VPC account ID for GCP.")
+			return
+		}
 		if plan.ApplicationVPCInfo.Project.IsNull() {
 			resp.Diagnostics.AddError("No Application VPC Project specified", "The application VPC Project must be provided for GCP cloud.")
 			return
