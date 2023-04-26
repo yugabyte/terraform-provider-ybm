@@ -94,6 +94,7 @@ type VPC struct {
 	Name           types.String    `tfsdk:"name"`
 	Cloud          types.String    `tfsdk:"cloud"`
 	GlobalCIDR     types.String    `tfsdk:"global_cidr"`
+	ExternalVPCID  types.String    `tfsdk:"external_vpc_id"`
 	RegionCIDRInfo []VPCRegionInfo `tfsdk:"region_cidr_info"`
 }
 

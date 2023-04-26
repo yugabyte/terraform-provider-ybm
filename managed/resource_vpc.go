@@ -40,6 +40,11 @@ func (r resourceVPCType) GetSchema(_ context.Context) (tfsdk.Schema, diag.Diagno
 				Computed:    true,
 				Optional:    true,
 			},
+			"external_vpc_id": {
+				Description: "The ID of the cloud provider(AWS/GCP/AZzure) VPC where YBM resources are created",
+				Type:        types.StringType,
+				Computed:    true,
+			},
 			"name": {
 				Description: "The description of the VPC.",
 				Type:        types.StringType,
@@ -264,6 +269,7 @@ func resourceVPCRead(accountId string, projectId string, vpcId string, regionMap
 
 	vpc.Name.Value = vpcResp.Data.Spec.GetName()
 	vpc.Cloud.Value = string(vpcResp.Data.Spec.GetCloud())
+	vpc.ExternalVPCID.Value = vpcResp.Data.Info.GetExternalVpcId()
 	if vpcResp.Data.Spec.GetParentCidr() != "" {
 		vpc.GlobalCIDR.Value = vpcResp.Data.Spec.GetParentCidr()
 	} else {

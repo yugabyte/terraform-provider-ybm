@@ -82,6 +82,7 @@ func (r resourceVPCPeeringType) GetSchema(_ context.Context) (tfsdk.Schema, diag
 					"cidr": {
 						Description: "The CIDR of the VPC in which the application is deployed.",
 						Type:        types.StringType,
+						Computed:    true,
 						Optional:    true,
 					},
 				}),
@@ -173,6 +174,10 @@ func (r resourceVPCPeering) Create(ctx context.Context, req tfsdk.CreateResource
 
 	// The Region, CIDR and Account ID are required only for AWS. They are not required for GCP. Project is required only in GCP.
 	if applicationCloud == "AWS" {
+		if !plan.ApplicationVPCInfo.Project.IsNull() {
+			resp.Diagnostics.AddError("Project needs to specified only in GCP", "You must not specify the application VPC project for AWS.")
+			return
+		}
 		if plan.ApplicationVPCInfo.Region.IsNull() {
 			resp.Diagnostics.AddError("No region specified", "You must specify the application VPC region for AWS.")
 			return
@@ -181,6 +186,10 @@ func (r resourceVPCPeering) Create(ctx context.Context, req tfsdk.CreateResource
 		applicationVPCSpec.CloudInfo.SetRegion(applicationRegion)
 		if plan.ApplicationVPCInfo.CIDR.IsNull() {
 			resp.Diagnostics.AddError("No CIDR specified", "You must specify the CIDR of the application VPC for AWS.")
+			return
+		}
+		if plan.ApplicationVPCInfo.CIDR.IsNull() || plan.ApplicationVPCInfo.CIDR.Value == "" {
+			resp.Diagnostics.AddError("No Application VPC CIDR specified", "The application VPC CIDR must be provided for AWS cloud.")
 			return
 		}
 		applicationVPCCIDR := plan.ApplicationVPCInfo.CIDR.Value
@@ -192,12 +201,25 @@ func (r resourceVPCPeering) Create(ctx context.Context, req tfsdk.CreateResource
 		applicationVPCAccountID := plan.ApplicationVPCInfo.AccountID.Value
 		applicationVPCSpec.SetCloudProviderProject(applicationVPCAccountID)
 	} else if applicationCloud == "GCP" {
+		if !plan.ApplicationVPCInfo.AccountID.IsNull() {
+			resp.Diagnostics.AddError("Account ID needs to specifid only in AWS", "You must not specify the application VPC account ID for GCP.")
+			return
+		}
+		if !plan.ApplicationVPCInfo.Region.IsNull() {
+			resp.Diagnostics.AddError("Region needs to specifid only in AWS", "You must not specify the application VPC region for GCP.")
+			return
+		}
 		if plan.ApplicationVPCInfo.Project.IsNull() {
 			resp.Diagnostics.AddError("No Application VPC Project specified", "The application VPC Project must be provided for GCP cloud.")
 			return
 		}
 		applicationVPCProject := plan.ApplicationVPCInfo.Project.Value
 		applicationVPCSpec.SetCloudProviderProject(applicationVPCProject)
+		if !plan.ApplicationVPCInfo.CIDR.IsNull() && plan.ApplicationVPCInfo.CIDR.Value != "" {
+			applicationVPCCIDR := plan.ApplicationVPCInfo.CIDR.Value
+			applicationVPCSpec.SetCidr(applicationVPCCIDR)
+		}
+
 	} else {
 		resp.Diagnostics.AddError("Invalid cloud provider specified", "The cloud provider must be either AWS or GCP.")
 		return
@@ -237,13 +259,6 @@ func (r resourceVPCPeering) Create(ctx context.Context, req tfsdk.CreateResource
 		return
 	}
 
-	if plan.ApplicationVPCInfo.Region.Null {
-		vpcPeering.ApplicationVPCInfo.Region.Null = true
-	}
-	if plan.ApplicationVPCInfo.CIDR.Null {
-		vpcPeering.ApplicationVPCInfo.CIDR.Null = true
-	}
-
 	diags = resp.State.Set(ctx, &vpcPeering)
 	resp.Diagnostics.Append(diags...)
 	if resp.Diagnostics.HasError() {
@@ -276,12 +291,13 @@ func resourceVPCPeeringRead(accountId string, projectId string, vpcPeeringId str
 	if cloud == "AWS" {
 		vpcPeering.ApplicationVPCInfo.AccountID.Value = vpcPeeringResp.Data.Spec.CustomerVpc.GetCloudProviderProject()
 		vpcPeering.ApplicationVPCInfo.Project.Null = true
+		vpcPeering.ApplicationVPCInfo.Region.Value = vpcPeeringResp.Data.Spec.CustomerVpc.CloudInfo.GetRegion()
 	} else {
 		vpcPeering.ApplicationVPCInfo.Project.Value = vpcPeeringResp.Data.Spec.CustomerVpc.GetCloudProviderProject()
 		vpcPeering.ApplicationVPCInfo.AccountID.Null = true
+		vpcPeering.ApplicationVPCInfo.Region.Null = true
 	}
 
-	vpcPeering.ApplicationVPCInfo.Region.Value = vpcPeeringResp.Data.Spec.CustomerVpc.CloudInfo.GetRegion()
 	vpcPeering.ApplicationVPCInfo.VPCID.Value = vpcPeeringResp.Data.Spec.CustomerVpc.GetExternalVpcId()
 	vpcPeering.ApplicationVPCInfo.CIDR.Value = vpcPeeringResp.Data.Spec.CustomerVpc.GetCidr()
 
