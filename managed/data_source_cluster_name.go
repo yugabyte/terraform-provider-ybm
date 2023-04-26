@@ -283,13 +283,13 @@ func (r dataClusterName) Read(ctx context.Context, req tfsdk.ReadDataSourceReque
 		return
 	}
 
-	list := res.GetData()
-	if len(list) == 0 {
+	clusterList := res.GetData()
+	if len(clusterList) == 0 {
 		resp.Diagnostics.AddError("Unable to extract the following cluster information: ", fmt.Sprintf("The cluster %v doesn't exist", clusterName))
 		return
 	}
-	Info := list[0].GetInfo()
-	clusterId := Info.GetId()
+	clusterInfo := clusterList[0].GetInfo()
+	clusterId := clusterInfo.GetId()
 
 	scheduleResp, r2, err1 := apiClient.BackupApi.ListBackupSchedules(ctx, accountId, projectId).EntityId(clusterId).Execute()
 	if err1 != nil {
@@ -298,12 +298,12 @@ func (r dataClusterName) Read(ctx context.Context, req tfsdk.ReadDataSourceReque
 	}
 
 	var cluster Cluster
-	list1 := scheduleResp.GetData()
-	if len(list1) == 0 {
+	backupScheduleList := scheduleResp.GetData()
+	if len(backupScheduleList) == 0 {
 		resp.Diagnostics.AddError("The default backup schedule was not found for the cluster ", clusterName)
 		return
 	}
-	scheduleId := list1[0].GetInfo().Id
+	scheduleId := backupScheduleList[0].GetInfo().Id
 	var backUpSchedule []BackupScheduleInfo
 
 	backUpInfo := BackupScheduleInfo{
