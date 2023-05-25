@@ -6,6 +6,7 @@ package managed
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/path"
@@ -139,9 +140,23 @@ func (r resourceAllowList) Create(ctx context.Context, req tfsdk.CreateResourceR
 		cidrList = append(cidrList, plan.CIDRList[i].Value)
 	}
 
+	allowListListResp, response, err := apiClient.NetworkApi.ListNetworkAllowLists(ctx, accountId, projectId).Execute()
+	if err != nil {
+		errMsg := getErrorMessage(response, err)
+		resp.Diagnostics.AddError("Unable to create allow list", errMsg)
+		return
+	}
+
+	err = findDuplicateNetworkAllowList(allowListListResp.GetData(), allowListName)
+	if err != nil {
+		errMsg := getErrorMessage(response, err)
+		resp.Diagnostics.AddError("Unable to create allow list", errMsg)
+		return
+	}
+
 	networkAllowListSpec := *openapiclient.NewNetworkAllowListSpec(allowListName, allowListDesc, cidrList) // NetworkAllowListSpec | Allow list specification (optional)
 
-	allowListResp, response, err := apiClient.NetworkApi.CreateNetworkAllowList(context.Background(), accountId, projectId).NetworkAllowListSpec(networkAllowListSpec).Execute()
+	allowListResp, response, err := apiClient.NetworkApi.CreateNetworkAllowList(ctx, accountId, projectId).NetworkAllowListSpec(networkAllowListSpec).Execute()
 	if err != nil {
 		errMsg := getErrorMessage(response, err)
 		resp.Diagnostics.AddError("Unable to create allow list ", errMsg)
@@ -261,4 +276,13 @@ func (r resourceAllowList) Delete(ctx context.Context, req tfsdk.DeleteResourceR
 func (r resourceAllowList) ImportState(ctx context.Context, req tfsdk.ImportResourceStateRequest, resp *tfsdk.ImportResourceStateResponse) {
 	// Save the import identifier in the id attribute
 	tfsdk.ResourceImportStatePassthroughID(ctx, path.Root("id"), req, resp)
+}
+
+func findDuplicateNetworkAllowList(nals []openapiclient.NetworkAllowListData, name string) error {
+	for _, allowList := range nals {
+		if allowList.Spec.Name == name {
+			return fmt.Errorf("NetworkAllowList %v already exists", name)
+		}
+	}
+	return nil
 }
