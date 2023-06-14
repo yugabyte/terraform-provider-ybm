@@ -63,3 +63,6 @@ override.tf.json
 terraform.rc
 terraform
 .vscode
+
+# Ignore Intellij files.
+.idea/

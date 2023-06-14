@@ -72,3 +72,7 @@ Required:
 
 - `disk_size_gb` (Number)
 - `num_cores` (Number)
+
+Optional:
+
+- `disk_iops` (Number)

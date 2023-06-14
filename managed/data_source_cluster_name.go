@@ -147,6 +147,10 @@ func (r dataClusterNameType) GetSchema(_ context.Context) (tfsdk.Schema, diag.Di
 						Type:     types.Int64Type,
 						Computed: true,
 					},
+					"disk_iops": {
+						Type:     types.Int64Type,
+						Computed: true,
+					},
 				}),
 			},
 			"credentials": {

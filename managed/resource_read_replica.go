@@ -85,6 +85,11 @@ func (r resourceReadReplicasType) GetSchema(ctx context.Context) (tfsdk.Schema, 
 								Type:     types.Int64Type,
 								Required: true,
 							},
+							"disk_iops": {
+								Type:     types.Int64Type,
+								Optional: true,
+								Computed: true,
+							},
 						}),
 					},
 					"endpoint": {
@@ -133,6 +138,9 @@ func createReadReplicasSpec(ctx context.Context, apiClient *openapiclient.APICli
 			memoryMb,
 			int32(readReplica.NodeConfig.DiskSizeGb.Value),
 		)
+		if !(readReplica.NodeConfig.DiskIops.IsUnknown() || readReplica.NodeConfig.DiskIops.IsNull()) {
+			clusterNodeInfo.SetDiskIops(int32(readReplica.NodeConfig.DiskIops.Value))
+		}
 		placementInfo := *openapiclient.NewPlacementInfo(
 			*openapiclient.NewCloudInfo(
 				openapiclient.CloudEnum(cloud),
@@ -333,6 +341,9 @@ func resourceReadReplicasRead(ctx context.Context, accountId string, projectId s
 		readReplicaInfo.NodeConfig.NumCores.Value = int64(readReplicaSpec.NodeInfo.NumCores)
 		readReplicaInfo.NodeConfig.DiskSizeGb.Value = int64(readReplicaSpec.NodeInfo.DiskSizeGb)
 		readReplicaInfo.MultiZone.Value = readReplicaSpec.PlacementInfo.GetMultiZone()
+		if readReplicaSpec.NodeInfo.DiskIops.Get() != nil {
+			readReplicaInfo.NodeConfig.DiskIops.Value = int64(*readReplicaSpec.NodeInfo.DiskIops.Get())
+		}
 		if getEndpointsOk {
 			readReplicaInfo.Endpoint.Value = endpoints[localIndex].GetHost()
 		}

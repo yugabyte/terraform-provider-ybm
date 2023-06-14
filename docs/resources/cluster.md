@@ -294,6 +294,7 @@ Required:
 
 Optional:
 
+- `disk_iops` (Number) Disk IOPS of the node.
 - `disk_size_gb` (Number) Disk size of the node.
 
 
