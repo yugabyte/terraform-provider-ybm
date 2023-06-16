@@ -101,5 +101,6 @@ Read-Only:
 
 Read-Only:
 
+- `disk_iops` (Number)
 - `disk_size_gb` (Number)
 - `num_cores` (Number)

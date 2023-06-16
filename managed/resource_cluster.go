@@ -171,6 +171,12 @@ and modify the backup schedule of the cluster being created.`,
 						Computed:    true,
 						Optional:    true,
 					},
+					"disk_iops": {
+						Description: "Disk IOPS of the node.",
+						Type:        types.Int64Type,
+						Computed:    true,
+						Optional:    true,
+					},
 				}),
 			},
 			"credentials": {
@@ -391,15 +397,16 @@ func createClusterSpec(ctx context.Context, apiClient *openapiclient.APIClient, 
 		isProduction = false
 	}
 
+	nodeInfo := *openapiclient.NewClusterNodeInfo(numCores, memoryMb, diskSizeGb)
+	if !plan.NodeConfig.DiskIops.IsUnknown() {
+		nodeInfo.SetDiskIops(int32(plan.NodeConfig.DiskIops.Value))
+	}
+
 	clusterInfo := *openapiclient.NewClusterInfo(
 		openapiclient.ClusterTier(tier),
 		int32(totalNodes),
 		openapiclient.ClusterFaultTolerance(plan.FaultTolerance.Value),
-		*openapiclient.NewClusterNodeInfo(
-			numCores,
-			memoryMb,
-			diskSizeGb,
-		),
+		nodeInfo,
 		isProduction,
 	)
 
@@ -503,6 +510,14 @@ func (r resourceCluster) Create(ctx context.Context, req tfsdk.CreateResourceReq
 	if !plan.NodeConfig.DiskSizeGb.IsUnknown() && !isDiskSizeValid(plan.ClusterTier.Value, plan.NodeConfig.DiskSizeGb.Value) {
 		resp.Diagnostics.AddError("Invalid disk size", "The disk size for a paid cluster must be at least 50 GB.")
 		return
+	}
+
+	if !(plan.NodeConfig.DiskIops.IsUnknown() || plan.NodeConfig.DiskIops.IsNull()) {
+		isValid, err := isDiskIopsValid(plan.CloudType.Value, plan.ClusterTier.Value, plan.NodeConfig.DiskIops.Value)
+		if !isValid {
+			resp.Diagnostics.AddError("Invalid disk IOPS", err)
+			return
+		}
 	}
 
 	backupId := ""
@@ -922,6 +937,10 @@ func resourceClusterRead(ctx context.Context, accountId string, projectId string
 	cluster.FaultTolerance.Value = string(clusterResp.Data.Spec.ClusterInfo.FaultTolerance)
 	cluster.NodeConfig.NumCores.Value = int64(clusterResp.Data.Spec.ClusterInfo.NodeInfo.NumCores)
 	cluster.NodeConfig.DiskSizeGb.Value = int64(clusterResp.Data.Spec.ClusterInfo.NodeInfo.DiskSizeGb)
+	iopsPtr := clusterResp.Data.Spec.ClusterInfo.NodeInfo.DiskIops.Get()
+	if iopsPtr != nil {
+		cluster.NodeConfig.DiskIops.Value = int64(*iopsPtr)
+	}
 
 	cluster.ClusterInfo.State.Value = string(clusterResp.Data.Info.GetState())
 	cluster.ClusterInfo.SoftwareVersion.Value = clusterResp.Data.Info.GetSoftwareVersion()
@@ -1068,6 +1087,14 @@ func (r resourceCluster) Update(ctx context.Context, req tfsdk.UpdateResourceReq
 	if !plan.NodeConfig.DiskSizeGb.IsUnknown() && !isDiskSizeValid(plan.ClusterTier.Value, plan.NodeConfig.DiskSizeGb.Value) {
 		resp.Diagnostics.AddError("Invalid disk size", "The disk size for a paid cluster must be at least 50 GB.")
 		return
+	}
+
+	if !(plan.NodeConfig.DiskIops.IsUnknown() || plan.NodeConfig.DiskIops.IsNull()) {
+		isValid, err := isDiskIopsValid(plan.CloudType.Value, plan.ClusterTier.Value, plan.NodeConfig.DiskIops.Value)
+		if !isValid {
+			resp.Diagnostics.AddError("Invalid disk IOPS", err)
+			return
+		}
 	}
 
 	apiClient := r.p.client
