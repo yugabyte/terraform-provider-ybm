@@ -148,6 +148,7 @@ func (p *provider) GetResources(_ context.Context) (map[string]tfsdk.ResourceTyp
 		"ybm_read_replicas": resourceReadReplicasType{},
 		"ybm_vpc_peering":   resourceVPCPeeringType{},
 		"ybm_user":          resourceUserType{},
+		"ybm_role":          resourceRoleType{},
 	}, nil
 }
 
