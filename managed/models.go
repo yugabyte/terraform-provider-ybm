@@ -175,3 +175,13 @@ type ApplicationVPCInfo struct {
 	VPCID     types.String `tfsdk:"vpc_id"`
 	CIDR      types.String `tfsdk:"cidr"`
 }
+
+type User struct {
+	AccountID types.String `tfsdk:"account_id"`
+	ProjectID types.String `tfsdk:"project_id"`
+	Email     types.String `tfsdk:"email"`
+	RoleName  types.String `tfsdk:"role_name"`
+	UserName  types.String `tfsdk:"user_name"`
+	UserState types.String `tfsdk:"user_state"`
+	UserID    types.String `tfsdk:"user_id"`
+}
