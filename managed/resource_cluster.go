@@ -606,17 +606,14 @@ func validateCredentials(credentials Credentials) bool {
 
 }
 
-func createCmkSpec(plan Cluster) (cmkSpec *openapiclient.CMKSpec, cmkSpecOK bool, errorMessage string) {
-	cmkSpecOK = true
+func createCmkSpec(plan Cluster) (*openapiclient.CMKSpec, error) {
 	cmkProvider := plan.CMKSpec.ProviderType.Value
-	cmkSpec = openapiclient.NewCMKSpec(openapiclient.CMKProviderEnum(cmkProvider))
+	cmkSpec := openapiclient.NewCMKSpec(openapiclient.CMKProviderEnum(cmkProvider))
 
 	switch cmkProvider {
 	case "GCP":
 		if plan.CMKSpec.GCPCMKSpec == nil {
-			errorMessage = "Provider type is GCP but GCP CMK spec is missing."
-			cmkSpecOK = false
-			return nil, false, errorMessage
+			return nil, errors.New("Provider type is GCP but GCP CMK spec is missing.")
 		}
 		gcpKeyRingName := plan.CMKSpec.GCPCMKSpec.KeyRingName.Value
 		gcpKeyName := plan.CMKSpec.GCPCMKSpec.KeyName.Value
@@ -648,9 +645,7 @@ func createCmkSpec(plan Cluster) (cmkSpec *openapiclient.CMKSpec, cmkSpecOK bool
 		cmkSpec.SetGcpCmkSpec(*gcpCmkSpec)
 	case "AWS":
 		if plan.CMKSpec.AWSCMKSpec == nil {
-			errorMessage = "Provider type is AWS but AWS CMK spec is missing."
-			cmkSpecOK = false
-			return nil, false, errorMessage
+			return nil, errors.New("Provider type is AWS but AWS CMK spec is missing.")
 		}
 		awsSecretKey := plan.CMKSpec.AWSCMKSpec.SecretKey.Value
 		awsAccessKey := plan.CMKSpec.AWSCMKSpec.AccessKey.Value
@@ -666,7 +661,7 @@ func createCmkSpec(plan Cluster) (cmkSpec *openapiclient.CMKSpec, cmkSpecOK bool
 
 	cmkSpec.SetIsEnabled(plan.CMKSpec.IsEnabled.Value)
 
-	return cmkSpec, cmkSpecOK, errorMessage
+	return cmkSpec, nil
 }
 
 // Create a new resource
@@ -750,20 +745,19 @@ func (r resourceCluster) Create(ctx context.Context, req tfsdk.CreateResourceReq
 	var cmkSpec *openapiclient.CMKSpec
 
 	if plan.CMKSpec != nil {
-		var cmkSpecOK bool
-		var errorMessage string
 		// EAR disabled is not supported with cluster creation
 		if !plan.CMKSpec.IsEnabled.Value {
 			resp.Diagnostics.AddError(
 				"EAR will be enabled by default.", "Cluster creation with EAR disabled is not supported.",
 			)
 		}
-		cmkSpec, cmkSpecOK, errorMessage = createCmkSpec(plan)
+		var err error
+		cmkSpec, err = createCmkSpec(plan)
 
-		if cmkSpecOK {
+		if err == nil {
 			createClusterRequest.SecurityCmkSpec = *openapiclient.NewNullableCMKSpec(cmkSpec)
 		} else {
-			resp.Diagnostics.AddError("Error creating CMK Spec.", errorMessage)
+			resp.Diagnostics.AddError("Error creating CMK Spec.", err.Error())
 		}
 	}
 
@@ -1505,8 +1499,8 @@ func (r resourceCluster) Update(ctx context.Context, req tfsdk.UpdateResourceReq
 	}
 
 	if plan.CMKSpec != nil {
-		cmkSpecNew, cmkSpecOK, errorMessage := createCmkSpec(plan)
-		if cmkSpecOK {
+		cmkSpecNew, err := createCmkSpec(plan)
+		if err == nil {
 			_, res, err := apiClient.ClusterApi.EditClusterCMK(context.Background(), accountId, projectId, clusterId).CMKSpec(*cmkSpecNew).Execute()
 			if err != nil {
 				errorMessage := getErrorMessage(res, err)
@@ -1514,7 +1508,7 @@ func (r resourceCluster) Update(ctx context.Context, req tfsdk.UpdateResourceReq
 				return
 			}
 		} else {
-			resp.Diagnostics.AddError("Unable to create CMK spec", errorMessage)
+			resp.Diagnostics.AddError("Unable to create CMK spec", err.Error())
 			return
 		}
 	}
