@@ -29,6 +29,41 @@ type Cluster struct {
 	BackupSchedules     []BackupScheduleInfo `tfsdk:"backup_schedules"`
 	ClusterEndpoints    types.Map            `tfsdk:"cluster_endpoints"`
 	ClusterCertificate  types.String         `tfsdk:"cluster_certificate"`
+	CMKSpec             *CMKSpec             `tfsdk:"cmk_spec"`
+}
+
+type CMKSpec struct {
+	ProviderType types.String `tfsdk:"provider_type"`
+	AWSCMKSpec   *AWSCMKSpec  `tfsdk:"aws_cmk_spec"`
+	GCPCMKSpec   *GCPCMKSpec  `tfsdk:"gcp_cmk_spec"`
+	IsEnabled    types.Bool   `tfsdk:"is_enabled"`
+}
+
+type AWSCMKSpec struct {
+	AccessKey types.String   `tfsdk:"access_key"`
+	SecretKey types.String   `tfsdk:"secret_key"`
+	ARNList   []types.String `tfsdk:"arn_list"`
+}
+
+type GCPCMKSpec struct {
+	KeyRingName       types.String      `tfsdk:"key_ring_name"`
+	KeyName           types.String      `tfsdk:"key_name"`
+	Location          types.String      `tfsdk:"location"`
+	ProtectionLevel   types.String      `tfsdk:"protection_level"`
+	GcpServiceAccount GCPServiceAccount `tfsdk:"gcp_service_account"`
+}
+type GCPServiceAccount struct {
+	Type                    types.String `tfsdk:"type"`
+	ProjectId               types.String `tfsdk:"project_id"`
+	PrivateKey              types.String `tfsdk:"private_key"`
+	PrivateKeyId            types.String `tfsdk:"private_key_id"`
+	ClientEmail             types.String `tfsdk:"client_email"`
+	ClientId                types.String `tfsdk:"client_id"`
+	AuthUri                 types.String `tfsdk:"auth_uri"`
+	TokenUri                types.String `tfsdk:"token_uri"`
+	AuthProviderX509CertUrl types.String `tfsdk:"auth_provider_x509_cert_url"`
+	ClientX509CertUrl       types.String `tfsdk:"client_x509_cert_url"`
+	UniverseDomain          types.String `tfsdk:"universe_domain"`
 }
 
 type BackupScheduleInfo struct {

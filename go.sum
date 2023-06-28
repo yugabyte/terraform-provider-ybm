@@ -185,8 +185,10 @@ github.com/vmihailenco/msgpack/v4 v4.3.12/go.mod h1:gborTTJjAo/GWTqqRjrLCn9pgNN+
 github.com/vmihailenco/tagparser v0.1.1/go.mod h1:OeAg3pn3UbLjkWt+rN9oFYB6u/cQgqMEUPoW2WPyhdI=
 github.com/vmihailenco/tagparser v0.1.2 h1:gnjoVuB/kljJ5wICEEOpx98oXMWPLj22G67Vbd1qPqc=
 github.com/vmihailenco/tagparser v0.1.2/go.mod h1:OeAg3pn3UbLjkWt+rN9oFYB6u/cQgqMEUPoW2WPyhdI=
-github.com/yugabyte/yugabytedb-managed-go-client-internal v0.0.0-20230612170114-34eb470a0c39 h1:ckc1DYAEq9zNMWCMV32T0mqdposIa03zhhkYHPeDfgw=
-github.com/yugabyte/yugabytedb-managed-go-client-internal v0.0.0-20230612170114-34eb470a0c39/go.mod h1:5vW0xIzIZw+1djkiWKx0qqNmqbRBSf4mjc4qw8lIMik=
+github.com/yugabyte/yugabytedb-managed-go-client-internal v0.0.0-20230418071958-56cbcbea1ba8 h1:+EbHGdfvMtacctw4axs37wth0mXfU5lQ7xQxjZwQhCM=
+github.com/yugabyte/yugabytedb-managed-go-client-internal v0.0.0-20230418071958-56cbcbea1ba8/go.mod h1:5vW0xIzIZw+1djkiWKx0qqNmqbRBSf4mjc4qw8lIMik=
+github.com/yugabyte/yugabytedb-managed-go-client-internal v0.0.0-20230616084337-3e2516a65d09 h1:B5fnbQTEbM0QX8R77NYCiGVlEzOq66V+lN2OYb+THTI=
+github.com/yugabyte/yugabytedb-managed-go-client-internal v0.0.0-20230616084337-3e2516a65d09/go.mod h1:5vW0xIzIZw+1djkiWKx0qqNmqbRBSf4mjc4qw8lIMik=
 github.com/yuin/goldmark v1.1.25/go.mod h1:3hX8gzYuyVAZsxl0MRgGTJEmQBFcNTphYh9decYSb74=
 github.com/yuin/goldmark v1.1.27/go.mod h1:3hX8gzYuyVAZsxl0MRgGTJEmQBFcNTphYh9decYSb74=
 github.com/yuin/goldmark v1.1.32/go.mod h1:3hX8gzYuyVAZsxl0MRgGTJEmQBFcNTphYh9decYSb74=

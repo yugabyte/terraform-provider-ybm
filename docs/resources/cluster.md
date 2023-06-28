@@ -246,6 +246,7 @@ resource "ybm_cluster" "multi_region_cluster" {
 - `cluster_allow_list_ids` (List of String) List of IDs of the allow lists assigned to the cluster.
 - `cluster_endpoints` (Map of String) The endpoints used to connect to the cluster by region.
 - `cluster_id` (String) The ID of the cluster. Created automatically when a cluster is created. Used to get a specific cluster.
+- `cmk_spec` (Attributes) KMS Provider Configuration. (see [below for nested schema](#nestedatt--cmk_spec))
 - `database_track` (String) The track of the database. Stable or Preview.
 - `desired_state` (String) The desired state of the database, Active or Paused. This parameter can be used to pause/resume a cluster.
 - `fault_tolerance` (String) The fault tolerance of the cluster. NONE, NODE, ZONE or REGION.
@@ -309,6 +310,60 @@ Optional:
 - `schedule_id` (String) The ID of the backup schedule. Created automatically when the backup schedule is created. Used to get a specific backup schedule.
 - `state` (String) The state of the backup schedule. Used to pause or resume the backup schedule. Valid values are ACTIVE or PAUSED.
 - `time_interval_in_days` (Number) The time interval in days for the backup schedule.
+
+
+<a id="nestedatt--cmk_spec"></a>
+### Nested Schema for `cmk_spec`
+
+Required:
+
+- `is_enabled` (Boolean) Is Enabled
+- `provider_type` (String) CMK Provider Type.
+
+Optional:
+
+- `aws_cmk_spec` (Attributes) AWS CMK Provider Configuration. (see [below for nested schema](#nestedatt--cmk_spec--aws_cmk_spec))
+- `gcp_cmk_spec` (Attributes) GCP CMK Provider Configuration. (see [below for nested schema](#nestedatt--cmk_spec--gcp_cmk_spec))
+
+<a id="nestedatt--cmk_spec--aws_cmk_spec"></a>
+### Nested Schema for `cmk_spec.aws_cmk_spec`
+
+Required:
+
+- `access_key` (String) Access Key
+- `arn_list` (List of String) AWS ARN List
+- `secret_key` (String) Secret Key
+
+
+<a id="nestedatt--cmk_spec--gcp_cmk_spec"></a>
+### Nested Schema for `cmk_spec.gcp_cmk_spec`
+
+Required:
+
+- `gcp_service_account` (Attributes) GCP Service Account (see [below for nested schema](#nestedatt--cmk_spec--gcp_cmk_spec--gcp_service_account))
+- `key_name` (String) Key Name
+- `key_ring_name` (String) Key Ring Name
+- `location` (String) Location
+- `protection_level` (String) Key Protection Level
+
+<a id="nestedatt--cmk_spec--gcp_cmk_spec--gcp_service_account"></a>
+### Nested Schema for `cmk_spec.gcp_cmk_spec.gcp_service_account`
+
+Required:
+
+- `auth_provider_x509_cert_url` (String) Auth Provider X509 Cert URL
+- `auth_uri` (String) Auth URI
+- `client_email` (String) Client Email
+- `client_id` (String) Client ID
+- `client_x509_cert_url` (String) Client X509 Cert URL
+- `private_key` (String) Private Key
+- `private_key_id` (String) Private Key ID
+- `project_id` (String) GCP Project ID
+- `token_uri` (String) Token URI
+- `type` (String) Service Account Type
+- `universe_domain` (String) Google Universe Domain
+
+
 
 
 <a id="nestedatt--cluster_info"></a>

@@ -132,6 +132,131 @@ and modify the backup schedule of the cluster being created.`,
 					},
 				}),
 			},
+			"cmk_spec": {
+				Description: "KMS Provider Configuration.",
+				Optional:    true,
+				Attributes: tfsdk.SingleNestedAttributes(map[string]tfsdk.Attribute{
+					"provider_type": {
+						Description: "CMK Provider Type.",
+						Type:        types.StringType,
+						Required:    true,
+						Validators:  []tfsdk.AttributeValidator{stringvalidator.OneOf("AWS", "GCP")},
+					},
+					"is_enabled": {
+						Description: "Is Enabled",
+						Type:        types.BoolType,
+						Required:    true,
+					},
+					"aws_cmk_spec": {
+						Description: "AWS CMK Provider Configuration.",
+						Optional:    true,
+						Attributes: tfsdk.SingleNestedAttributes(map[string]tfsdk.Attribute{
+							"access_key": {
+								Description: "Access Key",
+								Type:        types.StringType,
+								Required:    true,
+							},
+							"secret_key": {
+								Description: "Secret Key",
+								Type:        types.StringType,
+								Required:    true,
+							},
+							"arn_list": {
+								Description: "AWS ARN List",
+								Type:        types.ListType{ElemType: types.StringType},
+								Required:    true,
+							},
+						}),
+					},
+					"gcp_cmk_spec": {
+						Description: "GCP CMK Provider Configuration.",
+						Optional:    true,
+						Attributes: tfsdk.SingleNestedAttributes(map[string]tfsdk.Attribute{
+							"key_ring_name": {
+								Description: "Key Ring Name",
+								Type:        types.StringType,
+								Required:    true,
+							},
+							"key_name": {
+								Description: "Key Name",
+								Type:        types.StringType,
+								Required:    true,
+							},
+							"location": {
+								Description: "Location",
+								Type:        types.StringType,
+								Required:    true,
+							},
+							"protection_level": {
+								Description: "Key Protection Level",
+								Type:        types.StringType,
+								Required:    true,
+							},
+							"gcp_service_account": {
+								Description: "GCP Service Account",
+								Required:    true,
+								Attributes: tfsdk.SingleNestedAttributes(map[string]tfsdk.Attribute{
+									"type": {
+										Description: "Service Account Type",
+										Type:        types.StringType,
+										Required:    true,
+									},
+									"project_id": {
+										Description: "GCP Project ID",
+										Type:        types.StringType,
+										Required:    true,
+									},
+									"private_key": {
+										Description: "Private Key",
+										Type:        types.StringType,
+										Required:    true,
+									},
+									"private_key_id": {
+										Description: "Private Key ID",
+										Type:        types.StringType,
+										Required:    true,
+									},
+									"client_email": {
+										Description: "Client Email",
+										Type:        types.StringType,
+										Required:    true,
+									},
+									"client_id": {
+										Description: "Client ID",
+										Type:        types.StringType,
+										Required:    true,
+									},
+									"auth_uri": {
+										Description: "Auth URI",
+										Type:        types.StringType,
+										Required:    true,
+									},
+									"token_uri": {
+										Description: "Token URI",
+										Type:        types.StringType,
+										Required:    true,
+									},
+									"auth_provider_x509_cert_url": {
+										Description: "Auth Provider X509 Cert URL",
+										Type:        types.StringType,
+										Required:    true,
+									},
+									"client_x509_cert_url": {
+										Description: "Client X509 Cert URL",
+										Type:        types.StringType,
+										Required:    true,
+									},
+									"universe_domain": {
+										Description: "Google Universe Domain",
+										Type:        types.StringType,
+										Required:    true,
+									},
+								}),
+							},
+						}),
+					},
+				}),
+			},
 			"cluster_tier": {
 				Description: "FREE (Sandbox) or PAID (Dedicated).",
 				Type:        types.StringType,
@@ -447,6 +572,7 @@ func getPlan(ctx context.Context, plan tfsdk.Plan, cluster *Cluster) diag.Diagno
 	diags.Append(plan.GetAttribute(ctx, path.Root("node_config"), &cluster.NodeConfig)...)
 	diags.Append(plan.GetAttribute(ctx, path.Root("credentials"), &cluster.Credentials)...)
 	diags.Append(plan.GetAttribute(ctx, path.Root("backup_schedules"), &cluster.BackupSchedules)...)
+	diags.Append(plan.GetAttribute(ctx, path.Root("cmk_spec"), &cluster.CMKSpec)...)
 
 	return diags
 }
@@ -460,7 +586,6 @@ func getIDsFromState(ctx context.Context, state tfsdk.State, cluster *Cluster) {
 	state.GetAttribute(ctx, path.Root("cluster_allow_list_ids"), &cluster.ClusterAllowListIDs)
 	state.GetAttribute(ctx, path.Root("cluster_region_info"), &cluster.ClusterRegionInfo)
 	state.GetAttribute(ctx, path.Root("backup_schedules"), &cluster.BackupSchedules)
-
 }
 
 func validateCredentials(credentials Credentials) bool {
@@ -481,6 +606,64 @@ func validateCredentials(credentials Credentials) bool {
 
 }
 
+func createCmkSpec(plan Cluster) (*openapiclient.CMKSpec, error) {
+	cmkProvider := plan.CMKSpec.ProviderType.Value
+	cmkSpec := openapiclient.NewCMKSpec(openapiclient.CMKProviderEnum(cmkProvider))
+
+	switch cmkProvider {
+	case "GCP":
+		if plan.CMKSpec.GCPCMKSpec == nil {
+			return nil, errors.New("Provider type is GCP but GCP CMK spec is missing.")
+		}
+		gcpKeyRingName := plan.CMKSpec.GCPCMKSpec.KeyRingName.Value
+		gcpKeyName := plan.CMKSpec.GCPCMKSpec.KeyName.Value
+		gcpLocation := plan.CMKSpec.GCPCMKSpec.Location.Value
+		gcpProtectionLevel := plan.CMKSpec.GCPCMKSpec.ProtectionLevel.Value
+		gcpServiceAccount := plan.CMKSpec.GCPCMKSpec.GcpServiceAccount
+		gcpServiceAccountSpec := openapiclient.NewGCPServiceAccount(
+			gcpServiceAccount.Type.Value,
+			gcpServiceAccount.ProjectId.Value,
+			gcpServiceAccount.PrivateKeyId.Value,
+			gcpServiceAccount.ClientEmail.Value,
+			gcpServiceAccount.ClientId.Value,
+			gcpServiceAccount.AuthUri.Value,
+			gcpServiceAccount.TokenUri.Value,
+			gcpServiceAccount.AuthProviderX509CertUrl.Value,
+			gcpServiceAccount.ClientX509CertUrl.Value,
+		)
+
+		// Appending the optional fields
+		if (!gcpServiceAccount.PrivateKey.Unknown && !gcpServiceAccount.PrivateKey.Null) || gcpServiceAccount.PrivateKey.Value != "" {
+			gcpServiceAccountSpec.SetPrivateKey(gcpServiceAccount.PrivateKey.Value)
+		}
+		if (!gcpServiceAccount.UniverseDomain.Unknown && !gcpServiceAccount.UniverseDomain.Null) || gcpServiceAccount.UniverseDomain.Value != "" {
+			gcpServiceAccountSpec.SetUniverseDomain(gcpServiceAccount.UniverseDomain.Value)
+		}
+
+		gcpCmkSpec := openapiclient.NewGCPCMKSpec(gcpKeyRingName, gcpKeyName, gcpLocation, gcpProtectionLevel)
+		gcpCmkSpec.SetGcpServiceAccount(*gcpServiceAccountSpec)
+		cmkSpec.SetGcpCmkSpec(*gcpCmkSpec)
+	case "AWS":
+		if plan.CMKSpec.AWSCMKSpec == nil {
+			return nil, errors.New("Provider type is AWS but AWS CMK spec is missing.")
+		}
+		awsSecretKey := plan.CMKSpec.AWSCMKSpec.SecretKey.Value
+		awsAccessKey := plan.CMKSpec.AWSCMKSpec.AccessKey.Value
+		awsArnList := make([]string, len(plan.CMKSpec.AWSCMKSpec.ARNList))
+
+		for i, arn := range plan.CMKSpec.AWSCMKSpec.ARNList {
+			awsArnList[i] = arn.Value
+		}
+
+		awsCmkSpec := openapiclient.NewAWSCMKSpec(awsAccessKey, awsSecretKey, awsArnList)
+		cmkSpec.SetAwsCmkSpec(*awsCmkSpec)
+	}
+
+	cmkSpec.SetIsEnabled(plan.CMKSpec.IsEnabled.Value)
+
+	return cmkSpec, nil
+}
+
 // Create a new resource
 func (r resourceCluster) Create(ctx context.Context, req tfsdk.CreateResourceRequest, resp *tfsdk.CreateResourceResponse) {
 	if !r.p.configured {
@@ -490,9 +673,8 @@ func (r resourceCluster) Create(ctx context.Context, req tfsdk.CreateResourceReq
 		)
 		return
 	}
-
-	var plan Cluster
 	var accountId, message string
+	var plan Cluster
 	var getAccountOK bool
 	resp.Diagnostics.Append(getPlan(ctx, req.Plan, &plan)...)
 	if resp.Diagnostics.HasError() {
@@ -559,6 +741,25 @@ func (r resourceCluster) Create(ctx context.Context, req tfsdk.CreateResourceReq
 	}
 
 	createClusterRequest := *openapiclient.NewCreateClusterRequest(*clusterSpec, *credentials)
+
+	var cmkSpec *openapiclient.CMKSpec
+
+	if plan.CMKSpec != nil {
+		// EAR disabled is not supported with cluster creation
+		if !plan.CMKSpec.IsEnabled.Value {
+			resp.Diagnostics.AddError(
+				"EAR will be enabled by default.", "Cluster creation with EAR disabled is not supported.",
+			)
+		}
+		var err error
+		cmkSpec, err = createCmkSpec(plan)
+
+		if err == nil {
+			createClusterRequest.SecurityCmkSpec = *openapiclient.NewNullableCMKSpec(cmkSpec)
+		} else {
+			resp.Diagnostics.AddError("Error creating CMK Spec.", err.Error())
+		}
+	}
 
 	clusterResp, response, err := apiClient.ClusterApi.CreateCluster(ctx, accountId, projectId).CreateClusterRequest(createClusterRequest).Execute()
 	if err != nil {
@@ -689,6 +890,19 @@ func (r resourceCluster) Create(ctx context.Context, req tfsdk.CreateResourceReq
 	}
 
 	cluster, readOK, message := resourceClusterRead(ctx, accountId, projectId, clusterId, backUpSchedules, regions, allowListProvided, allowListIDs, false, apiClient)
+
+	// Update the State file with the unmasked creds for AWS (secret key,access) and GCP (client id,private key)
+	if plan.CMKSpec != nil {
+		providerType := cluster.CMKSpec.ProviderType.Value
+		switch providerType {
+		case "AWS":
+			cluster.CMKSpec.AWSCMKSpec.SecretKey = types.String{Value: string(cmkSpec.GetAwsCmkSpec().SecretKey)}
+			cluster.CMKSpec.AWSCMKSpec.AccessKey = types.String{Value: string(cmkSpec.GetAwsCmkSpec().AccessKey)}
+		case "GCP":
+			cluster.CMKSpec.GCPCMKSpec.GcpServiceAccount.ClientId = types.String{Value: string(cmkSpec.GetGcpCmkSpec().GcpServiceAccount.ClientId)}
+			cluster.CMKSpec.GCPCMKSpec.GcpServiceAccount.PrivateKey = types.String{Value: string(*cmkSpec.GetGcpCmkSpec().GcpServiceAccount.PrivateKey)}
+		}
+	}
 
 	if !readOK {
 		resp.Diagnostics.AddError("Unable to read the state of the cluster ", message)
@@ -844,7 +1058,25 @@ func (r resourceCluster) Read(ctx context.Context, req tfsdk.ReadResourceRequest
 	if state.BackupSchedules != nil && len(state.BackupSchedules) > 0 {
 		backUpSchedules = append(backUpSchedules, state.BackupSchedules[0])
 	}
+
 	cluster, readOK, message := resourceClusterRead(ctx, state.AccountID.Value, state.ProjectID.Value, state.ClusterID.Value, backUpSchedules, regions, allowListProvided, allowListIDs, false, r.p.client)
+
+	// Fetch the cmkSpec information from State (to get unmasked creds)
+	var cmkSpec CMKSpec
+	req.State.GetAttribute(ctx, path.Root("cmk_spec"), &cmkSpec)
+
+	if cluster.CMKSpec != nil {
+		// Unmask the creds to store in the State file
+		providerType := cluster.CMKSpec.ProviderType.Value
+		switch providerType {
+		case "AWS":
+			cluster.CMKSpec.AWSCMKSpec.SecretKey.Value = cmkSpec.AWSCMKSpec.SecretKey.Value
+			cluster.CMKSpec.AWSCMKSpec.AccessKey.Value = cmkSpec.AWSCMKSpec.AccessKey.Value
+		case "GCP":
+			cluster.CMKSpec.GCPCMKSpec.GcpServiceAccount.ClientId.Value = cmkSpec.GCPCMKSpec.GcpServiceAccount.ClientId.Value
+			cluster.CMKSpec.GCPCMKSpec.GcpServiceAccount.PrivateKey.Value = cmkSpec.GCPCMKSpec.GcpServiceAccount.PrivateKey.Value
+		}
+	}
 
 	if !readOK {
 		resp.Diagnostics.AddError("Unable to read the state of the cluster", message)
@@ -913,6 +1145,63 @@ func resourceClusterRead(ctx context.Context, accountId string, projectId string
 			}
 			backupScheduleInfo[0] = backupScheduleStruct
 			cluster.BackupSchedules = backupScheduleInfo
+		}
+	}
+
+	cmkResp, _, err := apiClient.ClusterApi.GetClusterCMK(context.Background(), accountId, projectId, clusterId).Execute()
+	if cmkResp.Data.Get() != nil {
+		cmkSpec := CMKSpec{}
+		cmkData := cmkResp.GetData()
+
+		cmkSpec.ProviderType = types.String{Value: string(cmkData.GetProviderType())}
+		cmkSpec.IsEnabled = types.Bool{Value: bool(cmkData.GetIsEnabled())}
+
+		switch cmkSpec.ProviderType.Value {
+		case "AWS":
+			awsCMKSpec := AWSCMKSpec{
+				AccessKey: types.String{Value: cmkData.GetAwsCmkSpec().AccessKey},
+				SecretKey: types.String{Value: cmkData.GetAwsCmkSpec().SecretKey},
+				ARNList:   []types.String{},
+			}
+			cmkSpec.AWSCMKSpec = &awsCMKSpec
+
+			for _, arn := range cmkData.GetAwsCmkSpec().ArnList {
+				cmkSpec.AWSCMKSpec.ARNList = append(cmkSpec.AWSCMKSpec.ARNList, types.String{Value: arn})
+			}
+			cluster.CMKSpec = &cmkSpec
+
+		case "GCP":
+			gcpCMKSpec := GCPCMKSpec{
+				KeyRingName:     types.String{Value: cmkData.GetGcpCmkSpec().KeyRingName},
+				KeyName:         types.String{Value: cmkData.GetGcpCmkSpec().KeyName},
+				Location:        types.String{Value: cmkData.GetGcpCmkSpec().Location},
+				ProtectionLevel: types.String{Value: cmkData.GetGcpCmkSpec().ProtectionLevel},
+			}
+			if cmkData.GetGcpCmkSpec().GcpServiceAccount != nil {
+				gcpServiceAccount := GCPServiceAccount{
+					Type:                    types.String{Value: cmkData.GetGcpCmkSpec().GcpServiceAccount.Type},
+					ProjectId:               types.String{Value: cmkData.GetGcpCmkSpec().GcpServiceAccount.ProjectId},
+					PrivateKeyId:            types.String{Value: cmkData.GetGcpCmkSpec().GcpServiceAccount.PrivateKeyId},
+					ClientEmail:             types.String{Value: cmkData.GetGcpCmkSpec().GcpServiceAccount.ClientEmail},
+					ClientId:                types.String{Value: cmkData.GetGcpCmkSpec().GcpServiceAccount.ClientId},
+					AuthUri:                 types.String{Value: cmkData.GetGcpCmkSpec().GcpServiceAccount.AuthUri},
+					TokenUri:                types.String{Value: cmkData.GetGcpCmkSpec().GcpServiceAccount.TokenUri},
+					AuthProviderX509CertUrl: types.String{Value: cmkData.GetGcpCmkSpec().GcpServiceAccount.AuthProviderX509CertUrl},
+					ClientX509CertUrl:       types.String{Value: cmkData.GetGcpCmkSpec().GcpServiceAccount.ClientX509CertUrl},
+				}
+				if cmkData.GetGcpCmkSpec().GcpServiceAccount.GetPrivateKey() != "" {
+					privateKey := types.String{Value: cmkData.GetGcpCmkSpec().GcpServiceAccount.GetPrivateKey()}
+					gcpServiceAccount.PrivateKey = privateKey
+				}
+				if cmkData.GetGcpCmkSpec().GcpServiceAccount.GetUniverseDomain() != "" {
+					universeDomain := types.String{Value: cmkData.GetGcpCmkSpec().GcpServiceAccount.GetUniverseDomain()}
+					gcpServiceAccount.UniverseDomain = universeDomain
+				}
+				gcpCMKSpec.GcpServiceAccount = gcpServiceAccount
+			}
+
+			cmkSpec.GCPCMKSpec = &gcpCMKSpec
+			cluster.CMKSpec = &cmkSpec
 		}
 	}
 
@@ -1208,6 +1497,22 @@ func (r resourceCluster) Update(ctx context.Context, req tfsdk.UpdateResourceReq
 		backUpSchedules = append(backUpSchedules, backupScheduleStruct)
 
 	}
+
+	if plan.CMKSpec != nil {
+		cmkSpecNew, err := createCmkSpec(plan)
+		if err == nil {
+			_, res, err := apiClient.ClusterApi.EditClusterCMK(context.Background(), accountId, projectId, clusterId).CMKSpec(*cmkSpecNew).Execute()
+			if err != nil {
+				errorMessage := getErrorMessage(res, err)
+				resp.Diagnostics.AddError("Unable to update cluster CMK", errorMessage)
+				return
+			}
+		} else {
+			resp.Diagnostics.AddError("Unable to create CMK spec", err.Error())
+			return
+		}
+	}
+
 	allowListIDs := []string{}
 	allowListProvided := false
 
@@ -1267,6 +1572,19 @@ func (r resourceCluster) Update(ctx context.Context, req tfsdk.UpdateResourceReq
 	}
 	tflog.Debug(ctx, "Cluster Update: Allow list IDs read from API server ", map[string]interface{}{
 		"Allow List IDs": cluster.ClusterAllowListIDs})
+
+	// Update the State file with the unmasked creds for AWS (secret key,access) and GCP (client id,private key)
+	if plan.CMKSpec != nil {
+		providerType := cluster.CMKSpec.ProviderType.Value
+		switch providerType {
+		case "AWS":
+			cluster.CMKSpec.AWSCMKSpec.SecretKey = plan.CMKSpec.AWSCMKSpec.SecretKey
+			cluster.CMKSpec.AWSCMKSpec.AccessKey = plan.CMKSpec.AWSCMKSpec.AccessKey
+		case "GCP":
+			cluster.CMKSpec.GCPCMKSpec.GcpServiceAccount.ClientId = plan.CMKSpec.GCPCMKSpec.GcpServiceAccount.ClientId
+			cluster.CMKSpec.GCPCMKSpec.GcpServiceAccount.PrivateKey = plan.CMKSpec.GCPCMKSpec.GcpServiceAccount.PrivateKey
+		}
+	}
 
 	// set credentials for cluster (not returned by read api)
 	req.State.GetAttribute(ctx, path.Root("credentials"), &cluster.Credentials)
