@@ -26,7 +26,7 @@ jobs:
         run: git fetch --prune --unshallow
       -
         name: Set up Go
-        uses: actions/setup-go@v3
+        uses: actions/setup-go@v4
         with:
           go-version-file: 'go.mod'
           cache: true
@@ -48,7 +48,7 @@ jobs:
           git config --global url."git@github.com:".insteadOf https://github.com/
       -
         name: Run GoReleaser
-        uses: goreleaser/goreleaser-action@v3.0.0
+        uses: goreleaser/goreleaser-action@v4.3.0
         with:
           version: latest
           args: release --rm-dist
