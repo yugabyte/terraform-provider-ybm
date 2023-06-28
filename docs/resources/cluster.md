@@ -361,6 +361,9 @@ Required:
 - `project_id` (String) GCP Project ID
 - `token_uri` (String) Token URI
 - `type` (String) Service Account Type
+
+Optional:
+
 - `universe_domain` (String) Google Universe Domain
 
 

@@ -249,7 +249,7 @@ and modify the backup schedule of the cluster being created.`,
 									"universe_domain": {
 										Description: "Google Universe Domain",
 										Type:        types.StringType,
-										Required:    true,
+										Optional:    true,
 									},
 								}),
 							},
@@ -609,6 +609,10 @@ func validateCredentials(credentials Credentials) bool {
 func createCmkSpec(plan Cluster) (*openapiclient.CMKSpec, error) {
 	cmkProvider := plan.CMKSpec.ProviderType.Value
 	cmkSpec := openapiclient.NewCMKSpec(openapiclient.CMKProviderEnum(cmkProvider))
+
+	if plan.CMKSpec.GCPCMKSpec != nil && plan.CMKSpec.AWSCMKSpec != nil {
+		return nil, errors.New("Invalid input. Both AWS and GCP spec cannot be present")
+	}
 
 	switch cmkProvider {
 	case "GCP":
@@ -1196,6 +1200,8 @@ func resourceClusterRead(ctx context.Context, accountId string, projectId string
 				if cmkData.GetGcpCmkSpec().GcpServiceAccount.GetUniverseDomain() != "" {
 					universeDomain := types.String{Value: cmkData.GetGcpCmkSpec().GcpServiceAccount.GetUniverseDomain()}
 					gcpServiceAccount.UniverseDomain = universeDomain
+				} else {
+					gcpServiceAccount.UniverseDomain.Null = true
 				}
 				gcpCMKSpec.GcpServiceAccount = gcpServiceAccount
 			}
