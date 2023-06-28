@@ -29,6 +29,11 @@ builds:
     - goos: darwin
       goarch: '386'
   binary: '{{ .ProjectName }}_v{{ .Version }}'
+
+# In case there are multiple tags for the same commit, pick the latest one.
+git:
+  tag_sort: -v:creatordate
+
 archives:
 - format: zip
   name_template: '{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}'
