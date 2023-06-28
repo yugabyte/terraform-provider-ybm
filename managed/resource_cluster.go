@@ -610,6 +610,10 @@ func createCmkSpec(plan Cluster) (*openapiclient.CMKSpec, error) {
 	cmkProvider := plan.CMKSpec.ProviderType.Value
 	cmkSpec := openapiclient.NewCMKSpec(openapiclient.CMKProviderEnum(cmkProvider))
 
+	if plan.CMKSpec.GCPCMKSpec != nil && plan.CMKSpec.AWSCMKSpec != nil {
+		return nil, errors.New("Invalid input. Both AWS and GCP spec cannot be present")
+	}
+
 	switch cmkProvider {
 	case "GCP":
 		if plan.CMKSpec.GCPCMKSpec == nil {
