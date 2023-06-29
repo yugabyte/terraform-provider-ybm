@@ -160,11 +160,11 @@ func (r resourceVPC) Create(ctx context.Context, req tfsdk.CreateResourceRequest
 	cloud := plan.Cloud.Value
 
 	// Exactly one parameter amongst Global CIDR and Region CIDR Info must be present
-	// We want them to be true or not
-	if globalCIDRPresent && regionCIDRInfoPresent {
+	// Simulating XOR by comparing boolean values
+	if globalCIDRPresent == regionCIDRInfoPresent {
 		resp.Diagnostics.AddError(
 			"Global and region CIDR details provided",
-			"Specify either the global CIDR or the CIDR information for the regions or none for AZURE. Don't provide both.",
+			"Specify either the global CIDR or the CIDR information for the regions. Don't provide both.",
 		)
 		return
 	}
