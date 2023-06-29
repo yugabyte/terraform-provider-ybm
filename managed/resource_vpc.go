@@ -7,7 +7,6 @@ package managed
 import (
 	"context"
 	"errors"
-	"fmt"
 	"time"
 
 	"github.com/hashicorp/terraform-plugin-framework/diag"
@@ -298,8 +297,6 @@ func resourceVPCRead(accountId string, projectId string, vpcId string, regionMap
 	}
 
 	if len(regionMap) > 0 {
-		fmt.Println(regionMap)
-		fmt.Println(vpcResp.Data.Spec.GetRegionSpecs())
 		regionInfo := make([]VPCRegionInfo, len(regionMap))
 		for _, info := range vpcResp.Data.Spec.GetRegionSpecs() {
 			region := info.GetRegion()
