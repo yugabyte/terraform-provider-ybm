@@ -9,7 +9,7 @@ description: |-
 The resource to create a VPC in YugabyteDB Managed.
 
 
-## Example Usage
+## Example Usage - GCP VPC with Global CIDR
 
 ```terraform
 resource "ybm_vpc" "example-vpc" {
@@ -27,6 +27,37 @@ resource "ybm_vpc" "example-vpc" {
   #     cidr = "10.9.0.0/24"
   #   }
   # ]
+}
+```
+
+## Example Usage - AWS regional VPC
+
+```terraform
+resource "ybm_vpc" "example-vpc" {
+  name = "example-vpc"
+  cloud = "AWS"
+  region_cidr_info = [
+    {
+      region = "us-east-1"
+      cidr = "10.231.0.0/24"
+    }
+  ]
+}
+```
+
+## Example Usage - Azure VPC with auto-CIDR
+
+```terraform
+resource "ybm_vpc" "example-vpc" {
+  name = "example-vpc"
+  cloud = "AZURE"
+  region_cidr_info = [
+    {
+      region = "eastus"
+      # For Azure, the CIDR is auto-assigned
+      # cidr = "10.231.0.0/24"
+    }
+  ]
 }
 ```
 

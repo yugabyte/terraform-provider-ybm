@@ -71,6 +71,7 @@ func (r resourceVPCType) GetSchema(_ context.Context) (tfsdk.Schema, diag.Diagno
 					"cidr": {
 						Type:     types.StringType,
 						Optional: true,
+						Computed: true,
 					},
 				}),
 			},
@@ -154,6 +155,9 @@ func (r resourceVPC) Create(ctx context.Context, req tfsdk.CreateResourceRequest
 		regionCIDRInfoPresent = true
 	}
 
+	vpcName := plan.Name.Value
+	cloud := plan.Cloud.Value
+
 	// Exactly one parameter amongst Global CIDR and Region CIDR Info must be present
 	// Simulating XOR by comparing boolean values
 	if globalCIDRPresent == regionCIDRInfoPresent {
@@ -163,16 +167,29 @@ func (r resourceVPC) Create(ctx context.Context, req tfsdk.CreateResourceRequest
 		)
 		return
 	}
-
-	vpcName := plan.Name.Value
-	cloud := plan.Cloud.Value
-
 	if cloud != "GCP" && globalCIDRPresent {
 		resp.Diagnostics.AddError(
 			"Global CIDR specified",
 			"Global CIDR only applies to GCP.",
 		)
 		return
+	}
+
+	if cloud == "AZURE" {
+		if len(plan.RegionCIDRInfo) != 1 {
+			resp.Diagnostics.AddError(
+				"Unable to create VPC",
+				"Only one region supported per Azure VPC.",
+			)
+			return
+		}
+		if (!plan.RegionCIDRInfo[0].CIDR.Unknown && !plan.RegionCIDRInfo[0].CIDR.Null) || plan.RegionCIDRInfo[0].CIDR.Value != "" {
+			resp.Diagnostics.AddError(
+				"CIDR specifed",
+				"CIDR are auto-assigned for AZURE. Please remove it",
+			)
+			return
+		}
 	}
 
 	regionMap := map[string]int{}
@@ -185,7 +202,9 @@ func (r resourceVPC) Create(ctx context.Context, req tfsdk.CreateResourceRequest
 			spec := *openapiclient.NewVpcRegionSpecWithDefaults()
 			regionMap[region] = index
 			spec.SetRegion(region)
-			spec.SetCidr(cidr)
+			if cloud != "AZURE" {
+				spec.SetCidr(cidr)
+			}
 			vpcRegionSpec = append(vpcRegionSpec, spec)
 		}
 		// Ensure distinct regions are specified in the region CIDR info
@@ -235,6 +254,7 @@ func (r resourceVPC) Create(ctx context.Context, req tfsdk.CreateResourceRequest
 		resp.Diagnostics.AddError("Unable to read the state of the VPC", message)
 		return
 	}
+
 	if !globalCIDRPresent {
 		vpc.GlobalCIDR.Null = true
 	} else {

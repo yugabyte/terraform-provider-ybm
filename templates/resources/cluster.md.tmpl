@@ -27,4 +27,16 @@ To create a multi region cluster by using distinct credentials for both YSQL and
 
 {{ tffile "examples/resources/ybm_cluster/multi-region-distinct-credentials.tf" }}
 
+To create an AWS Cluster with Customer Managed Keys
+
+{{ tffile "examples/resources/ybm_cluster/single-region-aws-cmk.tf" }}
+
+To create a GCP Cluster with Customer Managed Keys
+
+{{ tffile "examples/resources/ybm_cluster/single-region-gcp-cmk.tf" }}
+
+To create an Azure Cluster
+
+{{ tffile "examples/resources/ybm_cluster/single-region-azure.tf" }}
+
 {{ .SchemaMarkdown | trimspace }}

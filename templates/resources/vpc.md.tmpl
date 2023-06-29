@@ -9,8 +9,16 @@ description: |-
 {{ .Description | trimspace }}
 
 
-## Example Usage
+## Example Usage - GCP VPC with Global CIDR
 
-{{ tffile "examples/resources/ybm_vpc/resource.tf" }}
+{{ tffile "examples/resources/ybm_vpc/gcp-global-cidr.tf" }}
+
+## Example Usage - AWS regional VPC
+
+{{ tffile "examples/resources/ybm_vpc/aws-regional-vpc.tf" }}
+
+## Example Usage - Azure VPC with auto-CIDR
+
+{{ tffile "examples/resources/ybm_vpc/azure-vpc.tf" }}
 
 {{ .SchemaMarkdown | trimspace }}
