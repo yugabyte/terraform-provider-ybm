@@ -1222,52 +1222,52 @@ func resourceClusterRead(ctx context.Context, accountId string, projectId string
 	}
 
 	cmkResp, _, err := apiClient.ClusterApi.GetClusterCMK(context.Background(), accountId, projectId, clusterId).Execute()
-	if cmkResp.Data.Get() != nil {
+	if cmkResp.Data != nil {
 		cmkSpec := CMKSpec{}
-		cmkData := cmkResp.GetData()
+		cmkDataSpec := cmkResp.GetData().Spec.Get()
 
-		cmkSpec.ProviderType = types.String{Value: string(cmkData.GetProviderType())}
-		cmkSpec.IsEnabled = types.Bool{Value: bool(cmkData.GetIsEnabled())}
+		cmkSpec.ProviderType = types.String{Value: string(cmkDataSpec.GetProviderType())}
+		cmkSpec.IsEnabled = types.Bool{Value: bool(cmkDataSpec.GetIsEnabled())}
 
 		switch cmkSpec.ProviderType.Value {
 		case "AWS":
 			awsCMKSpec := AWSCMKSpec{
-				AccessKey: types.String{Value: cmkData.GetAwsCmkSpec().AccessKey},
-				SecretKey: types.String{Value: cmkData.GetAwsCmkSpec().SecretKey},
+				AccessKey: types.String{Value: cmkDataSpec.GetAwsCmkSpec().AccessKey},
+				SecretKey: types.String{Value: cmkDataSpec.GetAwsCmkSpec().SecretKey},
 				ARNList:   []types.String{},
 			}
 			cmkSpec.AWSCMKSpec = &awsCMKSpec
 
-			for _, arn := range cmkData.GetAwsCmkSpec().ArnList {
+			for _, arn := range cmkDataSpec.GetAwsCmkSpec().ArnList {
 				cmkSpec.AWSCMKSpec.ARNList = append(cmkSpec.AWSCMKSpec.ARNList, types.String{Value: arn})
 			}
 			cluster.CMKSpec = &cmkSpec
 
 		case "GCP":
 			gcpCMKSpec := GCPCMKSpec{
-				KeyRingName:     types.String{Value: cmkData.GetGcpCmkSpec().KeyRingName},
-				KeyName:         types.String{Value: cmkData.GetGcpCmkSpec().KeyName},
-				Location:        types.String{Value: cmkData.GetGcpCmkSpec().Location},
-				ProtectionLevel: types.String{Value: cmkData.GetGcpCmkSpec().ProtectionLevel},
+				KeyRingName:     types.String{Value: cmkDataSpec.GetGcpCmkSpec().KeyRingName},
+				KeyName:         types.String{Value: cmkDataSpec.GetGcpCmkSpec().KeyName},
+				Location:        types.String{Value: cmkDataSpec.GetGcpCmkSpec().Location},
+				ProtectionLevel: types.String{Value: cmkDataSpec.GetGcpCmkSpec().ProtectionLevel},
 			}
-			if cmkData.GetGcpCmkSpec().GcpServiceAccount != nil {
+			if cmkDataSpec.GetGcpCmkSpec().GcpServiceAccount != nil {
 				gcpServiceAccount := GCPServiceAccount{
-					Type:                    types.String{Value: cmkData.GetGcpCmkSpec().GcpServiceAccount.Type},
-					ProjectId:               types.String{Value: cmkData.GetGcpCmkSpec().GcpServiceAccount.ProjectId},
-					PrivateKeyId:            types.String{Value: cmkData.GetGcpCmkSpec().GcpServiceAccount.PrivateKeyId},
-					ClientEmail:             types.String{Value: cmkData.GetGcpCmkSpec().GcpServiceAccount.ClientEmail},
-					ClientId:                types.String{Value: cmkData.GetGcpCmkSpec().GcpServiceAccount.ClientId},
-					AuthUri:                 types.String{Value: cmkData.GetGcpCmkSpec().GcpServiceAccount.AuthUri},
-					TokenUri:                types.String{Value: cmkData.GetGcpCmkSpec().GcpServiceAccount.TokenUri},
-					AuthProviderX509CertUrl: types.String{Value: cmkData.GetGcpCmkSpec().GcpServiceAccount.AuthProviderX509CertUrl},
-					ClientX509CertUrl:       types.String{Value: cmkData.GetGcpCmkSpec().GcpServiceAccount.ClientX509CertUrl},
+					Type:                    types.String{Value: cmkDataSpec.GetGcpCmkSpec().GcpServiceAccount.Type},
+					ProjectId:               types.String{Value: cmkDataSpec.GetGcpCmkSpec().GcpServiceAccount.ProjectId},
+					PrivateKeyId:            types.String{Value: cmkDataSpec.GetGcpCmkSpec().GcpServiceAccount.PrivateKeyId},
+					ClientEmail:             types.String{Value: cmkDataSpec.GetGcpCmkSpec().GcpServiceAccount.ClientEmail},
+					ClientId:                types.String{Value: cmkDataSpec.GetGcpCmkSpec().GcpServiceAccount.ClientId},
+					AuthUri:                 types.String{Value: cmkDataSpec.GetGcpCmkSpec().GcpServiceAccount.AuthUri},
+					TokenUri:                types.String{Value: cmkDataSpec.GetGcpCmkSpec().GcpServiceAccount.TokenUri},
+					AuthProviderX509CertUrl: types.String{Value: cmkDataSpec.GetGcpCmkSpec().GcpServiceAccount.AuthProviderX509CertUrl},
+					ClientX509CertUrl:       types.String{Value: cmkDataSpec.GetGcpCmkSpec().GcpServiceAccount.ClientX509CertUrl},
 				}
-				if cmkData.GetGcpCmkSpec().GcpServiceAccount.GetPrivateKey() != "" {
-					privateKey := types.String{Value: cmkData.GetGcpCmkSpec().GcpServiceAccount.GetPrivateKey()}
+				if cmkDataSpec.GetGcpCmkSpec().GcpServiceAccount.GetPrivateKey() != "" {
+					privateKey := types.String{Value: cmkDataSpec.GetGcpCmkSpec().GcpServiceAccount.GetPrivateKey()}
 					gcpServiceAccount.PrivateKey = privateKey
 				}
-				if cmkData.GetGcpCmkSpec().GcpServiceAccount.GetUniverseDomain() != "" {
-					universeDomain := types.String{Value: cmkData.GetGcpCmkSpec().GcpServiceAccount.GetUniverseDomain()}
+				if cmkDataSpec.GetGcpCmkSpec().GcpServiceAccount.GetUniverseDomain() != "" {
+					universeDomain := types.String{Value: cmkDataSpec.GetGcpCmkSpec().GcpServiceAccount.GetUniverseDomain()}
 					gcpServiceAccount.UniverseDomain = universeDomain
 				} else {
 					gcpServiceAccount.UniverseDomain.Null = true
@@ -1308,8 +1308,8 @@ func resourceClusterRead(ctx context.Context, accountId string, projectId string
 
 	cluster.ClusterInfo.State.Value = string(clusterResp.Data.Info.GetState())
 	cluster.ClusterInfo.SoftwareVersion.Value = clusterResp.Data.Info.GetSoftwareVersion()
-	cluster.ClusterInfo.CreatedTime.Value = clusterResp.Data.Info.Metadata.GetCreatedOn()
-	cluster.ClusterInfo.UpdatedTime.Value = clusterResp.Data.Info.Metadata.GetUpdatedOn()
+	cluster.ClusterInfo.CreatedTime.Value = clusterResp.Data.Info.Metadata.Get().GetCreatedOn()
+	cluster.ClusterInfo.UpdatedTime.Value = clusterResp.Data.Info.Metadata.Get().GetUpdatedOn()
 
 	// Cluster endpoints
 	clusterEndpoints := types.Map{}

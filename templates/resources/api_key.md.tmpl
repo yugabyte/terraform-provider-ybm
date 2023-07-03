@@ -1,0 +1,22 @@
+---
+page_title: "{{.Name}} {{.Type}} - {{.RenderedProviderName}}"
+description: |-
+{{ .Description | plainmarkdown | trimspace | prefixlines "  " }}
+---
+
+# {{.Name}} ({{.Type}})
+
+{{ .Description | trimspace }}
+
+
+## Example Usage
+
+To issue an API Key with predefined built-in roles like Admin, Developer, Viewer
+
+{{ tffile "examples/resources/ybm_api_key/built-in-role-api-key.tf" }}
+
+To issue an API Key with custom user defined roles
+
+{{ tffile "examples/resources/ybm_api_key/custom-role-api-key.tf" }}
+
+{{ .SchemaMarkdown | trimspace }}
