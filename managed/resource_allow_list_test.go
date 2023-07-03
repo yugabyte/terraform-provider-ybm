@@ -95,9 +95,7 @@ func TestCreateAllowList(t *testing.T) {
 	allowListID := "test-allow-list-id"
 	allowList := getMockAllowList(cfg, mockNetworkApi, mockProjectApi, mockAccountApi)
 	listAccountsRequest := getListAccountsRequest(ctx, cfg, mockAccountApi)
-	listAccountsResponse := getListAccountsResponse(accountID)
-	listProjectsRequest := getListProjectsRequest(ctx, cfg, accountID, mockProjectApi)
-	listProjectsResponse := getListProjectsResponse(projectID)
+	listAccountsResponse := getListAccountsResponse(accountID, projectID)
 
 	createAllowListRequest := getCreateAllowListRequest(ctx, cfg, accountID, projectID, mockNetworkApi)
 	createAllowListSpec := *openapiclient.NewNetworkAllowListSpec(allowListName, allowListDescription, cidrList)
@@ -152,10 +150,8 @@ func TestCreateAllowList(t *testing.T) {
 	for _, testCase := range testCases {
 		t.Run(testCase.TestName, func(t *testing.T) {
 
-			mockProjectApi.EXPECT().ListProjects(ctx, accountID).Return(*listProjectsRequest).Times(1)
-			mockProjectApi.EXPECT().ListProjectsExecute(*listProjectsRequest).Return(*listProjectsResponse, httpSuccessResponse, nil).Times(1)
-			mockAccountApi.EXPECT().ListAccounts(ctx).Return(*listAccountsRequest).Times(1)
-			mockAccountApi.EXPECT().ListAccountsExecute(*listAccountsRequest).Return(*listAccountsResponse, httpSuccessResponse, nil).Times(1)
+			mockAccountApi.EXPECT().ListAccounts(ctx).Return(*listAccountsRequest).Times(2)
+			mockAccountApi.EXPECT().ListAccountsExecute(*listAccountsRequest).Return(*listAccountsResponse, httpSuccessResponse, nil).Times(2)
 			mockNetworkApi.EXPECT().ListNetworkAllowLists(ctx, accountID, projectID).Return(*listNetworkAllowListsRequest).Times(1)
 			mockNetworkApi.EXPECT().ListNetworkAllowListsExecute(*listNetworkAllowListsRequest).Return(*listNetworkAllowListsResponse, httpSuccessResponse, nil).Times(1)
 			mockNetworkApi.EXPECT().CreateNetworkAllowList(ctx, accountID, projectID).Return(*createAllowListRequest).Times(1)

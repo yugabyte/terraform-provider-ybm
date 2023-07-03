@@ -14,12 +14,12 @@ import (
 )
 
 func getProjectId(ctx context.Context, apiClient *openapiclient.APIClient, accountId string) (projectId string, projectIdOK bool, errorMessage string) {
-	projectResp, resp, err := apiClient.ProjectApi.ListProjects(ctx, accountId).Execute()
+	accountResp, resp, err := apiClient.AccountApi.ListAccounts(ctx).Execute()
 	if err != nil {
 		errMsg := getErrorMessage(resp, err)
 		return "", false, errMsg
 	}
-	projectData := projectResp.GetData()
+	projectData := accountResp.GetData()[0].Info.GetProjects()
 	if len(projectData) == 0 {
 		return "", false, "The account is not associated with any projects."
 	}
@@ -27,7 +27,7 @@ func getProjectId(ctx context.Context, apiClient *openapiclient.APIClient, accou
 		return "", false, "The account is associated with multiple projects, please provide a project ID."
 	}
 
-	projectId = projectData[0].Id
+	projectId = projectData[0].Info.Id
 	return projectId, true, ""
 }
 

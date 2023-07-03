@@ -22,44 +22,33 @@ func getListAccountsRequest(ctx context.Context, cfg *openapiclient.Configuratio
 	return &listAccountsRequest
 }
 
-func getListAccountsResponse(accountID string) *openapiclient.AccountListResponse {
+func getListAccountsResponse(accountID string, projectID string) *openapiclient.AccountListResponse {
 	listAccountsResponse := openapiclient.NewAccountListResponseWithDefaults()
 	accountData := []openapiclient.AccountData{}
 	accountDatum := openapiclient.NewAccountDataWithDefaults()
 	accountDatum.SetInfo(*openapiclient.NewAccountInfoWithDefaults())
 	accountDatum.Info.SetId(accountID)
+	projectData := []openapiclient.ProjectData{}
+	projectDatum := openapiclient.NewProjectDataWithDefaults()
+	projectDatum.SetInfo(*openapiclient.NewProjectDataInfoWithDefaults())
+	projectDatum.Info.SetId(projectID)
+	projectData = append(projectData, *projectDatum)
+	accountDatum.Info.SetProjects(projectData)
 	accountData = append(accountData, *accountDatum)
 	listAccountsResponse.SetData(accountData)
 	return listAccountsResponse
 }
 
-func getListProjectsRequest(ctx context.Context, cfg *openapiclient.Configuration, accountID string, mockProjectApi *mocks.MockProjectApi) *openapiclient.ApiListProjectsRequest {
-	testClient := openapiclient.NewAPIClient(cfg)
-	listProjectsRequest := testClient.ProjectApi.ListProjects(ctx, accountID)
-	listProjectsRequest.ApiService = mockProjectApi
-	return &listProjectsRequest
-}
-
-func getListProjectsResponse(projectID string) *openapiclient.ProjectListResponse {
-	listProjectsResponse := openapiclient.NewProjectListResponseWithDefaults()
-	projectData := []openapiclient.ProjectData{}
-	projectDatum := openapiclient.NewProjectDataWithDefaults()
-	projectDatum.SetId(projectID)
-	projectData = append(projectData, *projectDatum)
-	listProjectsResponse.SetData(projectData)
-	return listProjectsResponse
-}
-
 func TestGetProjectID(t *testing.T) {
 	mockCtrl := gomock.NewController(t)
 	defer mockCtrl.Finish()
-	mockProjectApi := mocks.NewMockProjectApi(mockCtrl)
+	mockAccountApi := mocks.NewMockAccountApi(mockCtrl)
 
 	cfg := openapiclient.NewConfiguration()
 	ctx := context.Background()
 
 	apiClient := openapiclient.NewAPIClient(cfg)
-	apiClient.ProjectApi = mockProjectApi
+	apiClient.AccountApi = mockAccountApi
 
 	testCases := []struct {
 		TestName          string
@@ -84,15 +73,15 @@ func TestGetProjectID(t *testing.T) {
 		expectedError := testCase.ExpectedError
 		t.Run(testCase.TestName, func(t *testing.T) {
 
-			listProjectsRequest := getListProjectsRequest(ctx, cfg, accountID, mockProjectApi)
-			listProjectsResponse := getListProjectsResponse(expectedProjectID)
+			listProjectsRequest := getListAccountsRequest(ctx, cfg, mockAccountApi)
+			listProjectsResponse := getListAccountsResponse(accountID, expectedProjectID)
 			httpSuccessResponse := &http.Response{
 				Status:     "200 OK",
 				StatusCode: 200,
 			}
 
-			mockProjectApi.EXPECT().ListProjects(ctx, testCase.AccountID).Return(*listProjectsRequest).Times(1)
-			mockProjectApi.EXPECT().ListProjectsExecute(*listProjectsRequest).Return(*listProjectsResponse, httpSuccessResponse, nil).Times(1)
+			mockAccountApi.EXPECT().ListAccounts(ctx).Return(*listProjectsRequest).Times(1)
+			mockAccountApi.EXPECT().ListAccountsExecute(*listProjectsRequest).Return(*listProjectsResponse, httpSuccessResponse, nil).Times(1)
 
 			gotProjectID, gotStatus, gotError := getProjectId(ctx, apiClient, testCase.AccountID)
 			if gotProjectID != expectedProjectID || gotStatus != expectedStatus || gotError != expectedError {
