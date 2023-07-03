@@ -1,0 +1,22 @@
+---
+page_title: "{{.Name}} {{.Type}} - {{.RenderedProviderName}}"
+description: |-
+{{ .Description | plainmarkdown | trimspace | prefixlines "  " }}
+---
+
+# {{.Name}} ({{.Type}})
+
+{{ .Description | trimspace }}
+
+
+## Example Usage
+
+To invite a user with predefined built-in roles like Admin, Developer, Viewer
+
+{{ tffile "examples/resources/ybm_user/built-in-role-user.tf" }}
+
+To invite a user with custom user defined roles
+
+{{ tffile "examples/resources/ybm_user/custom-role-user.tf" }}
+
+{{ .SchemaMarkdown | trimspace }}
