@@ -185,3 +185,20 @@ type User struct {
 	UserState types.String `tfsdk:"user_state"`
 	UserID    types.String `tfsdk:"user_id"`
 }
+
+type Role struct {
+	AccountID               types.String     `tfsdk:"account_id"`
+	ProjectID               types.String     `tfsdk:"project_id"`
+	RoleID                  types.String     `tfsdk:"role_id"`
+	RoleName                types.String     `tfsdk:"role_name"`
+	RoleDescription         types.String     `tfsdk:"role_description"`
+	PermissionList          []PermissionInfo `tfsdk:"permission_list"`
+	EffectivePermissionList []PermissionInfo `tfsdk:"effective_permission_list"`
+	Users                   []types.String   `tfsdk:"users"`
+	ApiKeys                 []types.String   `tfsdk:"api_keys"`
+}
+
+type PermissionInfo struct {
+	ResourceType    types.String   `tfsdk:"resource_type"`
+	OperationGroups []types.String `tfsdk:"operation_groups"`
+}
