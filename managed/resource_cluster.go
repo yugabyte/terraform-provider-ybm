@@ -985,6 +985,38 @@ func pauseCluster(ctx context.Context, apiClient *openapiclient.APIClient, accou
 
 }
 
+func editClusterCmk(ctx context.Context, apiClient *openapiclient.APIClient, accountId string, projectId string, clusterId string, cmkSpec openapiclient.CMKSpec) (err error) {
+	_, res, err := apiClient.ClusterApi.EditClusterCMK(context.Background(), accountId, projectId, clusterId).CMKSpec(cmkSpec).Execute()
+	if err != nil {
+		errMsg := getErrorMessage(res, err)
+		if len(errMsg) > 10000 {
+			return errors.New("Could not edit the cluster CMK. " + errMsg[:10000])
+		}
+		return errors.New("Could not edit the cluster CMK. " + errMsg)
+	}
+
+	// read status, wait for status to be done
+	retryPolicy := retry.NewConstant(10 * time.Second)
+	retryPolicy = retry.WithMaxDuration(1200*time.Second, retryPolicy)
+	err = retry.Do(ctx, retryPolicy, func(ctx context.Context) error {
+		clusterState, readInfoOK, message := getClusterState(ctx, accountId, projectId, clusterId, apiClient)
+		if readInfoOK {
+			if strings.EqualFold(clusterState, "Active") {
+				return nil
+			}
+		} else {
+			return retry.RetryableError(errors.New("Unable to get cluster state: " + message))
+		}
+		return retry.RetryableError(errors.New("Cluster CMK is getting updated."))
+	})
+
+	if err != nil {
+		return errors.New("Unable to edit cluster CMK. " + "The operation timed out waiting to edit CMK.")
+	}
+
+	return nil
+}
+
 func resumeCluster(ctx context.Context, apiClient *openapiclient.APIClient, accountId string, projectId string, clusterId string) (err error) {
 
 	_, response, err := apiClient.ClusterApi.ResumeCluster(ctx, accountId, projectId, clusterId).Execute()
@@ -1505,17 +1537,15 @@ func (r resourceCluster) Update(ctx context.Context, req tfsdk.UpdateResourceReq
 	}
 
 	if plan.CMKSpec != nil {
-		cmkSpecNew, err := createCmkSpec(plan)
-		if err == nil {
-			_, res, err := apiClient.ClusterApi.EditClusterCMK(context.Background(), accountId, projectId, clusterId).CMKSpec(*cmkSpecNew).Execute()
+		cmkSpec, err := createCmkSpec(plan)
+		if err != nil {
+			resp.Diagnostics.AddError("Error creating CMK Spec: ", err.Error())
+		} else {
+			err = editClusterCmk(ctx, apiClient, accountId, projectId, clusterId, *cmkSpec)
 			if err != nil {
-				errorMessage := getErrorMessage(res, err)
-				resp.Diagnostics.AddError("Unable to update cluster CMK", errorMessage)
+				resp.Diagnostics.AddError("Cluster CMK update failed: ", err.Error())
 				return
 			}
-		} else {
-			resp.Diagnostics.AddError("Unable to create CMK spec", err.Error())
-			return
 		}
 	}
 
