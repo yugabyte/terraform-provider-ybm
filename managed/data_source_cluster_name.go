@@ -113,7 +113,130 @@ func (r dataClusterNameType) GetSchema(_ context.Context) (tfsdk.Schema, diag.Di
 					},
 				}),
 			},
-
+			"cmk_spec": {
+				Description: "KMS Provider Configuration.",
+				Computed:    true,
+				Attributes: tfsdk.SingleNestedAttributes(map[string]tfsdk.Attribute{
+					"provider_type": {
+						Description: "CMK Provider Type.",
+						Type:        types.StringType,
+						Computed:    true,
+					},
+					"is_enabled": {
+						Description: "Is Enabled",
+						Type:        types.BoolType,
+						Computed:    true,
+					},
+					"aws_cmk_spec": {
+						Description: "AWS CMK Provider Configuration.",
+						Computed:    true,
+						Attributes: tfsdk.SingleNestedAttributes(map[string]tfsdk.Attribute{
+							"access_key": {
+								Description: "Access Key",
+								Type:        types.StringType,
+								Computed:    true,
+							},
+							"secret_key": {
+								Description: "Secret Key",
+								Type:        types.StringType,
+								Computed:    true,
+							},
+							"arn_list": {
+								Description: "AWS ARN List",
+								Type:        types.ListType{ElemType: types.StringType},
+								Computed:    true,
+							},
+						}),
+					},
+					"gcp_cmk_spec": {
+						Description: "GCP CMK Provider Configuration.",
+						Computed:    true,
+						Attributes: tfsdk.SingleNestedAttributes(map[string]tfsdk.Attribute{
+							"key_ring_name": {
+								Description: "Key Ring Name",
+								Type:        types.StringType,
+								Computed:    true,
+							},
+							"key_name": {
+								Description: "Key Name",
+								Type:        types.StringType,
+								Computed:    true,
+							},
+							"location": {
+								Description: "Location",
+								Type:        types.StringType,
+								Computed:    true,
+							},
+							"protection_level": {
+								Description: "Key Protection Level",
+								Type:        types.StringType,
+								Computed:    true,
+							},
+							"gcp_service_account": {
+								Description: "GCP Service Account",
+								Computed:    true,
+								Attributes: tfsdk.SingleNestedAttributes(map[string]tfsdk.Attribute{
+									"type": {
+										Description: "Service Account Type",
+										Type:        types.StringType,
+										Computed:    true,
+									},
+									"project_id": {
+										Description: "GCP Project ID",
+										Type:        types.StringType,
+										Computed:    true,
+									},
+									"private_key": {
+										Description: "Private Key",
+										Type:        types.StringType,
+										Computed:    true,
+									},
+									"private_key_id": {
+										Description: "Private Key ID",
+										Type:        types.StringType,
+										Computed:    true,
+									},
+									"client_email": {
+										Description: "Client Email",
+										Type:        types.StringType,
+										Computed:    true,
+									},
+									"client_id": {
+										Description: "Client ID",
+										Type:        types.StringType,
+										Computed:    true,
+									},
+									"auth_uri": {
+										Description: "Auth URI",
+										Type:        types.StringType,
+										Computed:    true,
+									},
+									"token_uri": {
+										Description: "Token URI",
+										Type:        types.StringType,
+										Computed:    true,
+									},
+									"auth_provider_x509_cert_url": {
+										Description: "Auth Provider X509 Cert URL",
+										Type:        types.StringType,
+										Computed:    true,
+									},
+									"client_x509_cert_url": {
+										Description: "Client X509 Cert URL",
+										Type:        types.StringType,
+										Computed:    true,
+									},
+									"universe_domain": {
+										Description: "Google Universe Domain",
+										Type:        types.StringType,
+										Computed:    true,
+									},
+								}),
+							},
+						}),
+					},
+				}),
+			},
 			"cluster_tier": {
 				Description: "FREE (Sandbox) or PAID (Dedicated).",
 				Type:        types.StringType,
@@ -316,6 +439,7 @@ func (r dataClusterName) Read(ctx context.Context, req tfsdk.ReadDataSourceReque
 	}
 	backUpSchedule = append(backUpSchedule, backUpInfo)
 	cluster, readOK, message := resourceClusterRead(ctx, accountId, projectId, clusterId, backUpSchedule, make([]string, 0), true, make([]string, 0), true, apiClient)
+
 	if !readOK {
 		resp.Diagnostics.AddError("Unable to read the state of the cluster", message)
 		return
