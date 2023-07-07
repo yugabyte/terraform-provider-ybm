@@ -41,6 +41,7 @@ data "ybm_cluster" "example_cluster"{
 - `cluster_tier` (String) FREE (Sandbox) or PAID (Dedicated).
 - `cluster_type` (String) The type of the cluster.
 - `cluster_version` (String)
+- `cmk_spec` (Attributes) KMS Provider Configuration. (see [below for nested schema](#nestedatt--cmk_spec))
 - `credentials` (Attributes) (see [below for nested schema](#nestedatt--credentials))
 - `database_track` (String) The track of the database. Stable or Preview.
 - `desired_state` (String) The desired state of the database, Active or Paused. This parameter can be used to pause/resume a cluster.
@@ -81,6 +82,57 @@ Read-Only:
 - `num_nodes` (Number)
 - `region` (String)
 - `vpc_id` (String)
+
+
+<a id="nestedatt--cmk_spec"></a>
+### Nested Schema for `cmk_spec`
+
+Read-Only:
+
+- `aws_cmk_spec` (Attributes) AWS CMK Provider Configuration. (see [below for nested schema](#nestedatt--cmk_spec--aws_cmk_spec))
+- `gcp_cmk_spec` (Attributes) GCP CMK Provider Configuration. (see [below for nested schema](#nestedatt--cmk_spec--gcp_cmk_spec))
+- `is_enabled` (Boolean) Is Enabled
+- `provider_type` (String) CMK Provider Type.
+
+<a id="nestedatt--cmk_spec--aws_cmk_spec"></a>
+### Nested Schema for `cmk_spec.aws_cmk_spec`
+
+Read-Only:
+
+- `access_key` (String) Access Key
+- `arn_list` (List of String) AWS ARN List
+- `secret_key` (String) Secret Key
+
+
+<a id="nestedatt--cmk_spec--gcp_cmk_spec"></a>
+### Nested Schema for `cmk_spec.gcp_cmk_spec`
+
+Read-Only:
+
+- `gcp_service_account` (Attributes) GCP Service Account (see [below for nested schema](#nestedatt--cmk_spec--gcp_cmk_spec--gcp_service_account))
+- `key_name` (String) Key Name
+- `key_ring_name` (String) Key Ring Name
+- `location` (String) Location
+- `protection_level` (String) Key Protection Level
+
+<a id="nestedatt--cmk_spec--gcp_cmk_spec--gcp_service_account"></a>
+### Nested Schema for `cmk_spec.gcp_cmk_spec.gcp_service_account`
+
+Read-Only:
+
+- `auth_provider_x509_cert_url` (String) Auth Provider X509 Cert URL
+- `auth_uri` (String) Auth URI
+- `client_email` (String) Client Email
+- `client_id` (String) Client ID
+- `client_x509_cert_url` (String) Client X509 Cert URL
+- `private_key` (String) Private Key
+- `private_key_id` (String) Private Key ID
+- `project_id` (String) GCP Project ID
+- `token_uri` (String) Token URI
+- `type` (String) Service Account Type
+- `universe_domain` (String) Google Universe Domain
+
+
 
 
 <a id="nestedatt--credentials"></a>
