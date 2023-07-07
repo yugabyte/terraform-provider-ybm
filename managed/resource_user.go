@@ -132,6 +132,13 @@ func (r resourceUser) Create(ctx context.Context, req tfsdk.CreateResourceReques
 		resp.Diagnostics.AddError("Unable to invite user", errMsg)
 		return
 	}
+	if len(roleResp.Data) < 1 {
+		resp.Diagnostics.AddError(
+			"Unable to invite user",
+			"The role provided for the user to be invited does not exist.",
+		)
+		return
+	}
 	roleId := roleResp.Data[0].Info.Id
 
 	users := []openapiclient.InviteUserSpec{}
@@ -149,6 +156,10 @@ func (r resourceUser) Create(ctx context.Context, req tfsdk.CreateResourceReques
 	if err != nil {
 		errMsg := getErrorMessage(response, err)
 		resp.Diagnostics.AddError("Unable to invite user ", errMsg)
+		return
+	}
+	if !userResp.Data.GetUserList()[0].GetIsSuccessful() {
+		resp.Diagnostics.AddError("Unable to invite user ", userResp.Data.GetUserList()[0].GetErrorMessage())
 		return
 	}
 	userId := userResp.Data.GetUserList()[0].GetInviteUserData().Info.Id
@@ -235,12 +246,27 @@ func (r resourceUser) Update(ctx context.Context, req tfsdk.UpdateResourceReques
 	userId := state.UserID.Value
 	email := state.Email.Value
 
+	if plan.Email.Value != email {
+		resp.Diagnostics.AddError(
+			"User Email modified for existing user",
+			"The email was modified for an existing user. Do not modify this field in the provider when updating an existing user. Only the user role can be modified.",
+		)
+		return
+	}
+
 	roleName := plan.RoleName.Value
 
 	roleResp, response, err := apiClient.RoleApi.ListRbacRoles(ctx, accountId).RoleTypes("ALL").Limit(100).DisplayName(roleName).Execute()
 	if err != nil {
 		errMsg := getErrorMessage(response, err)
 		resp.Diagnostics.AddError("Unable to modify user role", errMsg)
+		return
+	}
+	if len(roleResp.Data) < 1 {
+		resp.Diagnostics.AddError(
+			"Unable to modify user role",
+			"The role provided for the user does not exist.",
+		)
 		return
 	}
 	roleId := roleResp.Data[0].Info.Id
