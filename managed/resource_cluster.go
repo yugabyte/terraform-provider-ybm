@@ -371,7 +371,7 @@ and modify the backup schedule of the cluster being created.`,
 				Computed: true,
 			},
 			"database_track": {
-				Description: "The track of the database. Stable or Preview.",
+				Description: "The track of the database. Production or Innovation or Preview.",
 				Type:        types.StringType,
 				Optional:    true,
 				Computed:    true,

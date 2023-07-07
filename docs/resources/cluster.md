@@ -416,7 +416,7 @@ resource "ybm_cluster" "single_region_cluster" {
 - `cluster_endpoints` (Map of String) The endpoints used to connect to the cluster by region.
 - `cluster_id` (String) The ID of the cluster. Created automatically when a cluster is created. Used to get a specific cluster.
 - `cmk_spec` (Attributes) KMS Provider Configuration. (see [below for nested schema](#nestedatt--cmk_spec))
-- `database_track` (String) The track of the database. Stable or Preview.
+- `database_track` (String) The track of the database. Production or Innovation or Preview.
 - `desired_state` (String) The desired state of the database, Active or Paused. This parameter can be used to pause/resume a cluster.
 - `fault_tolerance` (String) The fault tolerance of the cluster. NONE, NODE, ZONE or REGION.
 - `restore_backup_id` (String) The ID of the backup to be restored to the cluster.

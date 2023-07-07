@@ -89,7 +89,7 @@ func getTrackId(ctx context.Context, apiClient *openapiclient.APIClient, account
 
 	for _, track := range tracksData {
 		tflog.Debug(ctx, fmt.Sprintf("Required track name:  %v, current track name: %v", track.Spec.GetName(), trackName))
-		if track.Spec.GetName() == trackName {
+		if track.Spec.GetName() == trackName || (track.Spec.GetName() == "Production" && trackName == "Stable") {
 			return track.Info.GetId(), true, ""
 		}
 	}
