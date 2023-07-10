@@ -156,5 +156,6 @@ func (p *provider) GetDataSources(_ context.Context) (map[string]tfsdk.DataSourc
 	return map[string]tfsdk.DataSourceType{
 		"ybm_backup":  dataSourceBackupType{},
 		"ybm_cluster": dataClusterNameType{},
+		"ybm_vpc":     dataSourceVPCType{},
 	}, nil
 }
