@@ -20,7 +20,7 @@ type dataSourceVPCType struct{}
 
 func (r dataSourceVPCType) GetSchema(_ context.Context) (tfsdk.Schema, diag.Diagnostics) {
 	return tfsdk.Schema{
-		Description: `The resource to create a VPC in YugabyteDB Managed.`,
+		Description: `The data source to fetch VPC in YugabyteDB Managed by VPC name or ID.`,
 		Attributes: map[string]tfsdk.Attribute{
 			"account_id": {
 				Description: "The ID of the account this VPC belongs to.",
