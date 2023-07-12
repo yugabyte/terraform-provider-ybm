@@ -41,7 +41,7 @@ func (r resourceVPCType) GetSchema(_ context.Context) (tfsdk.Schema, diag.Diagno
 				Optional:    true,
 			},
 			"external_vpc_id": {
-				Description: "The ID of the cloud provider(AWS/GCP/AZzure) VPC where YBM resources are created",
+				Description: "The ID of the cloud provider(AWS/GCP/Azure) VPC where YBM resources are created",
 				Type:        types.StringType,
 				Computed:    true,
 			},

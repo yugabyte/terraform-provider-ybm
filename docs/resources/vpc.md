@@ -78,7 +78,7 @@ resource "ybm_vpc" "example-vpc" {
 ### Read-Only
 
 - `account_id` (String) The ID of the account this VPC belongs to.
-- `external_vpc_id` (String) The ID of the cloud provider(AWS/GCP/AZzure) VPC where YBM resources are created
+- `external_vpc_id` (String) The ID of the cloud provider(AWS/GCP/Azure) VPC where YBM resources are created
 - `project_id` (String) The ID of the project this VPC belongs to.
 
 <a id="nestedatt--region_cidr_info"></a>

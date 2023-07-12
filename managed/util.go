@@ -35,7 +35,7 @@ func isDiskIopsValid(cloudType string, clusterTier string, diskIops int64) (bool
 			return false, err
 		}
 	} else {
-		if diskIops % 1000 != 0 {
+		if diskIops%1000 != 0 {
 			err = "Disk IOPS must be a multiple of 1000"
 			return false, err
 		}

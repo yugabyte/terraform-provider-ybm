@@ -6,6 +6,7 @@ package managed
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"strings"
 
@@ -131,4 +132,30 @@ func getAccountId(ctx context.Context, apiClient *openapiclient.APIClient) (acco
 	}
 	accountId = accountData[0].Info.Id
 	return accountId, true, ""
+}
+
+// Utils functions
+
+// GetApiErrorDetails will return the api Error message if present
+// If not present will return the original err.Error()
+func GetApiErrorDetails(err error) string {
+	switch castedError := err.(type) {
+	case openapiclient.GenericOpenAPIError:
+		if v := getAPIError(castedError.Body()); v != nil {
+			if d, ok := v.GetErrorOk(); ok {
+				return fmt.Sprintf("%s%s", d.GetDetail(), "\n")
+			}
+		}
+	}
+	return err.Error()
+
+}
+
+func getAPIError(b []byte) *openapiclient.ApiError {
+	apiError := openapiclient.NewApiErrorWithDefaults()
+	err := json.Unmarshal(b, &apiError)
+	if err != nil {
+		return nil
+	}
+	return apiError
 }
