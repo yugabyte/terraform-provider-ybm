@@ -13,6 +13,7 @@ import (
 
 	"time"
 
+	"github.com/hashicorp/terraform-plugin-framework-validators/schemavalidator"
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
@@ -78,6 +79,14 @@ and modify the backup schedule of the cluster being created.`,
 						Required: true,
 					},
 					"vpc_id": {
+						Type:     types.StringType,
+						Optional: true,
+						Computed: true,
+						Validators: []tfsdk.AttributeValidator{
+							schemavalidator.ConflictsWith(path.MatchRelative().AtParent().AtName("vpc_name")),
+						},
+					},
+					"vpc_name": {
 						Type:     types.StringType,
 						Optional: true,
 						Computed: true,
@@ -443,7 +452,7 @@ func EditBackupSchedule(ctx context.Context, backupScheduleStruct BackupSchedule
 	return nil
 }
 
-func createClusterSpec(ctx context.Context, apiClient *openapiclient.APIClient, accountId string, plan Cluster, clusterExists bool) (clusterSpec *openapiclient.ClusterSpec, clusterSpecOK bool, errorMessage string) {
+func createClusterSpec(ctx context.Context, apiClient *openapiclient.APIClient, accountId string, projectId string, plan Cluster, clusterExists bool) (clusterSpec *openapiclient.ClusterSpec, clusterSpecOK bool, errorMessage string) {
 
 	var diskSizeGb int32
 	var diskSizeOK bool
@@ -477,6 +486,14 @@ func createClusterSpec(ctx context.Context, apiClient *openapiclient.APIClient, 
 					openapiclient.CloudEnum(plan.CloudType.Value),
 					regionInfo.Region.Value), int32(regionNodes)),
 		)
+		if vpcName := regionInfo.VPCName.Value; vpcName != "" {
+			vpcData, err := getVPCByName(context.Background(), accountId, projectId, vpcName, apiClient)
+			if err != nil {
+				return nil, false, err.Error()
+			}
+
+			regionInfo.VPCID.Value = vpcData.Info.Id
+		}
 		if vpcID := regionInfo.VPCID.Value; vpcID != "" {
 			info.PlacementInfo.SetVpcId(vpcID)
 		}
@@ -723,13 +740,33 @@ func (r resourceCluster) Create(ctx context.Context, req tfsdk.CreateResourceReq
 		return
 	}
 
+	for _, regionInfo := range plan.ClusterRegionInfo {
+		vpcNamePresent := false
+		vpcIDPresent := false
+		if (!regionInfo.VPCName.Unknown && !regionInfo.VPCName.Null) || regionInfo.VPCName.Value != "" {
+			vpcNamePresent = true
+		}
+		if (!regionInfo.VPCID.Unknown && !regionInfo.VPCID.Null) || regionInfo.VPCID.Value != "" {
+			vpcIDPresent = true
+		}
+		if vpcNamePresent {
+			if vpcIDPresent {
+				resp.Diagnostics.AddError(
+					"Specify VPC name or VPC ID",
+					"To select a vpc, use either vpc_name or vpc_id. Don't provide both.",
+				)
+				return
+			}
+		}
+	}
+
 	projectId, getProjectOK, message := getProjectId(ctx, apiClient, accountId)
 	if !getProjectOK {
 		resp.Diagnostics.AddError("Unable to get project ID ", message)
 		return
 	}
 
-	clusterSpec, clusterOK, message := createClusterSpec(ctx, apiClient, accountId, plan, false)
+	clusterSpec, clusterOK, message := createClusterSpec(ctx, apiClient, accountId, projectId, plan, false)
 	if !clusterOK {
 		resp.Diagnostics.AddError("Unable to create cluster spec", message)
 		return
@@ -1303,10 +1340,20 @@ func resourceClusterRead(ctx context.Context, accountId string, projectId string
 		region := info.PlacementInfo.CloudInfo.GetRegion()
 		destIndex := getClusterRegionIndex(region, readOnly, regionIndexMap, localIndex)
 		if destIndex < len(respClusterRegionInfo) {
+			vpcID := info.PlacementInfo.GetVpcId()
+			vpcName := ""
+			if vpcID != "" {
+				vpcData, err := getVPCByID(context.Background(), accountId, projectId, info.PlacementInfo.GetVpcId(), apiClient)
+				if err != nil {
+					return cluster, false, err.Error()
+				}
+				vpcName = vpcData.Spec.Name
+			}
 			regionInfo := RegionInfo{
 				Region:   types.String{Value: region},
 				NumNodes: types.Int64{Value: int64(info.PlacementInfo.GetNumNodes())},
-				VPCID:    types.String{Value: info.PlacementInfo.GetVpcId()},
+				VPCID:    types.String{Value: vpcID},
+				VPCName:  types.String{Value: vpcName},
 			}
 			clusterRegionInfo[destIndex] = regionInfo
 		}
@@ -1441,6 +1488,26 @@ func (r resourceCluster) Update(ctx context.Context, req tfsdk.UpdateResourceReq
 		}
 	}
 
+	for _, regionInfo := range plan.ClusterRegionInfo {
+		vpcNamePresent := false
+		vpcIDPresent := false
+		if (!regionInfo.VPCName.Unknown && !regionInfo.VPCName.Null) || regionInfo.VPCName.Value != "" {
+			vpcNamePresent = true
+		}
+		if (!regionInfo.VPCID.Unknown && !regionInfo.VPCID.Null) || regionInfo.VPCID.Value != "" {
+			vpcIDPresent = true
+		}
+		if vpcNamePresent {
+			if vpcIDPresent {
+				resp.Diagnostics.AddError(
+					"Specify VPC name or VPC ID",
+					"To select a vpc, use either vpc_name or vpc_id. Don't provide both.",
+				)
+				return
+			}
+		}
+	}
+
 	scheduleResp, r1, err := apiClient.BackupApi.ListBackupSchedules(ctx, accountId, projectId).EntityId(clusterId).Execute()
 	if err != nil {
 		resp.Diagnostics.AddError("Could not fetch the backup schedule for the cluster "+r1.Status, "Try again")
@@ -1451,7 +1518,7 @@ func (r resourceCluster) Update(ctx context.Context, req tfsdk.UpdateResourceReq
 	params := list[0].GetInfo().TaskParams
 	backupDescription := params["description"].(string)
 
-	clusterSpec, clusterOK, message := createClusterSpec(ctx, apiClient, accountId, plan, false)
+	clusterSpec, clusterOK, message := createClusterSpec(ctx, apiClient, accountId, projectId, plan, false)
 	if !clusterOK {
 		resp.Diagnostics.AddError("Unable to create cluster specification ", message)
 		return
