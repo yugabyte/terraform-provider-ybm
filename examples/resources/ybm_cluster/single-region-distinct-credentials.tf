@@ -19,7 +19,8 @@ resource "ybm_cluster" "single_region_cluster" {
     {
       region    = "us-west1"
       num_nodes = 3
-      vpc_id    = "example-vpc-id"  #Optional
+      vpc_id    = "example-vpc-id" #Optional
+      #vpc_name = "example-vpc-name" #Optional You can also use the VPC Name in place of vpc_id
     }
   ]
   cluster_tier           = "PAID"
@@ -27,7 +28,7 @@ resource "ybm_cluster" "single_region_cluster" {
   fault_tolerance        = "ZONE"
   node_config = {
     num_cores    = 2
-    disk_size_gb = 50  #Optional
+    disk_size_gb = 50 #Optional
   }
   backup_schedules = [
     {
@@ -35,7 +36,7 @@ resource "ybm_cluster" "single_region_cluster" {
       retention_period_in_days = 10
       time_interval_in_days    = 10
     }
-  ]  #Optional
+  ] #Optional
   credentials = {
     ysql_username = "example_ysql_user"
     ysql_password = var.ysql_password

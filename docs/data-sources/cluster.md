@@ -82,6 +82,7 @@ Read-Only:
 - `num_nodes` (Number)
 - `region` (String)
 - `vpc_id` (String)
+- `vpc_name` (String)
 
 
 <a id="nestedatt--cmk_spec"></a>
