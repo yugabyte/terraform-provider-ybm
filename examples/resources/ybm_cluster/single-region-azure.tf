@@ -13,10 +13,11 @@ resource "ybm_cluster" "single_region_cluster" {
       region    = "eastus"
       num_nodes = 3
       vpc_id    = ybm_vpc.example-vpc.vpc_id # Azure requires a VPC
+      #vpc_name = "example-vpc-name" # You can also use the VPC Name in place of vpc_id
     }
   ]
   cluster_tier           = "PAID" # Azure only supports PAID tier
-  cluster_allow_list_ids = [] # Optional
+  cluster_allow_list_ids = []     # Optional
   fault_tolerance        = "ZONE"
   node_config = {
     num_cores    = 2
@@ -28,7 +29,7 @@ resource "ybm_cluster" "single_region_cluster" {
       retention_period_in_days = 10
       time_interval_in_days    = 10
     }
-  ]  #Optional
+  ] #Optional
   credentials = {
     username = "example_user"
     password = var.password

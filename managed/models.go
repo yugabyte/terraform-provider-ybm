@@ -78,6 +78,7 @@ type RegionInfo struct {
 	Region   types.String `tfsdk:"region"`
 	NumNodes types.Int64  `tfsdk:"num_nodes"`
 	VPCID    types.String `tfsdk:"vpc_id"`
+	VPCName  types.String `tfsdk:"vpc_name"`
 }
 
 type NodeConfig struct {
@@ -152,6 +153,7 @@ type ReadReplicaInfo struct {
 	NumReplicas types.Int64  `tfsdk:"num_replicas"`
 	Region      types.String `tfsdk:"region"`
 	VPCID       types.String `tfsdk:"vpc_id"`
+	VPCName     types.String `tfsdk:"vpc_name"`
 	NodeConfig  NodeConfig   `tfsdk:"node_config"`
 	MultiZone   types.Bool   `tfsdk:"multi_zone"`
 	Endpoint    types.String `tfsdk:"endpoint"`

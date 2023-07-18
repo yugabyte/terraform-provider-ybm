@@ -11,6 +11,8 @@ import (
 
 	"time"
 
+	"github.com/hashicorp/terraform-plugin-framework-validators/schemavalidator"
+	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
@@ -46,6 +48,7 @@ func (r resourceReadReplicasType) GetSchema(ctx context.Context) (tfsdk.Schema, 
 						Type:        types.StringType,
 						Optional:    true,
 						Computed:    true,
+						Validators:  []tfsdk.AttributeValidator{stringvalidator.OneOf("AWS", "GCP", "AZURE")},
 					},
 					"num_nodes": {
 						Description: "The number of nodes of the read replica.",
@@ -65,7 +68,19 @@ func (r resourceReadReplicasType) GetSchema(ctx context.Context) (tfsdk.Schema, 
 					"vpc_id": {
 						Description: "The ID of the VPC where the read replica is deployed.",
 						Type:        types.StringType,
-						Required:    true,
+						Optional:    true,
+						Computed:    true,
+					},
+					"vpc_name": {
+						Description: "The name of the VPC where the read replica is deployed.",
+						Type:        types.StringType,
+						Optional:    true,
+						Computed:    true,
+						Validators: []tfsdk.AttributeValidator{
+							schemavalidator.ExactlyOneOf(path.MatchRelative().AtParent().AtName("vpc_name"),
+								path.MatchRelative().AtParent().AtName("vpc_id"),
+							),
+						},
 					},
 					"multi_zone": {
 						Description: "Set whether to spread the nodes in this region across zones. Defaults to true.",
@@ -118,7 +133,7 @@ type resourceReadReplicas struct {
 	p provider
 }
 
-func createReadReplicasSpec(ctx context.Context, apiClient *openapiclient.APIClient, accountId string, plan ReadReplicas) (readReplicasSpec []openapiclient.ReadReplicaSpec, readReplicaSpecOK bool, errorMessage string) {
+func createReadReplicasSpec(ctx context.Context, apiClient *openapiclient.APIClient, accountId string, projectId string, plan ReadReplicas) (readReplicasSpec []openapiclient.ReadReplicaSpec, readReplicaSpecOK bool, errorMessage string) {
 
 	readReplicasInfo := plan.ReadReplicasInfo
 	// Default tier "PAID" used for read replica. Tier is used to get memory from cpu cores using instance types.
@@ -141,6 +156,16 @@ func createReadReplicasSpec(ctx context.Context, apiClient *openapiclient.APICli
 		if !(readReplica.NodeConfig.DiskIops.IsUnknown() || readReplica.NodeConfig.DiskIops.IsNull()) {
 			clusterNodeInfo.SetDiskIops(int32(readReplica.NodeConfig.DiskIops.Value))
 		}
+
+		if vpcName := readReplica.VPCName.Value; vpcName != "" {
+			vpcData, err := getVPCByName(context.Background(), accountId, projectId, vpcName, apiClient)
+			if err != nil {
+				return nil, false, err.Error()
+			}
+
+			readReplica.VPCID.Value = vpcData.Info.Id
+		}
+
 		placementInfo := *openapiclient.NewPlacementInfo(
 			*openapiclient.NewCloudInfo(
 				openapiclient.CloudEnum(cloud),
@@ -222,9 +247,29 @@ func (r resourceReadReplicas) Create(ctx context.Context, req tfsdk.CreateResour
 		resp.Diagnostics.AddError("Unable to get project ID", message)
 		return
 	}
+
+	for _, rrInfo := range plan.ReadReplicasInfo {
+		vpcNamePresent := false
+		vpcIDPresent := false
+		if (!rrInfo.VPCName.Unknown && !rrInfo.VPCName.Null) || rrInfo.VPCName.Value != "" {
+			vpcNamePresent = true
+		}
+		if (!rrInfo.VPCID.Unknown && !rrInfo.VPCID.Null) || rrInfo.VPCID.Value != "" {
+			vpcIDPresent = true
+		}
+		if vpcNamePresent == vpcIDPresent {
+			resp.Diagnostics.AddError(
+				"Specify VPC name or VPC ID",
+				"To select a vpc, use either vpc_name or vpc_id. Don't provide both.",
+			)
+			return
+		}
+
+	}
+
 	clusterId := plan.PrimaryClusterID.Value
 
-	readReplicasSpec, readReplicasOK, message := createReadReplicasSpec(ctx, apiClient, accountId, plan)
+	readReplicasSpec, readReplicasOK, message := createReadReplicasSpec(ctx, apiClient, accountId, projectId, plan)
 	if !readReplicasOK {
 		resp.Diagnostics.AddError("Unable to create read replicas spec", message)
 		return
@@ -338,6 +383,11 @@ func resourceReadReplicasRead(ctx context.Context, accountId string, projectId s
 		readReplicaInfo.NumReplicas.Value = int64(readReplicaSpec.PlacementInfo.GetNumReplicas())
 		readReplicaInfo.Region.Value = readReplicaSpec.PlacementInfo.CloudInfo.GetRegion()
 		readReplicaInfo.VPCID.Value = readReplicaSpec.PlacementInfo.GetVpcId()
+		vpcData, err := getVPCByID(context.Background(), accountId, projectId, readReplicaSpec.PlacementInfo.GetVpcId(), apiClient)
+		if err != nil {
+			return readReplicas, false, err.Error()
+		}
+		readReplicaInfo.VPCName.Value = vpcData.Spec.Name
 		readReplicaInfo.NodeConfig.NumCores.Value = int64(readReplicaSpec.NodeInfo.NumCores)
 		readReplicaInfo.NodeConfig.DiskSizeGb.Value = int64(readReplicaSpec.NodeInfo.DiskSizeGb)
 		readReplicaInfo.MultiZone.Value = readReplicaSpec.PlacementInfo.GetMultiZone()
@@ -383,7 +433,26 @@ func (r resourceReadReplicas) Update(ctx context.Context, req tfsdk.UpdateResour
 
 	apiClient := r.p.client
 
-	readReplicasSpec, readReplicasOK, message := createReadReplicasSpec(ctx, apiClient, accountId, plan)
+	for _, rrInfo := range plan.ReadReplicasInfo {
+		vpcNamePresent := false
+		vpcIDPresent := false
+		if (!rrInfo.VPCName.Unknown && !rrInfo.VPCName.Null) || rrInfo.VPCName.Value != "" {
+			vpcNamePresent = true
+		}
+		if (!rrInfo.VPCID.Unknown && !rrInfo.VPCID.Null) || rrInfo.VPCID.Value != "" {
+			vpcIDPresent = true
+		}
+		if vpcNamePresent == vpcIDPresent {
+			resp.Diagnostics.AddError(
+				"Specify VPC name or VPC ID",
+				"To select a vpc, use either vpc_name or vpc_id. Don't provide both.",
+			)
+			return
+		}
+
+	}
+
+	readReplicasSpec, readReplicasOK, message := createReadReplicasSpec(ctx, apiClient, accountId, projectId, plan)
 	if !readReplicasOK {
 		resp.Diagnostics.AddError("Unable to create read replicas spec", message)
 		return

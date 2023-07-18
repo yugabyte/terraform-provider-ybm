@@ -54,12 +54,13 @@ Required:
 - `num_nodes` (Number) The number of nodes of the read replica.
 - `num_replicas` (Number) The number of replicas of the read replica.
 - `region` (String) The region of the read replica.
-- `vpc_id` (String) The ID of the VPC where the read replica is deployed.
 
 Optional:
 
 - `cloud_type` (String) The cloud provider where the read replica is deployed: AWS, AZURE or GCP. Default GCP.
 - `multi_zone` (Boolean) Set whether to spread the nodes in this region across zones. Defaults to true.
+- `vpc_id` (String) The ID of the VPC where the read replica is deployed.
+- `vpc_name` (String) The name of the VPC where the read replica is deployed.
 
 Read-Only:
 

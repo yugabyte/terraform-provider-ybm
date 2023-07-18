@@ -68,6 +68,10 @@ func (r dataClusterNameType) GetSchema(_ context.Context) (tfsdk.Schema, diag.Di
 						Type:     types.StringType,
 						Computed: true,
 					},
+					"vpc_name": {
+						Type:     types.StringType,
+						Computed: true,
+					},
 				}),
 			},
 
