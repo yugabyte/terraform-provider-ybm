@@ -22,3 +22,12 @@ description: |-
 {{ tffile "examples/resources/ybm_vpc/azure-vpc.tf" }}
 
 {{ .SchemaMarkdown | trimspace }}
+{{- if .HasImport }}
+
+## Import
+
+Import is supported using the following syntax:
+
+{{ codefile "shell" "examples/resources/ybm_vpc/import.sh" }}
+
+{{- end }}

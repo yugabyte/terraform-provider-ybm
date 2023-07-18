@@ -37,3 +37,14 @@ resource "ybm_allow_list" "example_allow_list" {
 - `account_id` (String) The ID of the account this allow list belongs to.
 - `cluster_ids` (Set of String) List of the IDs of the clusters the allow list is assigned to.
 - `project_id` (String) The ID of the project this allow list belongs to.
+
+## Import
+
+Import is supported using the following syntax:
+
+```shell
+# Network allow list can be imported using the network allow list name . 
+
+# Example:
+terraform import ybm_allow_list.my_resource_name my_network_allow_list_name
+```
