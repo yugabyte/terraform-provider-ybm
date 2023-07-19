@@ -140,7 +140,7 @@ func (r resourceAllowList) Create(ctx context.Context, req tfsdk.CreateResourceR
 		cidrList = append(cidrList, plan.CIDRList[i].Value)
 	}
 
-	allowListListResp, response, err := apiClient.NetworkApi.ListNetworkAllowLists(ctx, accountId, projectId).Execute()
+	allowListListResp, _, err := apiClient.NetworkApi.ListNetworkAllowLists(ctx, accountId, projectId).Execute()
 	if err != nil {
 		resp.Diagnostics.AddError("Unable to create allow list", err.Error())
 		return
@@ -154,7 +154,7 @@ func (r resourceAllowList) Create(ctx context.Context, req tfsdk.CreateResourceR
 
 	networkAllowListSpec := *openapiclient.NewNetworkAllowListSpec(allowListName, allowListDesc, cidrList) // NetworkAllowListSpec | Allow list specification (optional)
 
-	_, response, err = apiClient.NetworkApi.CreateNetworkAllowList(ctx, accountId, projectId).NetworkAllowListSpec(networkAllowListSpec).Execute()
+	_, response, err := apiClient.NetworkApi.CreateNetworkAllowList(ctx, accountId, projectId).NetworkAllowListSpec(networkAllowListSpec).Execute()
 	if err != nil {
 		errMsg := getErrorMessage(response, err)
 		resp.Diagnostics.AddError("Unable to create allow list ", errMsg)
