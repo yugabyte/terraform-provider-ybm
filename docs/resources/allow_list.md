@@ -48,3 +48,5 @@ Import is supported using the following syntax:
 # Example:
 terraform import ybm_allow_list.my_resource_name my_network_allow_list_name
 ```
+
+Since terraform 1.5.0 you can also use [generate-config-out](https://developer.hashicorp.com/terraform/language/import/generating-configuration), please check Guides>Imports section.
