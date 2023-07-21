@@ -1,0 +1,26 @@
+---
+page_title: "{{.Name}} {{.Type}} - {{.RenderedProviderName}}"
+description: |-
+{{ .Description | plainmarkdown | trimspace | prefixlines "  " }}
+---
+
+# {{.Name}} ({{.Type}})
+
+{{ .Description | trimspace }}
+
+
+## Example Usage
+
+{{ tffile "examples/resources/ybm_private_service_endpoint/resource.tf" }}
+
+{{ .SchemaMarkdown | trimspace }}
+{{- if .HasImport }}
+## Import
+
+Import is supported using the following syntax:
+
+{{ codefile "shell" "examples/resources/ybm_private_service_endpoint/import.sh" }}
+
+Since terraform 1.5.0 you can also use [generate-config-out](https://developer.hashicorp.com/terraform/language/import/generating-configuration), please check Guides>Imports section.
+
+{{- end }}
