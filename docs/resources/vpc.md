@@ -88,3 +88,17 @@ Optional:
 
 - `cidr` (String)
 - `region` (String)
+
+## Import
+
+Import is supported using the following syntax:
+
+```shell
+# VPC can be imported using the vpc id. 
+
+# Example:
+terraform import ybm_vpc.my_vpc_resource vpc_id
+```
+
+
+Since terraform 1.5.0 you can also use [generate-config-out](https://developer.hashicorp.com/terraform/language/import/generating-configuration), please check Guides>Imports section.

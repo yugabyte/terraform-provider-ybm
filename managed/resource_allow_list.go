@@ -140,31 +140,28 @@ func (r resourceAllowList) Create(ctx context.Context, req tfsdk.CreateResourceR
 		cidrList = append(cidrList, plan.CIDRList[i].Value)
 	}
 
-	allowListListResp, response, err := apiClient.NetworkApi.ListNetworkAllowLists(ctx, accountId, projectId).Execute()
+	allowListListResp, _, err := apiClient.NetworkApi.ListNetworkAllowLists(ctx, accountId, projectId).Execute()
 	if err != nil {
-		errMsg := getErrorMessage(response, err)
-		resp.Diagnostics.AddError("Unable to create allow list", errMsg)
+		resp.Diagnostics.AddError("Unable to create allow list", err.Error())
 		return
 	}
 
 	err = findDuplicateNetworkAllowList(allowListListResp.GetData(), allowListName)
 	if err != nil {
-		errMsg := getErrorMessage(response, err)
-		resp.Diagnostics.AddError("Unable to create allow list", errMsg)
+		resp.Diagnostics.AddError("Unable to create allow list", err.Error())
 		return
 	}
 
 	networkAllowListSpec := *openapiclient.NewNetworkAllowListSpec(allowListName, allowListDesc, cidrList) // NetworkAllowListSpec | Allow list specification (optional)
 
-	allowListResp, response, err := apiClient.NetworkApi.CreateNetworkAllowList(ctx, accountId, projectId).NetworkAllowListSpec(networkAllowListSpec).Execute()
+	_, response, err := apiClient.NetworkApi.CreateNetworkAllowList(ctx, accountId, projectId).NetworkAllowListSpec(networkAllowListSpec).Execute()
 	if err != nil {
 		errMsg := getErrorMessage(response, err)
 		resp.Diagnostics.AddError("Unable to create allow list ", errMsg)
 		return
 	}
-	allowListId := allowListResp.Data.Info.Id
 
-	allowList, readOK, message := resourceAllowListRead(accountId, projectId, allowListId, apiClient)
+	allowList, readOK, message := resourceAllowListRead(accountId, projectId, allowListName, apiClient)
 	if !readOK {
 		resp.Diagnostics.AddError("Unable to read the state of the allow list ", message)
 		return
@@ -184,9 +181,15 @@ func getIDsFromAllowListState(ctx context.Context, state tfsdk.State, allowList 
 	state.GetAttribute(ctx, path.Root("project_id"), &allowList.ProjectID)
 	state.GetAttribute(ctx, path.Root("cidr_list"), &allowList.CIDRList)
 	state.GetAttribute(ctx, path.Root("allow_list_id"), &allowList.AllowListID)
+	state.GetAttribute(ctx, path.Root("allow_list_name"), &allowList.AllowListName)
 }
 
-func resourceAllowListRead(accountId string, projectId string, allowListId string, apiClient *openapiclient.APIClient) (allowList AllowList, readOK bool, errorMessage string) {
+func resourceAllowListRead(accountId string, projectId string, allowListName string, apiClient *openapiclient.APIClient) (allowList AllowList, readOK bool, errorMessage string) {
+
+	allowListId, err := getNetworkAllowListIdByName(context.Background(), accountId, projectId, allowListName, *apiClient)
+	if err != nil {
+		return allowList, false, err.Error()
+	}
 	allowListResp, response, err := apiClient.NetworkApi.GetNetworkAllowList(context.Background(), accountId, projectId, allowListId).Execute()
 	if err != nil {
 		errMsg := getErrorMessage(response, err)
@@ -220,6 +223,21 @@ func (r resourceAllowList) Read(ctx context.Context, req tfsdk.ReadResourceReque
 	var state AllowList
 	getIDsFromAllowListState(ctx, req.State, &state)
 
+	var accountId, projectId, message string
+	var getAccountOK bool
+	apiClient := r.p.client
+	accountId, getAccountOK, message = getAccountId(context.Background(), apiClient)
+	if !getAccountOK {
+		resp.Diagnostics.AddError("unable to get account ID", message)
+		return
+	}
+
+	projectId, getProjectOK, message := getProjectId(context.Background(), apiClient, accountId)
+	if !getProjectOK {
+		resp.Diagnostics.AddError("unable to get project ID", message)
+		return
+	}
+
 	cidrList := []string{}
 	for i := range state.CIDRList {
 		cidrList = append(cidrList, state.CIDRList[i].Value)
@@ -228,7 +246,7 @@ func (r resourceAllowList) Read(ctx context.Context, req tfsdk.ReadResourceReque
 	tflog.Debug(ctx, "Allow List Read: CIDR List from state", map[string]interface{}{
 		"CIDR List": state.CIDRList})
 
-	allowList, readOK, message := resourceAllowListRead(state.AccountID.Value, state.ProjectID.Value, state.AllowListID.Value, r.p.client)
+	allowList, readOK, message := resourceAllowListRead(accountId, projectId, state.AllowListName.Value, apiClient)
 	if !readOK {
 		resp.Diagnostics.AddError("Unable to read the state of the allow list ", message)
 		return
@@ -274,15 +292,37 @@ func (r resourceAllowList) Delete(ctx context.Context, req tfsdk.DeleteResourceR
 
 // Import allow list
 func (r resourceAllowList) ImportState(ctx context.Context, req tfsdk.ImportResourceStateRequest, resp *tfsdk.ImportResourceStateResponse) {
-	// Save the import identifier in the id attribute
-	tfsdk.ResourceImportStatePassthroughID(ctx, path.Root("id"), req, resp)
+
+	resp.State.SetAttribute(ctx, path.Root("allow_list_name"), req.ID)
 }
 
 func findDuplicateNetworkAllowList(nals []openapiclient.NetworkAllowListData, name string) error {
-	for _, allowList := range nals {
-		if allowList.Spec.Name == name {
-			return fmt.Errorf("NetworkAllowList %v already exists", name)
-		}
+
+	if _, ok := findNetworkAllowList(nals, name); ok {
+		return fmt.Errorf("NetworkAllowList %v already exists", name)
 	}
 	return nil
+}
+
+func findNetworkAllowList(nals []openapiclient.NetworkAllowListData, name string) (openapiclient.NetworkAllowListData, bool) {
+	for _, allowList := range nals {
+		if allowList.Spec.Name == name {
+			return allowList, true
+		}
+	}
+	return openapiclient.NetworkAllowListData{}, false
+}
+
+func getNetworkAllowListIdByName(ctx context.Context, accountId string, projectId string, networkAllowListName string, apiClient openapiclient.APIClient) (string, error) {
+	nalResp, resp, err := apiClient.NetworkApi.ListNetworkAllowLists(ctx, accountId, projectId).Execute()
+	if err != nil {
+		errMsg := getErrorMessage(resp, err)
+		return "", fmt.Errorf("Unable to read the Network allow list %s: %s", networkAllowListName, errMsg)
+	}
+	if nalData, ok := findNetworkAllowList(nalResp.Data, networkAllowListName); ok {
+		return nalData.Info.GetId(), nil
+	}
+
+	return "", fmt.Errorf("NetworkAllowList %s not found", networkAllowListName)
+
 }

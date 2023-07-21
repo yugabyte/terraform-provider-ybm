@@ -68,6 +68,13 @@ func getListAllowListRequest(ctx context.Context, cfg *openapiclient.Configurati
 	listAllowListRequest.ApiService = mockNetworkApi
 	return &listAllowListRequest
 }
+func getListAllowListResponse(allowListID string, projectID string, cidrList []string, allowListDescription string, allowListName string) *openapiclient.NetworkAllowListListResponse {
+	allowListList := openapi.NewNetworkAllowListListResponseWithDefaults()
+	allowList := getCreateAllowListResponse(allowListID, projectID, cidrList, allowListDescription, allowListName)
+	allowListList.SetData([]openapi.NetworkAllowListData{allowList.Data})
+
+	return allowListList
+}
 
 func getDeleteAllowListRequest(ctx context.Context, cfg *openapiclient.Configuration, accountID string, projectID string, allowListID string, mockNetworkApi *mocks.MockNetworkApi) *openapiclient.ApiDeleteNetworkAllowListRequest {
 	testClient := openapiclient.NewAPIClient(cfg)
@@ -103,7 +110,8 @@ func TestCreateAllowList(t *testing.T) {
 	createAllowListResponse := getCreateAllowListResponse(allowListID, projectID, cidrList, allowListDescription, allowListName)
 	getAllowListRequest := getGetAllowListRequest(ctx, cfg, accountID, projectID, allowListID, mockNetworkApi)
 	listNetworkAllowListsRequest := getListAllowListRequest(ctx, cfg, accountID, projectID, mockNetworkApi)
-	listNetworkAllowListsResponse := openapiclient.NewNetworkAllowListListResponseWithDefaults()
+	listNetworkAllowListsResponse := getListAllowListResponse("non-exist", projectID, cidrList, allowListDescription, "non-exist")
+	listNetworkAllowListsResponseExist := getListAllowListResponse(allowListID, projectID, cidrList, allowListDescription, allowListName)
 
 	req := tfsdk.CreateResourceRequest{}
 	allowListType := resourceAllowListType{}
@@ -156,6 +164,8 @@ func TestCreateAllowList(t *testing.T) {
 			mockNetworkApi.EXPECT().ListNetworkAllowListsExecute(*listNetworkAllowListsRequest).Return(*listNetworkAllowListsResponse, httpSuccessResponse, nil).Times(1)
 			mockNetworkApi.EXPECT().CreateNetworkAllowList(ctx, accountID, projectID).Return(*createAllowListRequest).Times(1)
 			mockNetworkApi.EXPECT().CreateNetworkAllowListExecute(createAllowListRequestFinal).Return(*createAllowListResponse, httpSuccessResponse, nil).Times(1)
+			mockNetworkApi.EXPECT().ListNetworkAllowLists(ctx, accountID, projectID).Return(*listNetworkAllowListsRequest).Times(1)
+			mockNetworkApi.EXPECT().ListNetworkAllowListsExecute(*listNetworkAllowListsRequest).Return(*listNetworkAllowListsResponseExist, httpSuccessResponse, nil).Times(1)
 			mockNetworkApi.EXPECT().GetNetworkAllowList(ctx, accountID, projectID, allowListID).Return(*getAllowListRequest).Times(1)
 			mockNetworkApi.EXPECT().GetNetworkAllowListExecute(*getAllowListRequest).Return(*createAllowListResponse, httpSuccessResponse, nil).Times(1)
 			allowList.Create(ctx, req, resp)
@@ -188,6 +198,8 @@ func TestReadAllowList(t *testing.T) {
 	allowList := getMockAllowList(cfg, mockNetworkApi, mockProjectApi, mockAccountApi)
 	createAllowListResponse := getCreateAllowListResponse(allowListID, projectID, cidrList, allowListDescription, allowListName)
 	getAllowListRequest := getGetAllowListRequest(ctx, cfg, accountID, projectID, allowListID, mockNetworkApi)
+	listNetworkAllowListsRequest := getListAllowListRequest(ctx, cfg, accountID, projectID, mockNetworkApi)
+	listNetworkAllowListsResponseExist := getListAllowListResponse(allowListID, projectID, cidrList, allowListDescription, allowListName)
 
 	req := tfsdk.ReadResourceRequest{}
 	allowListType := resourceAllowListType{}
@@ -227,6 +239,13 @@ func TestReadAllowList(t *testing.T) {
 
 	for _, testCase := range testCases {
 		t.Run(testCase.TestName, func(t *testing.T) {
+
+			listProjectsRequest := getListAccountsRequest(ctx, cfg, mockAccountApi)
+			listProjectsResponse := getListAccountsResponse(accountID, "test-project-id")
+			mockAccountApi.EXPECT().ListAccounts(ctx).Return(*listProjectsRequest).Times(2)
+			mockAccountApi.EXPECT().ListAccountsExecute(*listProjectsRequest).Return(*listProjectsResponse, httpSuccessResponse, nil).Times(2)
+			mockNetworkApi.EXPECT().ListNetworkAllowLists(ctx, accountID, projectID).Return(*listNetworkAllowListsRequest).Times(1)
+			mockNetworkApi.EXPECT().ListNetworkAllowListsExecute(*listNetworkAllowListsRequest).Return(*listNetworkAllowListsResponseExist, httpSuccessResponse, nil).Times(1)
 			mockNetworkApi.EXPECT().GetNetworkAllowList(ctx, accountID, projectID, allowListID).Return(*getAllowListRequest).Times(1)
 			mockNetworkApi.EXPECT().GetNetworkAllowListExecute(*getAllowListRequest).Return(*createAllowListResponse, httpSuccessResponse, nil).Times(1)
 			allowList.Read(ctx, req, resp)

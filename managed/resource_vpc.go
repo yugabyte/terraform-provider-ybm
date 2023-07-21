@@ -7,6 +7,8 @@ package managed
 import (
 	"context"
 	"errors"
+	"fmt"
+	"sort"
 	"time"
 
 	"github.com/hashicorp/terraform-plugin-framework/diag"
@@ -249,7 +251,7 @@ func (r resourceVPC) Create(ctx context.Context, req tfsdk.CreateResourceRequest
 		return
 	}
 
-	vpc, readOK, message := resourceVPCRead(accountId, projectId, vpcId, regionMap, apiClient)
+	vpc, readOK, message := resourceVPCRead(vpcId, apiClient)
 	if !readOK {
 		resp.Diagnostics.AddError("Unable to read the state of the VPC", message)
 		return
@@ -276,7 +278,20 @@ func getIDsFromVPCState(ctx context.Context, state tfsdk.State, vpc *VPC) {
 	state.GetAttribute(ctx, path.Root("global_cidr"), &vpc.GlobalCIDR)
 }
 
-func resourceVPCRead(accountId string, projectId string, vpcId string, regionMap map[string]int, apiClient *openapiclient.APIClient) (vpc VPC, readOK bool, errorMessage string) {
+func resourceVPCRead(vpcId string, apiClient *openapiclient.APIClient) (vpc VPC, readOK bool, errorMessage string) {
+	var accountId, projectId, message string
+	var getAccountOK bool
+
+	accountId, getAccountOK, message = getAccountId(context.Background(), apiClient)
+	if !getAccountOK {
+		return vpc, false, fmt.Sprintf("unable to get account ID %s", message)
+	}
+
+	projectId, getProjectOK, message := getProjectId(context.Background(), apiClient, accountId)
+	if !getProjectOK {
+		return vpc, false, fmt.Sprintf("unable to get project ID %s", message)
+	}
+
 	vpcResp, response, err := apiClient.NetworkApi.GetSingleTenantVpc(context.Background(), accountId, projectId, vpcId).Execute()
 	if err != nil {
 		errMsg := getErrorMessage(response, err)
@@ -296,17 +311,19 @@ func resourceVPCRead(accountId string, projectId string, vpcId string, regionMap
 		vpc.GlobalCIDR.Null = true
 	}
 
-	if len(regionMap) > 0 {
-		regionInfo := make([]VPCRegionInfo, len(regionMap))
-		for _, info := range vpcResp.Data.Spec.GetRegionSpecs() {
+	if v, ok := vpcResp.Data.Spec.GetRegionSpecsOk(); ok {
+		regionInfo := make([]VPCRegionInfo, len(*v))
+		for index, info := range *v {
 			region := info.GetRegion()
 			cidr := info.GetCidr()
-			index := regionMap[region]
 			regionInfo[index] = VPCRegionInfo{
 				Region: types.String{Value: region},
 				CIDR:   types.String{Value: cidr},
 			}
 		}
+		sort.Slice(regionInfo, func(i, j int) bool {
+			return string(regionInfo[i].Region.Value) < string(regionInfo[j].Region.Value)
+		})
 		vpc.RegionCIDRInfo = regionInfo
 	}
 
@@ -330,7 +347,7 @@ func (r resourceVPC) Read(ctx context.Context, req tfsdk.ReadResourceRequest, re
 		}
 	}
 
-	vpc, readOK, message := resourceVPCRead(state.AccountID.Value, state.ProjectID.Value, state.VPCID.Value, regionMap, r.p.client)
+	vpc, readOK, message := resourceVPCRead(state.VPCID.Value, r.p.client)
 	if !readOK {
 		resp.Diagnostics.AddError("Unable to read the state of the VPC", message)
 		return
@@ -392,5 +409,5 @@ func (r resourceVPC) Delete(ctx context.Context, req tfsdk.DeleteResourceRequest
 // Import vpc
 func (r resourceVPC) ImportState(ctx context.Context, req tfsdk.ImportResourceStateRequest, resp *tfsdk.ImportResourceStateResponse) {
 	// Save the import identifier in the id attribute
-	tfsdk.ResourceImportStatePassthroughID(ctx, path.Root("id"), req, resp)
+	resp.State.SetAttribute(ctx, path.Root("vpc_id"), req.ID)
 }
