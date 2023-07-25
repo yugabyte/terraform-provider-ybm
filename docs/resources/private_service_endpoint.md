@@ -12,6 +12,7 @@ The resource to create an endpoint in YugabyteDB Managed.
 ## Example Usage
 
 ```terraform
+#Create Private service endpoint (Private link in AWS).
 resource "ybm_private_service_endpoint" "my_pse" {
   cluster_id          = "00000-ca0a-1111-2222-3cc19ac7fab3"
   region              = "ap-northeast-1"
