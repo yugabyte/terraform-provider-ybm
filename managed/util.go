@@ -4,6 +4,8 @@
  */
 package managed
 
+import "github.com/hashicorp/terraform-plugin-framework/types"
+
 func areListsEqual(l1 []string, l2 []string) bool {
 	if len(l1) != len(l2) {
 		return false
@@ -45,4 +47,32 @@ func isDiskIopsValid(cloudType string, clusterTier string, diskIops int64) (bool
 		}
 	}
 	return true, err
+}
+
+// Inspired from here:
+// https://stackoverflow.com/questions/37562873/most-idiomatic-way-to-select-elements-from-an-array-in-golang
+// This allows us to filter a slice of any type using a function that returns a bool
+func Filter[T any](ss []T, test func(T) bool) (ret []T) {
+	for _, s := range ss {
+		if test(s) {
+			ret = append(ret, s)
+		}
+	}
+	return
+}
+
+func SliceTypesStringToSliceString(slice []types.String) []string {
+	var result []string
+	for _, s := range slice {
+		result = append(result, s.Value)
+	}
+	return result
+}
+
+func SliceStringToSliceTypesString(slice []string) []types.String {
+	var result []types.String
+	for _, s := range slice {
+		result = append(result, types.String{Value: s})
+	}
+	return result
 }

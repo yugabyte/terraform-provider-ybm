@@ -204,3 +204,17 @@ type PermissionInfo struct {
 	ResourceType    types.String   `tfsdk:"resource_type"`
 	OperationGroups []types.String `tfsdk:"operation_groups"`
 }
+
+type PrivateServiceEndpoint struct {
+	AccountID                types.String   `tfsdk:"account_id"`
+	ProjectID                types.String   `tfsdk:"project_id"`
+	ClusterID                types.String   `tfsdk:"cluster_id"`
+	PrivateServiceEndpointID types.String   `tfsdk:"endpoint_id"`
+	AvailabilityZones        []types.String `tfsdk:"availability_zones"`
+	ServiceName              types.String   `tfsdk:"service_name"`
+	ClusterRegionInfoId      types.String   `tfsdk:"cluster_region_info_id"`
+	Region                   types.String   `tfsdk:"region"`
+	SecurityPrincipals       []types.String `tfsdk:"security_principals"`
+	Host                     types.String   `tfsdk:"host"`
+	State                    types.String   `tfsdk:"state"`
+}
