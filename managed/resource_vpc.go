@@ -61,14 +61,17 @@ func (r resourceVPCType) GetSchema(_ context.Context) (tfsdk.Schema, diag.Diagno
 				Description: "The global CIDR of the VPC (GCP only).",
 				Type:        types.StringType,
 				Optional:    true,
+				Computed:    true,
 			},
 			"region_cidr_info": {
 				Description: "The CIDR information for all the regions for the VPC.",
 				Optional:    true,
+				Computed:    true,
 				Attributes: tfsdk.ListNestedAttributes(map[string]tfsdk.Attribute{
 					"region": {
 						Type:     types.StringType,
 						Optional: true,
+						Computed: true,
 					},
 					"cidr": {
 						Type:     types.StringType,
@@ -334,18 +337,6 @@ func resourceVPCRead(vpcId string, apiClient *openapiclient.APIClient) (vpc VPC,
 func (r resourceVPC) Read(ctx context.Context, req tfsdk.ReadResourceRequest, resp *tfsdk.ReadResourceResponse) {
 	var state VPC
 	getIDsFromVPCState(ctx, req.State, &state)
-
-	regionCIDRInfoPresent := false
-	if state.RegionCIDRInfo != nil {
-		regionCIDRInfoPresent = true
-	}
-	regionMap := map[string]int{}
-	if regionCIDRInfoPresent {
-		for index, info := range state.RegionCIDRInfo {
-			region := info.Region.Value
-			regionMap[region] = index
-		}
-	}
 
 	vpc, readOK, message := resourceVPCRead(state.VPCID.Value, r.p.client)
 	if !readOK {
