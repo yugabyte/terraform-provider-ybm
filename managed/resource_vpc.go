@@ -8,6 +8,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"reflect"
 	"sort"
 	"time"
 
@@ -66,17 +67,15 @@ func (r resourceVPCType) GetSchema(_ context.Context) (tfsdk.Schema, diag.Diagno
 			"region_cidr_info": {
 				Description: "The CIDR information for all the regions for the VPC.",
 				Optional:    true,
-				Computed:    true,
 				Attributes: tfsdk.ListNestedAttributes(map[string]tfsdk.Attribute{
 					"region": {
 						Type:     types.StringType,
 						Optional: true,
-						Computed: true,
 					},
 					"cidr": {
 						Type:     types.StringType,
-						Optional: true,
 						Computed: true,
+						Optional: true,
 					},
 				}),
 			},
@@ -266,6 +265,12 @@ func (r resourceVPC) Create(ctx context.Context, req tfsdk.CreateResourceRequest
 		vpc.RegionCIDRInfo = nil
 	}
 
+	// We want to keep the order,  so if there are the same we use the one in the state
+	if isEqual(vpc.RegionCIDRInfo, plan.RegionCIDRInfo) {
+		if cloud != "AZURE" {
+			vpc.RegionCIDRInfo = plan.RegionCIDRInfo
+		}
+	}
 	diags := resp.State.Set(ctx, &vpc)
 	resp.Diagnostics.Append(diags...)
 	if resp.Diagnostics.HasError() {
@@ -295,10 +300,9 @@ func resourceVPCRead(vpcId string, apiClient *openapiclient.APIClient) (vpc VPC,
 		return vpc, false, fmt.Sprintf("unable to get project ID %s", message)
 	}
 
-	vpcResp, response, err := apiClient.NetworkApi.GetSingleTenantVpc(context.Background(), accountId, projectId, vpcId).Execute()
+	vpcResp, _, err := apiClient.NetworkApi.GetSingleTenantVpc(context.Background(), accountId, projectId, vpcId).Execute()
 	if err != nil {
-		errMsg := getErrorMessage(response, err)
-		return vpc, false, errMsg
+		return vpc, false, GetApiErrorDetails(err)
 	}
 
 	vpc.AccountID.Value = accountId
@@ -312,22 +316,22 @@ func resourceVPCRead(vpcId string, apiClient *openapiclient.APIClient) (vpc VPC,
 		vpc.GlobalCIDR.Value = vpcResp.Data.Spec.GetParentCidr()
 	} else {
 		vpc.GlobalCIDR.Null = true
-	}
-
-	if v, ok := vpcResp.Data.Spec.GetRegionSpecsOk(); ok {
-		regionInfo := make([]VPCRegionInfo, len(*v))
-		for index, info := range *v {
-			region := info.GetRegion()
-			cidr := info.GetCidr()
-			regionInfo[index] = VPCRegionInfo{
-				Region: types.String{Value: region},
-				CIDR:   types.String{Value: cidr},
+		if v, ok := vpcResp.Data.Spec.GetRegionSpecsOk(); ok {
+			regionInfo := make([]VPCRegionInfo, len(*v))
+			for index, info := range *v {
+				region := info.GetRegion()
+				cidr := info.GetCidr()
+				regionInfo[index] = VPCRegionInfo{
+					Region: types.String{Value: region},
+					CIDR:   types.String{Value: cidr},
+				}
 			}
+			sort.Slice(regionInfo, func(i, j int) bool {
+				return string(regionInfo[i].Region.Value) < string(regionInfo[j].Region.Value)
+			})
+			vpc.RegionCIDRInfo = regionInfo
 		}
-		sort.Slice(regionInfo, func(i, j int) bool {
-			return string(regionInfo[i].Region.Value) < string(regionInfo[j].Region.Value)
-		})
-		vpc.RegionCIDRInfo = regionInfo
+
 	}
 
 	return vpc, true, ""
@@ -343,7 +347,10 @@ func (r resourceVPC) Read(ctx context.Context, req tfsdk.ReadResourceRequest, re
 		resp.Diagnostics.AddError("Unable to read the state of the VPC", message)
 		return
 	}
-
+	// We want to keep the order,  so if there are the same we use the one in the state
+	if isEqual(vpc.RegionCIDRInfo, state.RegionCIDRInfo) {
+		vpc.RegionCIDRInfo = state.RegionCIDRInfo
+	}
 	diags := resp.State.Set(ctx, &vpc)
 	resp.Diagnostics.Append(diags...)
 	if resp.Diagnostics.HasError() {
@@ -401,4 +408,19 @@ func (r resourceVPC) Delete(ctx context.Context, req tfsdk.DeleteResourceRequest
 func (r resourceVPC) ImportState(ctx context.Context, req tfsdk.ImportResourceStateRequest, resp *tfsdk.ImportResourceStateResponse) {
 	// Save the import identifier in the id attribute
 	resp.State.SetAttribute(ctx, path.Root("vpc_id"), req.ID)
+}
+
+func isEqual(x []VPCRegionInfo, y []VPCRegionInfo) bool {
+	eqCtr := 0
+	for _, a := range x {
+		for _, b := range y {
+			if reflect.DeepEqual(a, b) {
+				eqCtr++
+			}
+		}
+	}
+	if eqCtr != len(x) || len(y) != len(x) {
+		return false
+	}
+	return true
 }

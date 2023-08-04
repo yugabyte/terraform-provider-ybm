@@ -4,7 +4,9 @@
  */
 package managed
 
-import "github.com/hashicorp/terraform-plugin-framework/types"
+import (
+	"github.com/hashicorp/terraform-plugin-framework/types"
+)
 
 func areListsEqual(l1 []string, l2 []string) bool {
 	if len(l1) != len(l2) {
