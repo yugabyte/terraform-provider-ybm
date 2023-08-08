@@ -104,6 +104,7 @@ func getIDsFromePrivateEndpointState(ctx context.Context, state tfsdk.State, pse
 	state.GetAttribute(ctx, path.Root("project_id"), &pse.ProjectID)
 	state.GetAttribute(ctx, path.Root("endpoint_id"), &pse.PrivateServiceEndpointID)
 	state.GetAttribute(ctx, path.Root("cluster_id"), &pse.ClusterID)
+	state.GetAttribute(ctx, path.Root("cluster_region_info_id"), &pse.ClusterRegionInfoId)
 }
 
 func getPrivateEndpointServicePlan(ctx context.Context, plan tfsdk.Plan, pse *PrivateServiceEndpoint) diag.Diagnostics {
@@ -115,7 +116,6 @@ func getPrivateEndpointServicePlan(ctx context.Context, plan tfsdk.Plan, pse *Pr
 
 	diags.Append(plan.GetAttribute(ctx, path.Root("cluster_id"), &pse.ClusterID)...)
 	diags.Append(plan.GetAttribute(ctx, path.Root("region"), &pse.Region)...)
-	diags.Append(plan.GetAttribute(ctx, path.Root("endpoint_id"), &pse.PrivateServiceEndpointID)...)
 	diags.Append(plan.GetAttribute(ctx, path.Root("security_principals"), &pse.SecurityPrincipals)...)
 
 	return diags
@@ -182,7 +182,7 @@ func (r resourcePrivateEndpoint) Create(ctx context.Context, req tfsdk.CreateRes
 		return
 	}
 
-	if (!plan.PrivateServiceEndpointID.Unknown && !plan.PrivateServiceEndpointID.Null) || plan.PrivateServiceEndpointID.Value != "" {
+	if plan.PrivateServiceEndpointID.Value != "" {
 		resp.Diagnostics.AddError(
 			"Private service endpoint ID provided for new private service endpoint",
 			"The endpoint_id was provided even though a new private service endpoint is being created. Do not include this field in the provider when creating it.",
@@ -251,12 +251,12 @@ func (r resourcePrivateEndpoint) Create(ctx context.Context, req tfsdk.CreateRes
 	retryPolicy := retry.NewConstant(10 * time.Second)
 	retryPolicy = retry.WithMaxDuration(2400*time.Second, retryPolicy)
 	err = retry.Do(ctx, retryPolicy, func(ctx context.Context) error {
-		pseState, readInfoOK, message := getPrivateServiceEndpointState(accountId, projectId, clusterId, pseID, apiClient)
+		pseState, readInfoOK, message := getPrivateServiceEndpointStateFromCluster(accountId, projectId, clusterId, pseID, apiClient)
 		if readInfoOK {
-			if pseState == string(openapiclient.PRIVATESERVICEENDPOINTSTATEENUM_AVAILABLE) {
+			if pseState == string(openapiclient.ENDPOINTSTATEENUM_ENABLED) {
 				return nil
 			}
-			if pseState == string(openapiclient.PRIVATESERVICEENDPOINTSTATEENUM_FAILED) {
+			if pseState == string(openapiclient.ENDPOINTSTATEENUM_FAILED) {
 				return errors.New("unable to create private service endpoint, operation failed")
 			}
 		} else {
@@ -318,7 +318,7 @@ func resourcePrivateEndpointRead(accountId string, projectId string, pseID strin
 	})
 	if len(desiredEndpoints) == 1 {
 		pse.Host.Value = desiredEndpoints[0].GetHost()
-		pse.State.Value = string(desiredEndpoints[0].GetState())
+		pse.State.Value = string(desiredEndpoints[0].GetStateV1())
 	}
 	pse.Region.Value = desiredRegions[0].Region
 
@@ -328,8 +328,69 @@ func resourcePrivateEndpointRead(accountId string, projectId string, pseID strin
 
 // Update private service Endpoint
 func (r resourcePrivateEndpoint) Update(ctx context.Context, req tfsdk.UpdateResourceRequest, resp *tfsdk.UpdateResourceResponse) {
-	resp.Diagnostics.AddError("Unable to update ", "Updating private Service endpoint is not currently supported. Delete and recreate the provider.")
-	return
+	var plan PrivateServiceEndpoint
+	resp.Diagnostics.Append(getPrivateEndpointServicePlan(ctx, req.Plan, &plan)...)
+	if resp.Diagnostics.HasError() {
+		tflog.Debug(ctx, "Error while getting the plan for the private service endpoint")
+		return
+	}
+
+	apiClient := r.p.client
+	var state PrivateServiceEndpoint
+	getIDsFromePrivateEndpointState(ctx, req.State, &state)
+	accountId := state.AccountID.Value
+	projectId := state.ProjectID.Value
+	clusterId := state.ClusterID.Value
+	ClusterRegionInfoId := state.ClusterRegionInfoId.Value
+	pseId := state.PrivateServiceEndpointID.Value
+
+	//Security Principal is the only field we update
+	securityPrincipals := plan.SecurityPrincipals
+
+	regionArnMap := make(map[string][]string)
+	regionArnMap[ClusterRegionInfoId] = SliceTypesStringToSliceString(securityPrincipals)
+	createPseSpec := createPrivateServiceEndpointRegionSpec(regionArnMap)
+
+	_, _, err := apiClient.ClusterApi.EditPrivateServiceEndpoint(context.Background(), accountId, projectId, clusterId, pseId).PrivateServiceEndpointRegionSpec(createPseSpec[0]).Execute()
+	if err != nil {
+		resp.Diagnostics.AddError("unable to update private service endpoint", GetApiErrorDetails(err))
+		return
+	}
+
+	retryPolicy := retry.NewConstant(10 * time.Second)
+	retryPolicy = retry.WithMaxDuration(2400*time.Second, retryPolicy)
+	err = retry.Do(ctx, retryPolicy, func(ctx context.Context) error {
+		pseState, readInfoOK, message := getPrivateServiceEndpointStateFromCluster(accountId, projectId, clusterId, pseId, apiClient)
+		tflog.Info(ctx, pseState)
+		if readInfoOK {
+			if pseState == string(openapiclient.ENDPOINTSTATEENUM_ENABLED) {
+				return nil
+			}
+			if pseState == string(openapiclient.ENDPOINTSTATEENUM_FAILED) {
+				return errors.New("unable to update private service endpoint, operation failed")
+			}
+		} else {
+			return retry.RetryableError(errors.New("Unable to get private service endpoint state: " + message))
+		}
+		return retry.RetryableError(errors.New("the private service endpoint update is in progress"))
+	})
+
+	if err != nil {
+		resp.Diagnostics.AddError("Unable to update private service endpoint ", "The operation timed out waiting for private service endpoint creation.")
+		return
+	}
+
+	pse, readOK, message := resourcePrivateEndpointRead(accountId, projectId, pseId, clusterId, apiClient)
+	if !readOK {
+		resp.Diagnostics.AddError("Unable to read the state of the private service endpoint ", message)
+		return
+	}
+
+	diags := resp.State.Set(ctx, &pse)
+	resp.Diagnostics.Append(diags...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
 
 }
 
@@ -385,6 +446,16 @@ func createPrivateServiceEndpointSpec(regionArnMap map[string][]string) []openap
 	return pseSpecs
 }
 
+func createPrivateServiceEndpointRegionSpec(regionArnMap map[string][]string) []openapiclient.PrivateServiceEndpointRegionSpec {
+	pseSpecs := []openapiclient.PrivateServiceEndpointRegionSpec{}
+
+	for regionId, arnList := range regionArnMap {
+		local := *openapiclient.NewPrivateServiceEndpointRegionSpec(regionId, arnList)
+		pseSpecs = append(pseSpecs, local)
+	}
+	return pseSpecs
+}
+
 // Import PSE
 func (r resourcePrivateEndpoint) ImportState(ctx context.Context, req tfsdk.ImportResourceStateRequest, resp *tfsdk.ImportResourceStateResponse) {
 	idParts := strings.Split(req.ID, ",")
@@ -411,4 +482,23 @@ func getPrivateServiceEndpointState(accountId string, projectId string, clusterI
 		return "", false, GetApiErrorDetails(err)
 	}
 	return string(pseResp.Data.Info.GetState()), true, ""
+}
+
+func getPrivateServiceEndpointStateFromCluster(accountId string, projectId string, clusterId string, pseId string, apiClient *openapiclient.APIClient) (state string, readOK bool, errorMessage string) {
+	clusterResp, _, err := apiClient.ClusterApi.GetCluster(context.Background(), accountId, projectId, clusterId).Execute()
+	if err != nil {
+		return "", false, GetApiErrorDetails(err)
+	}
+	clusterData := clusterResp.GetData()
+	desiredEndpoints := Filter(clusterData.Info.ClusterEndpoints, func(endpoint openapiclient.Endpoint) bool {
+		if !endpoint.HasPseId() {
+			return false
+		}
+		return endpoint.GetPseId() == pseId
+	})
+	if len(desiredEndpoints) != 1 {
+		return "", false, "Could not find endpoint id from Cluster API"
+	}
+	return string(desiredEndpoints[0].GetStateV1()), true, ""
+
 }
