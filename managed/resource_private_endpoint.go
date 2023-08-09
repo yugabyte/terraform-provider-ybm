@@ -379,7 +379,7 @@ func (r resourcePrivateEndpoint) Update(ctx context.Context, req tfsdk.UpdateRes
 		resp.Diagnostics.AddError("Unable to update private service endpoint ", "The operation timed out waiting for private service endpoint creation.")
 		return
 	}
-
+	time.Sleep(20 * time.Second)
 	pse, readOK, message := resourcePrivateEndpointRead(accountId, projectId, pseId, clusterId, apiClient)
 	if !readOK {
 		resp.Diagnostics.AddError("Unable to read the state of the private service endpoint ", message)
