@@ -361,7 +361,6 @@ func (r resourcePrivateEndpoint) Update(ctx context.Context, req tfsdk.UpdateRes
 	retryPolicy = retry.WithMaxDuration(2400*time.Second, retryPolicy)
 	err = retry.Do(ctx, retryPolicy, func(ctx context.Context) error {
 		pseState, readInfoOK, message := getPrivateServiceEndpointStateFromCluster(accountId, projectId, clusterId, pseId, apiClient)
-		tflog.Info(ctx, pseState)
 		if readInfoOK {
 			if pseState == string(openapiclient.ENDPOINTSTATEENUM_ENABLED) {
 				return nil
@@ -379,12 +378,19 @@ func (r resourcePrivateEndpoint) Update(ctx context.Context, req tfsdk.UpdateRes
 		resp.Diagnostics.AddError("Unable to update private service endpoint ", "The operation timed out waiting for private service endpoint creation.")
 		return
 	}
-	time.Sleep(20 * time.Second)
+
 	pse, readOK, message := resourcePrivateEndpointRead(accountId, projectId, pseId, clusterId, apiClient)
 	if !readOK {
 		resp.Diagnostics.AddError("Unable to read the state of the private service endpoint ", message)
 		return
 	}
+
+	// Temporaly fix
+	// Backend return the old service principal as there seems to be an async op
+	// Instead of waiting, we just assign the service principal
+	time.Sleep(20 * time.Second)
+	pse.SecurityPrincipals = plan.SecurityPrincipals
+	//end fix
 
 	diags := resp.State.Set(ctx, &pse)
 	resp.Diagnostics.Append(diags...)
@@ -405,10 +411,9 @@ func (r resourcePrivateEndpoint) Delete(ctx context.Context, req tfsdk.DeleteRes
 
 	apiClient := r.p.client
 
-	response, err := apiClient.ClusterApi.DeletePrivateServiceEndpoint(context.Background(), accountId, projectId, clusterID, pseId).Execute()
+	_, err := apiClient.ClusterApi.DeletePrivateServiceEndpoint(context.Background(), accountId, projectId, clusterID, pseId).Execute()
 	if err != nil {
-		errMsg := getErrorMessage(response, err)
-		resp.Diagnostics.AddError("Unable to delete the private Service endpoint ", errMsg)
+		resp.Diagnostics.AddError("Unable to delete the private Service endpoint ", GetApiErrorDetails(err))
 		return
 	}
 
