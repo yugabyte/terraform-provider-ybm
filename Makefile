@@ -2,7 +2,10 @@ HOSTNAME=registry.terraform.io
 NAMESPACE=yugabyte
 NAME=ybm
 VERSION=0.1.0-dev
-OS_ARCH=darwin_arm64
+
+OS := $(if $(GOOS),$(GOOS),$(shell go env GOOS))
+ARCH := $(if $(GOARCH),$(GOARCH),$(shell go env GOARCH))
+
 BINARY=terraform-provider-${NAME}
 export GOPRIVATE := github.com/yugabyte
 
@@ -29,8 +32,8 @@ release:
 	GOOS=windows GOARCH=amd64 go build -ldflags="-X 'main.version=v${VERSION}'" -o ./bin/${BINARY}_${VERSION}_windows_amd64
 
 install: build
-	mkdir -p ~/.terraform.d/plugins/${HOSTNAME}/${NAMESPACE}/${NAME}/${VERSION}/${OS_ARCH}/
-	mv ${BINARY} ~/.terraform.d/plugins/${HOSTNAME}/${NAMESPACE}/${NAME}/${VERSION}/${OS_ARCH}/
+	mkdir -p ~/.terraform.d/plugins/${HOSTNAME}/${NAMESPACE}/${NAME}/${VERSION}/$(OS)_$(ARCH)/
+	mv ${BINARY} ~/.terraform.d/plugins/${HOSTNAME}/${NAMESPACE}/${NAME}/${VERSION}/$(OS)_$(ARCH)/
 
 test:
 	go test -v -cover ./... -timeout 120m
@@ -39,7 +42,7 @@ testacc:
 	TF_ACC=1 go test -v -cover ./... -timeout 120m   
 
 doc:
-	./scripts/install_tfplugindocs.sh ${OS_ARCH}
+	./scripts/install_tfplugindocs.sh $(OS)_$(ARCH)
 	tfplugindocs generate --rendered-provider-name 'YugabyteDB Managed' --provider-name ybm
 
 update-client:
