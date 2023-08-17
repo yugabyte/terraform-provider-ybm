@@ -14,7 +14,7 @@ Since 1.5.0 terraform introduce a new option to import and generates `.tf` files
 
 1. Set imports into your `.tf` files
 
-{{ tffile "examples/resources/ybm_allow_list/import.tf" }}
+{{ tffile "examples/resources/ybm_vpc/import.tf" }}
 
 2. Run the plan command with generate-config-out option
 
@@ -24,7 +24,7 @@ terraform plan -generate-config-out=generated_resources.tf
 
 A new file generated_resources.tf should be created with the VPC resources
 
-{{ tffile "examples/resources/ybm_allow_list/generated_resources.tf" }}
+{{ tffile "examples/resources/ybm_vpc/generated_resources.tf" }}
 
 3. Run apply to finalize the import
 
