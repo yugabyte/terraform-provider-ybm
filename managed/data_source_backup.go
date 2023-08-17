@@ -104,7 +104,7 @@ func dataSourceBackupRead(ctx context.Context, accountId string, projectId strin
 		for {
 			for _, data := range backupsResp.Data {
 				// Assumes the provided timestamp is in the format 2022-07-08T00:06:01.890Z
-				createdOn := data.Info.Metadata.GetCreatedOn()
+				createdOn := data.Info.Metadata.Get().GetCreatedOn()
 				// By default the backups are ordered based on the created time in descending
 				// order. Ending the search if given timestamp is greater than current
 				// timestamp in the loop
