@@ -799,6 +799,7 @@ func (r resourceCluster) Create(ctx context.Context, req tfsdk.CreateResourceReq
 			createClusterRequest.SecurityCmkSpec = *openapiclient.NewNullableCMKSpec(cmkSpec)
 		} else {
 			resp.Diagnostics.AddError("Error creating CMK Spec.", err.Error())
+			return
 		}
 	}
 
@@ -1607,6 +1608,7 @@ func (r resourceCluster) Update(ctx context.Context, req tfsdk.UpdateResourceReq
 		cmkSpec, err := createCmkSpec(plan)
 		if err != nil {
 			resp.Diagnostics.AddError("Error creating CMK Spec: ", err.Error())
+			return
 		} else {
 			err = editClusterCmk(ctx, apiClient, accountId, projectId, clusterId, *cmkSpec)
 			if err != nil {
