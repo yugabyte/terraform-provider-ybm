@@ -218,3 +218,20 @@ type PrivateServiceEndpoint struct {
 	Host                     types.String   `tfsdk:"host"`
 	State                    types.String   `tfsdk:"state"`
 }
+
+type ApiKey struct {
+	AccountID   types.String `tfsdk:"account_id"`
+	ProjectID   types.String `tfsdk:"project_id"`
+	Name        types.String `tfsdk:"name"`
+	ApiKey      types.String `tfsdk:"api_key"`
+	Duration    types.Int64  `tfsdk:"duration"`
+	Unit        types.String `tfsdk:"unit"`
+	Description types.String `tfsdk:"description"`
+	RoleName    types.String `tfsdk:"role_name"`
+	Status      types.String `tfsdk:"status"`
+	ApiKeyID    types.String `tfsdk:"api_key_id"`
+	Issuer      types.String `tfsdk:"issuer"`
+	LastUsed    types.String `tfsdk:"last_used"`
+	ExpiryTime  types.String `tfsdk:"expiration"`
+	CreatedAt   types.String `tfsdk:"date_created"`
+}

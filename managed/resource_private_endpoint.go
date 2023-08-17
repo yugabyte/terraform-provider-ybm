@@ -238,7 +238,7 @@ func (r resourcePrivateEndpoint) Create(ctx context.Context, req tfsdk.CreateRes
 		return
 	}
 	psEps := Filter(createResp.GetData(), func(ep openapiclient.PrivateServiceEndpointRegionData) bool {
-		return ep.GetSpec().ClusterRegionInfoId == desiredRegions[0].Id
+		return ep.GetSpec().ClusterRegionInfoId.Get() == &desiredRegions[0].Id
 	})
 
 	if len(psEps) == 0 {
@@ -295,9 +295,9 @@ func resourcePrivateEndpointRead(accountId string, projectId string, pseID strin
 	pse.ServiceName.Value = pseResp.Data.Info.GetServiceName()
 
 	pse.AvailabilityZones = SliceStringToSliceTypesString(pseResp.Data.Info.AvailabilityZones)
-	pse.SecurityPrincipals = SliceStringToSliceTypesString(pseResp.Data.Spec.SecurityPrincipals)
+	pse.SecurityPrincipals = SliceStringToSliceTypesString(pseResp.Data.Spec.Get().SecurityPrincipals)
 
-	pse.ClusterRegionInfoId.Value = pseResp.Data.Spec.ClusterRegionInfoId
+	pse.ClusterRegionInfoId.Value = pseResp.Data.Spec.Get().GetClusterRegionInfoId()
 
 	// This another call, but we should get all information as much as possible from the API
 	// This is usefull when importing
@@ -306,7 +306,7 @@ func resourcePrivateEndpointRead(accountId string, projectId string, pseID strin
 		return pse, false, fmt.Sprintf("Unable to fetch cluster with id %s: %s", clusterId, GetApiErrorDetails(err))
 	}
 	clusterData := clusterResp.GetData()
-	pse.ClusterRegionInfoId.Value = pseResp.Data.Spec.ClusterRegionInfoId
+	pse.ClusterRegionInfoId.Value = pseResp.Data.Spec.Get().GetClusterRegionInfoId()
 	desiredRegions := Filter(clusterData.Info.ClusterRegionInfoDetails, func(regionInfo openapiclient.ClusterRegionInfoDetails) bool {
 		return regionInfo.Id == pse.ClusterRegionInfoId.Value
 	})
@@ -444,7 +444,8 @@ func createPrivateServiceEndpointSpec(regionArnMap map[string][]string) []openap
 	pseSpecs := []openapiclient.PrivateServiceEndpointSpec{}
 
 	for regionId, arnList := range regionArnMap {
-		regionSpec := *openapiclient.NewPrivateServiceEndpointRegionSpec(regionId, arnList)
+		regionSpec := *openapiclient.NewPrivateServiceEndpointRegionSpec(arnList)
+		regionSpec.SetClusterRegionInfoId(regionId)
 		local := *openapiclient.NewPrivateServiceEndpointSpec([]openapiclient.PrivateServiceEndpointRegionSpec{regionSpec})
 		pseSpecs = append(pseSpecs, local)
 	}
@@ -455,7 +456,8 @@ func createPrivateServiceEndpointRegionSpec(regionArnMap map[string][]string) []
 	pseSpecs := []openapiclient.PrivateServiceEndpointRegionSpec{}
 
 	for regionId, arnList := range regionArnMap {
-		local := *openapiclient.NewPrivateServiceEndpointRegionSpec(regionId, arnList)
+		local := *openapiclient.NewPrivateServiceEndpointRegionSpec(arnList)
+		local.SetClusterRegionInfoId(regionId)
 		pseSpecs = append(pseSpecs, local)
 	}
 	return pseSpecs

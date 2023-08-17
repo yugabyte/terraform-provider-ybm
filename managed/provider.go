@@ -150,6 +150,7 @@ func (p *provider) GetResources(_ context.Context) (map[string]tfsdk.ResourceTyp
 		"ybm_user":                     resourceUserType{},
 		"ybm_role":                     resourceRoleType{},
 		"ybm_private_service_endpoint": resourcePrivateEndpointType{},
+		"ybm_api_key":                  resourceApiKeyType{},
 	}, nil
 }
 
