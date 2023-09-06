@@ -238,11 +238,12 @@ func (r resourcePrivateEndpoint) Create(ctx context.Context, req tfsdk.CreateRes
 		return
 	}
 	psEps := Filter(createResp.GetData(), func(ep openapiclient.PrivateServiceEndpointRegionData) bool {
-		return ep.GetSpec().ClusterRegionInfoId.Get() == &desiredRegions[0].Id
+		return *ep.GetSpec().ClusterRegionInfoId.Get() == desiredRegions[0].Id
 	})
 
 	if len(psEps) == 0 {
-		resp.Diagnostics.AddError("unable to create private service endpoint", GetApiErrorDetails(err))
+		resp.Diagnostics.AddError("unable to create private service endpoint",
+			"Could not find cluster region endpoint")
 		return
 	}
 
