@@ -5,6 +5,8 @@
 package managed
 
 import (
+	"strings"
+
 	"github.com/hashicorp/terraform-plugin-framework/types"
 )
 
@@ -77,4 +79,13 @@ func SliceStringToSliceTypesString(slice []string) []types.String {
 		result = append(result, types.String{Value: s})
 	}
 	return result
+}
+
+func obfuscateString(s string) string {
+	if len(s) < 6 {
+		return "X"
+	}
+	substring := s[2 : len(s)-2]
+	replaced := strings.Replace(s, substring, strings.Repeat("X", len(substring)), 1)
+	return replaced
 }

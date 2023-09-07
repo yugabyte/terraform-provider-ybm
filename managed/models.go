@@ -235,3 +235,42 @@ type ApiKey struct {
 	ExpiryTime  types.String `tfsdk:"expiration"`
 	CreatedAt   types.String `tfsdk:"date_created"`
 }
+
+type MetricsExporter struct {
+	AccountID   types.String `tfsdk:"account_id"`
+	ProjectID   types.String `tfsdk:"project_id"`
+	ConfigID    types.String `tfsdk:"config_id"`
+	ConfigName  types.String `tfsdk:"config_name"`
+	Type        types.String `tfsdk:"type"`
+	DataDogSpec *DataDogSpec `tfsdk:"datadog_spec"`
+	GrafanaSpec *GrafanaSpec `tfsdk:"grafana_spec"`
+}
+
+type DataDogSpec struct {
+	Site   types.String `tfsdk:"site"`
+	ApiKey types.String `tfsdk:"api_key"`
+}
+
+type GrafanaSpec struct {
+	ApiKey     types.String `tfsdk:"api_key"`
+	Endpoint   types.String `tfsdk:"endpoint"`
+	InstanceId types.String `tfsdk:"instance_id"`
+	OrgSlug    types.String `tfsdk:"org_slug"`
+}
+
+func (d DataDogSpec) EncryptedKey() string {
+	return obfuscateString(d.ApiKey.Value)
+}
+
+func (g GrafanaSpec) EncryptedKey() string {
+	return obfuscateString(g.ApiKey.Value)
+}
+
+type AssociateMetricsExporterCluster struct {
+	AccountID   types.String `tfsdk:"account_id"`
+	ProjectID   types.String `tfsdk:"project_id"`
+	ConfigID    types.String `tfsdk:"config_id"`
+	ConfigName  types.String `tfsdk:"config_name"`
+	ClusterID   types.String `tfsdk:"cluster_id"`
+	ClusterName types.String `tfsdk:"cluster_name"`
+}
