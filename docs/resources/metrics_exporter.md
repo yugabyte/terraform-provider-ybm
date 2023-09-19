@@ -15,10 +15,10 @@ The resource to create a metrics exporter config in YugabyteDB Managed.
 # Example for Datadog
 resource "ybm_metrics_exporter" "datadog" {
   config_name = "datadogTest"
-  type = "DATADOG"
+  type        = "DATADOG"
   datadog_spec = {
     api_key = "Your api key"
-    site ="datadoghq.com"
+    site    = "datadoghq.com"
   }
 }
 
@@ -26,12 +26,12 @@ resource "ybm_metrics_exporter" "datadog" {
 # Example for Grafana
 resource "ybm_metrics_exporter" "gwenngrafna" {
   config_name = "grafanaTest"
-  type = "GRAFANA"
+  type        = "GRAFANA"
   grafana_spec = {
-    api_key = "your api key"
-    instance_id ="111111"
-    org_slug= "orgtest"
-    endpoint = "https://otlp-gateway-prod-us-east-0.grafana.net/otlp"
+    access_policy_token = "your access policy token"
+    instance_id         = "111111"
+    org_slug            = "orgtest"
+    zone                = "prod-us-east-0"
   }
 }
 ```
@@ -69,7 +69,7 @@ Required:
 
 Required:
 
-- `api_key` (String, Sensitive) Grafana Api Key
-- `endpoint` (String) Grafana site.
+- `access_policy_token` (String, Sensitive) Grafana Access Policy Token
 - `instance_id` (String) Grafana InstanceID.
 - `org_slug` (String) Grafana OrgSlug.
+- `zone` (String) Grafana Zone.

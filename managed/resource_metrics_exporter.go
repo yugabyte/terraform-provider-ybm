@@ -75,14 +75,14 @@ func (r resourceMetricsExporterType) GetSchema(_ context.Context) (tfsdk.Schema,
 				Description: "Configuration for Grafana metrics sink.",
 				Optional:    true,
 				Attributes: tfsdk.SingleNestedAttributes(map[string]tfsdk.Attribute{
-					"api_key": {
-						Description: "Grafana Api Key",
+					"access_policy_token": {
+						Description: "Grafana Access Policy Token",
 						Type:        types.StringType,
 						Required:    true,
 						Sensitive:   true,
 					},
-					"endpoint": {
-						Description: "Grafana site.",
+					"zone": {
+						Description: "Grafana Zone.",
 						Type:        types.StringType,
 						Required:    true,
 					},
@@ -206,9 +206,9 @@ func (r resourceMetricsExporter) Create(ctx context.Context, req tfsdk.CreateRes
 			)
 			return
 		}
-		grafanaSpec := openapiclient.NewGrafanaMetricsExporterConfigurationSpec(plan.GrafanaSpec.ApiKey.Value, plan.GrafanaSpec.Endpoint.Value, plan.GrafanaSpec.InstanceId.Value, plan.GrafanaSpec.OrgSlug.Value)
+		grafanaSpec := openapiclient.NewGrafanaMetricsExporterConfigurationSpec(plan.GrafanaSpec.AccessTokenPolicy.Value, plan.GrafanaSpec.Zone.Value, plan.GrafanaSpec.InstanceId.Value, plan.GrafanaSpec.OrgSlug.Value)
 		metricsExporterConfigSpec.SetGrafanaSpec(*grafanaSpec)
-		apiKey = plan.GrafanaSpec.ApiKey.Value
+		apiKey = plan.GrafanaSpec.AccessTokenPolicy.Value
 	default:
 		//We should never go there normally
 		resp.Diagnostics.AddError(
@@ -253,7 +253,7 @@ func (r resourceMetricsExporter) Read(ctx context.Context, req tfsdk.ReadResourc
 	case string(openapiclient.METRICSEXPORTERCONFIGTYPEENUM_DATADOG):
 		apiKey = state.DataDogSpec.ApiKey.Value
 	case string(openapiclient.METRICSEXPORTERCONFIGTYPEENUM_GRAFANA):
-		apiKey = state.GrafanaSpec.ApiKey.Value
+		apiKey = state.GrafanaSpec.AccessTokenPolicy.Value
 	}
 
 	apiClient := r.p.client
@@ -284,8 +284,8 @@ func (r resourceMetricsExporter) Read(ctx context.Context, req tfsdk.ReadResourc
 
 		}
 	case string(openapiclient.METRICSEXPORTERCONFIGTYPEENUM_GRAFANA):
-		if config.GrafanaSpec.ApiKey.Value == state.GrafanaSpec.EncryptedKey() {
-			config.GrafanaSpec.ApiKey.Value = apiKey
+		if config.GrafanaSpec.AccessTokenPolicy.Value == state.GrafanaSpec.EncryptedKey() {
+			config.GrafanaSpec.AccessTokenPolicy.Value = apiKey
 		}
 	}
 
@@ -340,9 +340,9 @@ func (r resourceMetricsExporter) Update(ctx context.Context, req tfsdk.UpdateRes
 			)
 			return
 		}
-		grafanaSpec := openapiclient.NewGrafanaMetricsExporterConfigurationSpec(plan.GrafanaSpec.ApiKey.Value, plan.GrafanaSpec.Endpoint.Value, plan.GrafanaSpec.InstanceId.Value, plan.GrafanaSpec.OrgSlug.Value)
+		grafanaSpec := openapiclient.NewGrafanaMetricsExporterConfigurationSpec(plan.GrafanaSpec.AccessTokenPolicy.Value, plan.GrafanaSpec.Zone.Value, plan.GrafanaSpec.InstanceId.Value, plan.GrafanaSpec.OrgSlug.Value)
 		metricsExporterConfigSpec.SetGrafanaSpec(*grafanaSpec)
-		apiKey = plan.GrafanaSpec.ApiKey.Value
+		apiKey = plan.GrafanaSpec.AccessTokenPolicy.Value
 	default:
 		//We should never go there normally
 		resp.Diagnostics.AddError(
@@ -374,8 +374,8 @@ func (r resourceMetricsExporter) Update(ctx context.Context, req tfsdk.UpdateRes
 			config.DataDogSpec.ApiKey.Value = apiKey
 		}
 	case string(openapiclient.METRICSEXPORTERCONFIGTYPEENUM_GRAFANA):
-		if config.GrafanaSpec.ApiKey.Value == plan.GrafanaSpec.EncryptedKey() {
-			config.GrafanaSpec.ApiKey.Value = apiKey
+		if config.GrafanaSpec.AccessTokenPolicy.Value == plan.GrafanaSpec.EncryptedKey() {
+			config.GrafanaSpec.AccessTokenPolicy.Value = apiKey
 		}
 	}
 	diags := resp.State.Set(ctx, &config)
@@ -410,10 +410,10 @@ func resourceMetricsExporterRead(accountId string, projectId string, configID st
 		// We cannot use the api return as the apikey return by the api is masked.
 		// We need to use the one provided by the user
 		me.GrafanaSpec = &GrafanaSpec{
-			ApiKey:     types.String{Value: string(apiKey)},
-			Endpoint:   types.String{Value: string(config.GetSpec().GrafanaSpec.Get().Endpoint)},
-			InstanceId: types.String{Value: string(config.GetSpec().GrafanaSpec.Get().InstanceId)},
-			OrgSlug:    types.String{Value: string(config.GetSpec().GrafanaSpec.Get().OrgSlug)},
+			AccessTokenPolicy: types.String{Value: string(apiKey)},
+			Zone:              types.String{Value: string(config.GetSpec().GrafanaSpec.Get().Zone)},
+			InstanceId:        types.String{Value: string(config.GetSpec().GrafanaSpec.Get().InstanceId)},
+			OrgSlug:           types.String{Value: string(config.GetSpec().GrafanaSpec.Get().OrgSlug)},
 		}
 	}
 

@@ -252,10 +252,10 @@ type DataDogSpec struct {
 }
 
 type GrafanaSpec struct {
-	ApiKey     types.String `tfsdk:"api_key"`
-	Endpoint   types.String `tfsdk:"endpoint"`
-	InstanceId types.String `tfsdk:"instance_id"`
-	OrgSlug    types.String `tfsdk:"org_slug"`
+	AccessTokenPolicy types.String `tfsdk:"access_policy_token"`
+	Zone              types.String `tfsdk:"zone"`
+	InstanceId        types.String `tfsdk:"instance_id"`
+	OrgSlug           types.String `tfsdk:"org_slug"`
 }
 
 func (d DataDogSpec) EncryptedKey() string {
@@ -263,7 +263,7 @@ func (d DataDogSpec) EncryptedKey() string {
 }
 
 func (g GrafanaSpec) EncryptedKey() string {
-	return obfuscateString(g.ApiKey.Value)
+	return obfuscateString(g.AccessTokenPolicy.Value)
 }
 
 type AssociateMetricsExporterCluster struct {
