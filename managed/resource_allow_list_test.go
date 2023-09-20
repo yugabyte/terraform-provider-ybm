@@ -10,13 +10,11 @@ import (
 	"reflect"
 	"testing"
 
-	mocks "github.com/yugabyte/terraform-provider-ybm/mock_yugabytedb_managed_go_client_internal"
-	openapi "github.com/yugabyte/yugabytedb-managed-go-client-internal"
-
 	gomock "github.com/golang/mock/gomock"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
 	"github.com/hashicorp/terraform-plugin-framework/types"
+	mocks "github.com/yugabyte/terraform-provider-ybm/mock_yugabytedb_managed_go_client_internal"
 	openapiclient "github.com/yugabyte/yugabytedb-managed-go-client-internal"
 )
 
@@ -47,7 +45,7 @@ func getCreateAllowListRequest(ctx context.Context, cfg *openapiclient.Configura
 }
 
 func getCreateAllowListResponse(allowListID string, projectID string, cidrList []string, allowListDescription string, allowListName string) *openapiclient.NetworkAllowListResponse {
-	allowListClusterInfo := []openapi.NetworkAllowListClusterInfo{*openapi.NewNetworkAllowListClusterInfoWithDefaults()}
+	allowListClusterInfo := []openapiclient.NetworkAllowListClusterInfo{*openapiclient.NewNetworkAllowListClusterInfoWithDefaults()}
 	allowListInfo := openapiclient.NewNetworkAllowListInfo(allowListID, projectID, []string{}, allowListClusterInfo)
 	allowListSpec := openapiclient.NewNetworkAllowListSpec(allowListName, allowListDescription, cidrList)
 	allowListData := openapiclient.NewNetworkAllowListData(*allowListSpec, *allowListInfo)
@@ -69,9 +67,9 @@ func getListAllowListRequest(ctx context.Context, cfg *openapiclient.Configurati
 	return &listAllowListRequest
 }
 func getListAllowListResponse(allowListID string, projectID string, cidrList []string, allowListDescription string, allowListName string) *openapiclient.NetworkAllowListListResponse {
-	allowListList := openapi.NewNetworkAllowListListResponseWithDefaults()
+	allowListList := openapiclient.NewNetworkAllowListListResponseWithDefaults()
 	allowList := getCreateAllowListResponse(allowListID, projectID, cidrList, allowListDescription, allowListName)
-	allowListList.SetData([]openapi.NetworkAllowListData{allowList.Data})
+	allowListList.SetData([]openapiclient.NetworkAllowListData{allowList.Data})
 
 	return allowListList
 }
