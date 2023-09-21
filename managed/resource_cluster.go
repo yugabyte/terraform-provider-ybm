@@ -13,6 +13,7 @@ import (
 
 	"time"
 
+	"github.com/hashicorp/terraform-plugin-framework-validators/int64validator"
 	"github.com/hashicorp/terraform-plugin-framework-validators/schemavalidator"
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/attr"
@@ -278,6 +279,13 @@ and modify the backup schedule of the cluster being created.`,
 				Optional:    true,
 				Computed:    true,
 				Validators:  []tfsdk.AttributeValidator{stringvalidator.OneOf("NONE", "NODE", "ZONE", "REGION")},
+			},
+			"num_faults_to_tolerate": {
+				Description: "The number of domain faults the cluster can tolerate. 0 for NONE, 1 for ZONE and [1-3] for NODE and REGION",
+				Type:        types.Int64Type,
+				Optional:    true,
+				Computed:    true,
+				Validators:  []tfsdk.AttributeValidator{int64validator.OneOf(0, 1, 2, 3)},
 			},
 			"cluster_allow_list_ids": {
 				Description: "List of IDs of the allow lists assigned to the cluster.",
@@ -552,6 +560,10 @@ func createClusterSpec(ctx context.Context, apiClient *openapiclient.APIClient, 
 		isProduction,
 	)
 
+	if !plan.NumFaultsToTolerate.IsUnknown() {
+		clusterInfo.SetNumFaultsToTolerate(int32(plan.NumFaultsToTolerate.Value))
+	}
+
 	clusterInfo.SetClusterType(openapiclient.ClusterType(clusterType))
 	if clusterExists {
 		cluster_version, _ := strconv.Atoi(plan.ClusterVersion.Value)
@@ -581,6 +593,7 @@ func getPlan(ctx context.Context, plan tfsdk.Plan, cluster *Cluster) diag.Diagno
 	diags.Append(plan.GetAttribute(ctx, path.Root("cluster_type"), &cluster.ClusterType)...)
 	diags.Append(plan.GetAttribute(ctx, path.Root("cluster_region_info"), &cluster.ClusterRegionInfo)...)
 	diags.Append(plan.GetAttribute(ctx, path.Root("fault_tolerance"), &cluster.FaultTolerance)...)
+	diags.Append(plan.GetAttribute(ctx, path.Root("num_faults_to_tolerate"), &cluster.NumFaultsToTolerate)...)
 	diags.Append(plan.GetAttribute(ctx, path.Root("cluster_tier"), &cluster.ClusterTier)...)
 	diags.Append(plan.GetAttribute(ctx, path.Root("cluster_allow_list_ids"), &cluster.ClusterAllowListIDs)...)
 	diags.Append(plan.GetAttribute(ctx, path.Root("restore_backup_id"), &cluster.RestoreBackupID)...)
@@ -1300,6 +1313,7 @@ func resourceClusterRead(ctx context.Context, accountId string, projectId string
 	cluster.DatabaseTrack.Value = trackName
 
 	cluster.FaultTolerance.Value = string(clusterResp.Data.Spec.ClusterInfo.FaultTolerance)
+	cluster.NumFaultsToTolerate.Value = int64(*clusterResp.Data.Spec.ClusterInfo.NumFaultsToTolerate.Get())
 	cluster.NodeConfig.NumCores.Value = int64(clusterResp.Data.Spec.ClusterInfo.NodeInfo.NumCores)
 	cluster.NodeConfig.DiskSizeGb.Value = int64(clusterResp.Data.Spec.ClusterInfo.NodeInfo.DiskSizeGb)
 	iopsPtr := clusterResp.Data.Spec.ClusterInfo.NodeInfo.DiskIops.Get()
