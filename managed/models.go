@@ -16,6 +16,7 @@ type Cluster struct {
 	CloudType           types.String         `tfsdk:"cloud_type"`
 	ClusterType         types.String         `tfsdk:"cluster_type"`
 	FaultTolerance      types.String         `tfsdk:"fault_tolerance"`
+	NumFaultsToTolerate types.Int64          `tfsdk:"num_faults_to_tolerate"`
 	ClusterRegionInfo   []RegionInfo         `tfsdk:"cluster_region_info"`
 	DatabaseTrack       types.String         `tfsdk:"database_track"`
 	DesiredState        types.String         `tfsdk:"desired_state"`

@@ -251,6 +251,11 @@ func (r dataClusterNameType) GetSchema(_ context.Context) (tfsdk.Schema, diag.Di
 				Type:        types.StringType,
 				Computed:    true,
 			},
+			"num_faults_to_tolerate": {
+				Description: "The number of domain faults the cluster can tolerate.",
+				Type:        types.Int64Type,
+				Computed:    true,
+			},
 			"cluster_allow_list_ids": {
 				Description: "List of IDs of the allow lists assigned to the cluster.",
 				Type: types.ListType{

@@ -493,6 +493,7 @@ resource "ybm_private_service_endpoint" "npsenonok-region" {
 - `database_track` (String) The track of the database. Production or Innovation or Preview.
 - `desired_state` (String) The desired state of the database, Active or Paused. This parameter can be used to pause/resume a cluster.
 - `fault_tolerance` (String) The fault tolerance of the cluster. NONE, NODE, ZONE or REGION.
+- `num_faults_to_tolerate` (Number) The number of domain faults the cluster can tolerate. 0 for NONE, 1 for ZONE and [1-3] for NODE and REGION
 - `restore_backup_id` (String) The ID of the backup to be restored to the cluster.
 
 ### Read-Only
