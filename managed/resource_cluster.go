@@ -829,10 +829,36 @@ func (r resourceCluster) Create(ctx context.Context, req tfsdk.CreateResourceReq
 	}
 	clusterId := clusterResp.Data.Info.Id
 
-	// read status, wait for status to be done
 	retryPolicy := retry.NewConstant(10 * time.Second)
-	retryPolicy = retry.WithMaxDuration(2400*time.Second, retryPolicy)
+	retryPolicy = retry.WithMaxDuration(3600*time.Second, retryPolicy)
 	err = retry.Do(ctx, retryPolicy, func(ctx context.Context) error {
+		asState, readInfoOK, message := getTaskState(accountId, projectId, clusterId, openapiclient.ENTITYTYPEENUM_CLUSTER, openapiclient.TASKTYPEENUM_CREATE_CLUSTER, apiClient, ctx)
+		if readInfoOK {
+			if asState == string(openapiclient.TASKACTIONSTATEENUM_SUCCEEDED) {
+				return nil
+			}
+			if asState == string(openapiclient.TASKACTIONSTATEENUM_FAILED) {
+				return ErrFailedTask
+			}
+		} else {
+			return retry.RetryableError(errors.New("Unable to get cluster state: " + message))
+		}
+		return retry.RetryableError(errors.New("The cluster creation is in progress"))
+	})
+
+	if err != nil {
+		msg := "The operation timed out waiting for cluster creation to complete."
+		if errors.Is(err, ErrFailedTask) {
+			msg = "cluster creation operation failed"
+		}
+		resp.Diagnostics.AddError("Unable to create cluster:", msg)
+		return
+	}
+
+	// read status, wait for status to be done
+	retryPolicyA := retry.NewConstant(10 * time.Second)
+	retryPolicyA = retry.WithMaxDuration(3600*time.Second, retryPolicyA)
+	err = retry.Do(ctx, retryPolicyA, func(ctx context.Context) error {
 		clusterState, readInfoOK, message := getClusterState(ctx, accountId, projectId, clusterId, apiClient)
 		if readInfoOK {
 			if strings.EqualFold(clusterState, "Active") || clusterState == "Create Failed" || clusterState == "CREATE_FAILED" {
@@ -1558,10 +1584,36 @@ func (r resourceCluster) Update(ctx context.Context, req tfsdk.UpdateResourceReq
 		return
 	}
 
-	// read status, wait for status to be don
 	retryPolicy := retry.NewConstant(10 * time.Second)
-	retryPolicy = retry.WithMaxDuration(2400*time.Second, retryPolicy)
+	retryPolicy = retry.WithMaxDuration(3600*time.Second, retryPolicy)
 	err = retry.Do(ctx, retryPolicy, func(ctx context.Context) error {
+		asState, readInfoOK, message := getTaskState(accountId, projectId, clusterId, openapiclient.ENTITYTYPEENUM_CLUSTER, openapiclient.TASKTYPEENUM_EDIT_CLUSTER, apiClient, ctx)
+		if readInfoOK {
+			if asState == string(openapiclient.TASKACTIONSTATEENUM_SUCCEEDED) {
+				return nil
+			}
+			if asState == string(openapiclient.TASKACTIONSTATEENUM_FAILED) {
+				return ErrFailedTask
+			}
+		} else {
+			return retry.RetryableError(errors.New("Unable to get cluster state: " + message))
+		}
+		return retry.RetryableError(errors.New("Cluster edit operation in progress"))
+	})
+
+	if err != nil {
+		msg := "The operation timed out waiting for cluster edit to complete."
+		if errors.Is(err, ErrFailedTask) {
+			msg = "cluster edit operation failed"
+		}
+		resp.Diagnostics.AddError("Unable to edit cluster:", msg)
+		return
+	}
+
+	// read status, wait for status to be active
+	retryPolicyA := retry.NewConstant(10 * time.Second)
+	retryPolicyA = retry.WithMaxDuration(3600*time.Second, retryPolicyA)
+	err = retry.Do(ctx, retryPolicyA, func(ctx context.Context) error {
 		clusterState, readInfoOK, message := getClusterState(ctx, accountId, projectId, clusterId, apiClient)
 		if readInfoOK {
 			if strings.EqualFold(clusterState, "Active") || clusterState == "Create Failed" || clusterState == "CREATE_FAILED" {
@@ -1574,7 +1626,7 @@ func (r resourceCluster) Update(ctx context.Context, req tfsdk.UpdateResourceReq
 	})
 
 	if err != nil {
-		resp.Diagnostics.AddError("Unable to create cluster", "The operation timed out waiting for cluster creation.")
+		resp.Diagnostics.AddError("Unable to edit cluster:", "The operation timed out waiting for cluster edit to complete.")
 		return
 	}
 
