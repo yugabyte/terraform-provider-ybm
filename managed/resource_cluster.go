@@ -1667,16 +1667,43 @@ func (r resourceCluster) Update(ctx context.Context, req tfsdk.UpdateResourceReq
 		return
 	}
 
+	// The following code has a pitfall:
+	// If we change just the cluster_allow_list_ids field, then we will send a cluster edit
+	// request to the server. The server will see the spec is the same as the current spec,
+	// so there will be no task submitted.
+	// If there is no task submitted (EVER), we will get a TASK_NOT_FOUND.
+	// If there was EVER a task submitted, we will get the status of that task (likely SUCCESS).
+	//
+	// Challenges:
+	// 1. Last EDIT was not successful - the customer should first perform an edit to get out of that state.
+	// 2. To work around ANY possible race condition in the server side (task created AFTER the response),
+	// we will try twice to read the task state. If both times we can't find the task, we bail out.
+	//
+	// Something similar will happen if changing the backup schedule or the CMK spec.
+	var retries int
 	retryPolicy := retry.NewConstant(10 * time.Second)
 	retryPolicy = retry.WithMaxDuration(3600*time.Second, retryPolicy)
 	err = retry.Do(ctx, retryPolicy, func(ctx context.Context) error {
 		asState, readInfoOK, message := getTaskState(accountId, projectId, clusterId, openapiclient.ENTITYTYPEENUM_CLUSTER, openapiclient.TASKTYPEENUM_EDIT_CLUSTER, apiClient, ctx)
+
+		tflog.Info(ctx, "Cluster edit operation in progress, state: "+asState)
+
 		if readInfoOK {
 			if asState == string(openapiclient.TASKACTIONSTATEENUM_SUCCEEDED) {
 				return nil
 			}
 			if asState == string(openapiclient.TASKACTIONSTATEENUM_FAILED) {
 				return ErrFailedTask
+			}
+			if asState == "TASK_NOT_FOUND" {
+				if retries < 2 {
+					retries++
+					tflog.Info(ctx, "Cluster edit task not found, retrying...")
+					return retry.RetryableError(errors.New("Cluster not found, retrying"))
+				} else {
+					tflog.Info(ctx, "Cluster edit task not found, giving up...")
+					return nil
+				}
 			}
 		} else {
 			return retry.RetryableError(errors.New("Unable to get cluster state: " + message))
