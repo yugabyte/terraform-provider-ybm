@@ -92,6 +92,11 @@ and modify the backup schedule of the cluster being created.`,
 						Optional: true,
 						Computed: true,
 					},
+					"public_access": {
+						Type:     types.BoolType,
+						Optional: true,
+						Computed: true,
+					},
 				}),
 			},
 			"backup_schedules": {
@@ -404,12 +409,38 @@ and modify the backup schedule of the cluster being created.`,
 				},
 			},
 			"cluster_endpoints": {
-				Description: "The endpoints used to connect to the cluster by region.",
+				Description:        "The endpoints used to connect to the cluster.",
+				DeprecationMessage: "This attribute is deprecated. Please use the 'endpoints' attribute instead.",
 				Type: types.MapType{
 					ElemType: types.StringType,
 				},
 				Optional: true,
 				Computed: true,
+			},
+			"endpoints": {
+				Description: "The endpoints used to connect to the cluster.",
+				Attributes: tfsdk.ListNestedAttributes(map[string]tfsdk.Attribute{
+					"accessibility_type": {
+						Description: "The accessibility type of the endpoint. PUBLIC or PRIVATE.",
+						Type:        types.StringType,
+						Computed:    true,
+						Optional:    true,
+					},
+					"host": {
+						Description: "The host of the endpoint.",
+						Type:        types.StringType,
+						Computed:    true,
+						Optional:    true,
+					},
+					"region": {
+						Description: "The region of the endpoint.",
+						Type:        types.StringType,
+						Computed:    true,
+						Optional:    true,
+					},
+				}),
+				Computed: true,
+				Optional: true,
 			},
 			"cluster_certificate": {
 				Description: "The certificate used to connect to the cluster.",
@@ -502,9 +533,33 @@ func createClusterSpec(ctx context.Context, apiClient *openapiclient.APIClient, 
 
 			regionInfo.VPCID.Value = vpcData.Info.Id
 		}
+
+		// Create an array of AccessibilityType and populate it according to
+		// the following logic:
+		// if the cluster is in a private VPC, it MUST always have PRIVATE.
+		// if the cluster is NOT in a private VPC, it MUST always have PUBLIC.
+		// if the cluster is in a private VPC and customer wants public access, it MUST have PRIVATE and PUBLIC.
+		accessibilityTypes := []openapiclient.AccessibilityType{}
+
 		if vpcID := regionInfo.VPCID.Value; vpcID != "" {
 			info.PlacementInfo.SetVpcId(vpcID)
+			accessibilityTypes = append(accessibilityTypes, openapiclient.ACCESSIBILITYTYPE_PRIVATE)
+
+			if regionInfo.PublicAccess.Value {
+				accessibilityTypes = append(accessibilityTypes, openapiclient.ACCESSIBILITYTYPE_PUBLIC)
+			}
+		} else {
+			accessibilityTypes = append(accessibilityTypes, openapiclient.ACCESSIBILITYTYPE_PUBLIC)
+
+			if !regionInfo.PublicAccess.Value {
+				tflog.Debug(ctx, fmt.Sprintf("Cluster %v is in a public VPC and public access is disabled. ", plan.ClusterName.Value))
+				return nil, false, "Cluster is in a public VPC and public access is disabled. Please enable public access."
+			}
 		}
+
+		// Set the accessibility type for the region
+		info.SetAccessibilityTypes(accessibilityTypes)
+
 		if clusterType == "SYNCHRONOUS" {
 			info.PlacementInfo.SetMultiZone(false)
 		}
@@ -1361,6 +1416,21 @@ func resourceClusterRead(ctx context.Context, accountId string, projectId string
 	}
 	cluster.ClusterEndpoints = clusterEndpoints
 
+	// Cluster endpoints v2
+	var clusterEndpointsV2 []ClusterEndpoint
+	for _, val := range clusterResp.Data.Info.ClusterEndpoints {
+
+		tflog.Debug(ctx, fmt.Sprintf("Cluster Endpoint %v %v %v", val.GetAccessibilityType(), val.GetHost(), val.Region))
+
+		clusterEndpoint := ClusterEndpoint{
+			AccessibilityType: types.String{Value: string(val.GetAccessibilityType())},
+			Host:              types.String{Value: val.GetHost()},
+			Region:            types.String{Value: val.Region},
+		}
+		clusterEndpointsV2 = append(clusterEndpointsV2, clusterEndpoint)
+	}
+	cluster.ClusterEndpointsV2 = clusterEndpointsV2
+
 	// Cluster certificate
 	certResponse, certHttpResp, err := apiClient.ClusterApi.GetConnectionCertificate(context.Background()).Execute()
 	if err != nil {
@@ -1390,11 +1460,24 @@ func resourceClusterRead(ctx context.Context, accountId string, projectId string
 				}
 				vpcName = vpcData.Spec.Name
 			}
+
+			// if info.AccessibilityTypes contains "PUBLIC" then set PublicAccess to true
+			publicAccess := false
+			for _, accessibilityType := range info.GetAccessibilityTypes() {
+				if accessibilityType == "PUBLIC" {
+					publicAccess = true
+					break
+				}
+			}
+
+			tflog.Debug(ctx, fmt.Sprintf("For region %v, publicAccess = %v", region, publicAccess))
+
 			regionInfo := RegionInfo{
-				Region:   types.String{Value: region},
-				NumNodes: types.Int64{Value: int64(info.PlacementInfo.GetNumNodes())},
-				VPCID:    types.String{Value: vpcID},
-				VPCName:  types.String{Value: vpcName},
+				Region:       types.String{Value: region},
+				NumNodes:     types.Int64{Value: int64(info.PlacementInfo.GetNumNodes())},
+				VPCID:        types.String{Value: vpcID},
+				VPCName:      types.String{Value: vpcName},
+				PublicAccess: types.Bool{Value: publicAccess},
 			}
 			clusterRegionInfo[destIndex] = regionInfo
 		}
