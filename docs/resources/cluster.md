@@ -169,6 +169,62 @@ resource "ybm_cluster" "multi_region_cluster" {
 }
 ```
 
+To create a single region cluster in a dedicated VPC with public access
+
+```terraform
+# Cluster with single region
+
+variable "password" {
+  type        = string
+  description = "YSQL Password."
+  sensitive   = true
+}
+
+resource "ybm_vpc" "example-vpc" {
+  name  = "example-vpc"
+  cloud = "AWS"
+  region_cidr_info = [
+    {
+      region = "us-east-1"
+      cidr   = "10.231.0.0/24"
+    }
+  ]
+}
+
+resource "ybm_allow_list" "example_allow_list" {
+  allow_list_name        = "allow-nobody"
+  allow_list_description = "allow 192.168.0.1"
+  cidr_list              = ["192.168.0.1/32"]
+}
+
+
+resource "ybm_cluster" "single_region_cluster" {
+  cluster_name = "single-region-cluster"
+  cloud_type   = "AWS"
+  cluster_type = "SYNCHRONOUS"
+  cluster_region_info = [
+    {
+      region        = "us-east-1"
+      num_nodes     = 1
+      vpc_id        = ybm_vpc.example-vpc.vpc_id
+      public_access = true
+    }
+  ]
+  cluster_tier           = "PAID"
+  cluster_allow_list_ids = [ybm_allow_list.example_allow_list.allow_list_id]
+  fault_tolerance        = "NONE"
+  node_config = {
+    num_cores    = 4
+    disk_size_gb = 50
+  }
+  credentials = {
+    username = "example_ysql_user"
+    password = var.password
+  }
+
+}
+```
+
 To create a multi region cluster by using distinct credentials for both YSQL and YCQL API
 
 ```terraform
@@ -487,11 +543,12 @@ resource "ybm_private_service_endpoint" "npsenonok-region" {
 - `backup_schedules` (Attributes List) (see [below for nested schema](#nestedatt--backup_schedules))
 - `cloud_type` (String) The cloud provider where the cluster is deployed: AWS, AZURE or GCP.
 - `cluster_allow_list_ids` (List of String) List of IDs of the allow lists assigned to the cluster.
-- `cluster_endpoints` (Map of String) The endpoints used to connect to the cluster by region.
+- `cluster_endpoints` (Map of String, Deprecated) The endpoints used to connect to the cluster.
 - `cluster_id` (String) The ID of the cluster. Created automatically when a cluster is created. Used to get a specific cluster.
 - `cmk_spec` (Attributes) KMS Provider Configuration. (see [below for nested schema](#nestedatt--cmk_spec))
 - `database_track` (String) The track of the database. Production or Innovation or Preview.
 - `desired_state` (String) The desired state of the database, Active or Paused. This parameter can be used to pause/resume a cluster.
+- `endpoints` (Attributes List) The endpoints used to connect to the cluster. (see [below for nested schema](#nestedatt--endpoints))
 - `fault_tolerance` (String) The fault tolerance of the cluster. NONE, NODE, ZONE or REGION.
 - `num_faults_to_tolerate` (Number) The number of domain faults the cluster can tolerate. 0 for NONE, 1 for ZONE and [1-3] for NODE and REGION
 - `restore_backup_id` (String) The ID of the backup to be restored to the cluster.
@@ -514,6 +571,7 @@ Required:
 
 Optional:
 
+- `public_access` (Boolean)
 - `vpc_id` (String)
 - `vpc_name` (String)
 
@@ -612,6 +670,16 @@ Optional:
 - `universe_domain` (String) Google Universe Domain
 
 
+
+
+<a id="nestedatt--endpoints"></a>
+### Nested Schema for `endpoints`
+
+Optional:
+
+- `accessibility_type` (String) The accessibility type of the endpoint. PUBLIC or PRIVATE.
+- `host` (String) The host of the endpoint.
+- `region` (String) The region of the endpoint.
 
 
 <a id="nestedatt--cluster_info"></a>
