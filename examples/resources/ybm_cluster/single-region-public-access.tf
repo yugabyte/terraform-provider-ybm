@@ -31,14 +31,15 @@ resource "ybm_cluster" "single_region_cluster" {
   cluster_region_info = [
     {
       region        = "us-east-1"
-      num_nodes     = 1
+      num_nodes     = 5
       vpc_id        = ybm_vpc.example-vpc.vpc_id
       public_access = true
     }
   ]
   cluster_tier           = "PAID"
   cluster_allow_list_ids = [ybm_allow_list.example_allow_list.allow_list_id]
-  fault_tolerance        = "NONE"
+  fault_tolerance        = "NODE"
+  num_faults_to_tolerate = 2
   node_config = {
     num_cores    = 4
     disk_size_gb = 50
