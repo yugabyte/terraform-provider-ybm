@@ -169,7 +169,7 @@ resource "ybm_cluster" "multi_region_cluster" {
 }
 ```
 
-To create a cluster which supports upto 2 domain faults (RF 5)
+To create a multi-region cluster which supports upto 2 domain faults (RF 5)
 
 ```terraform
 variable "password" {
