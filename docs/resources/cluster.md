@@ -221,6 +221,8 @@ resource "ybm_cluster" "single_region_cluster" {
     username = "example_ysql_user"
     password = var.password
   }
+
+}
 ```
 
 To create a multi-region cluster which supports up to 2 domain faults (RF 5)
