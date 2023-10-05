@@ -23,6 +23,10 @@ To create a multi region cluster by using common credentials for both YSQL and Y
 
 {{ tffile "examples/resources/ybm_cluster/multi-region-common-credentials.tf" }}
 
+To create a multi-region cluster which supports upto 2 domain faults (RF 5)
+
+{{ tffile "examples/resources/ybm_cluster/multi-region-rf5.tf" }}
+
 To create a multi region cluster by using distinct credentials for both YSQL and YCQL API
 
 {{ tffile "examples/resources/ybm_cluster/multi-region-distinct-credentials.tf" }}
