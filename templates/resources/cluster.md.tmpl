@@ -27,6 +27,10 @@ To create a single region cluster in a dedicated VPC with public access
 
 {{ tffile "examples/resources/ybm_cluster/single-region-public-access.tf" }}
 
+To create a multi-region cluster which supports up to 2 domain faults (RF 5)
+
+{{ tffile "examples/resources/ybm_cluster/multi-region-rf5.tf" }}
+
 To create a multi region cluster by using distinct credentials for both YSQL and YCQL API
 
 {{ tffile "examples/resources/ybm_cluster/multi-region-distinct-credentials.tf" }}
