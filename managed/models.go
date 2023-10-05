@@ -29,8 +29,15 @@ type Cluster struct {
 	ClusterVersion      types.String         `tfsdk:"cluster_version"`
 	BackupSchedules     []BackupScheduleInfo `tfsdk:"backup_schedules"`
 	ClusterEndpoints    types.Map            `tfsdk:"cluster_endpoints"`
+	ClusterEndpointsV2  []ClusterEndpoint    `tfsdk:"endpoints"`
 	ClusterCertificate  types.String         `tfsdk:"cluster_certificate"`
 	CMKSpec             *CMKSpec             `tfsdk:"cmk_spec"`
+}
+
+type ClusterEndpoint struct {
+	AccessibilityType types.String `tfsdk:"accessibility_type"`
+	Host              types.String `tfsdk:"host"`
+	Region            types.String `tfsdk:"region"`
 }
 
 type CMKSpec struct {
@@ -76,10 +83,11 @@ type BackupScheduleInfo struct {
 	TimeIntervalInDays    types.Int64  `tfsdk:"time_interval_in_days"`
 }
 type RegionInfo struct {
-	Region   types.String `tfsdk:"region"`
-	NumNodes types.Int64  `tfsdk:"num_nodes"`
-	VPCID    types.String `tfsdk:"vpc_id"`
-	VPCName  types.String `tfsdk:"vpc_name"`
+	Region       types.String `tfsdk:"region"`
+	NumNodes     types.Int64  `tfsdk:"num_nodes"`
+	VPCID        types.String `tfsdk:"vpc_id"`
+	VPCName      types.String `tfsdk:"vpc_name"`
+	PublicAccess types.Bool   `tfsdk:"public_access"`
 }
 
 type NodeConfig struct {

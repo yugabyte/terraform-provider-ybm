@@ -288,6 +288,12 @@ func getTaskState(accountId string, projectId string, entityId string, entityTyp
 
 	if v, ok := taskList.GetDataOk(); ok && v != nil {
 		c := taskList.GetData()
+
+		if len(c) == 0 {
+			tflog.Info(ctx, "No task found for this operation")
+			return "TASK_NOT_FOUND", true, ""
+		}
+
 		if len(c) > 0 {
 			if status, ok := c[0].GetInfoOk(); ok {
 				currentStatus = status.GetState()

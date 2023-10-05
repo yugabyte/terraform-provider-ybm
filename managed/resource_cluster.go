@@ -92,6 +92,11 @@ and modify the backup schedule of the cluster being created.`,
 						Optional: true,
 						Computed: true,
 					},
+					"public_access": {
+						Type:     types.BoolType,
+						Optional: true,
+						Computed: true,
+					},
 				}),
 			},
 			"backup_schedules": {
@@ -404,12 +409,38 @@ and modify the backup schedule of the cluster being created.`,
 				},
 			},
 			"cluster_endpoints": {
-				Description: "The endpoints used to connect to the cluster by region.",
+				Description:        "The endpoints used to connect to the cluster.",
+				DeprecationMessage: "This attribute is deprecated. Please use the 'endpoints' attribute instead.",
 				Type: types.MapType{
 					ElemType: types.StringType,
 				},
 				Optional: true,
 				Computed: true,
+			},
+			"endpoints": {
+				Description: "The endpoints used to connect to the cluster.",
+				Attributes: tfsdk.ListNestedAttributes(map[string]tfsdk.Attribute{
+					"accessibility_type": {
+						Description: "The accessibility type of the endpoint. PUBLIC or PRIVATE.",
+						Type:        types.StringType,
+						Computed:    true,
+						Optional:    true,
+					},
+					"host": {
+						Description: "The host of the endpoint.",
+						Type:        types.StringType,
+						Computed:    true,
+						Optional:    true,
+					},
+					"region": {
+						Description: "The region of the endpoint.",
+						Type:        types.StringType,
+						Computed:    true,
+						Optional:    true,
+					},
+				}),
+				Computed: true,
+				Optional: true,
 			},
 			"cluster_certificate": {
 				Description: "The certificate used to connect to the cluster.",
@@ -502,9 +533,33 @@ func createClusterSpec(ctx context.Context, apiClient *openapiclient.APIClient, 
 
 			regionInfo.VPCID.Value = vpcData.Info.Id
 		}
+
+		// Create an array of AccessibilityType and populate it according to
+		// the following logic:
+		// if the cluster is in a private VPC, it MUST always have PRIVATE.
+		// if the cluster is NOT in a private VPC, it MUST always have PUBLIC.
+		// if the cluster is in a private VPC and customer wants public access, it MUST have PRIVATE and PUBLIC.
+		accessibilityTypes := []openapiclient.AccessibilityType{}
+
 		if vpcID := regionInfo.VPCID.Value; vpcID != "" {
 			info.PlacementInfo.SetVpcId(vpcID)
+			accessibilityTypes = append(accessibilityTypes, openapiclient.ACCESSIBILITYTYPE_PRIVATE)
+
+			if regionInfo.PublicAccess.Value {
+				accessibilityTypes = append(accessibilityTypes, openapiclient.ACCESSIBILITYTYPE_PUBLIC)
+			}
+		} else {
+			accessibilityTypes = append(accessibilityTypes, openapiclient.ACCESSIBILITYTYPE_PUBLIC)
+
+			if !regionInfo.PublicAccess.Value {
+				tflog.Debug(ctx, fmt.Sprintf("Cluster %v is in a public VPC and public access is disabled. ", plan.ClusterName.Value))
+				return nil, false, "Cluster is in a public VPC and public access is disabled. Please enable public access."
+			}
 		}
+
+		// Set the accessibility type for the region
+		info.SetAccessibilityTypes(accessibilityTypes)
+
 		if clusterType == "SYNCHRONOUS" {
 			info.PlacementInfo.SetMultiZone(false)
 		}
@@ -1361,6 +1416,21 @@ func resourceClusterRead(ctx context.Context, accountId string, projectId string
 	}
 	cluster.ClusterEndpoints = clusterEndpoints
 
+	// Cluster endpoints v2
+	var clusterEndpointsV2 []ClusterEndpoint
+	for _, val := range clusterResp.Data.Info.ClusterEndpoints {
+
+		tflog.Debug(ctx, fmt.Sprintf("Cluster Endpoint %v %v %v", val.GetAccessibilityType(), val.GetHost(), val.Region))
+
+		clusterEndpoint := ClusterEndpoint{
+			AccessibilityType: types.String{Value: string(val.GetAccessibilityType())},
+			Host:              types.String{Value: val.GetHost()},
+			Region:            types.String{Value: val.Region},
+		}
+		clusterEndpointsV2 = append(clusterEndpointsV2, clusterEndpoint)
+	}
+	cluster.ClusterEndpointsV2 = clusterEndpointsV2
+
 	// Cluster certificate
 	certResponse, certHttpResp, err := apiClient.ClusterApi.GetConnectionCertificate(context.Background()).Execute()
 	if err != nil {
@@ -1390,11 +1460,24 @@ func resourceClusterRead(ctx context.Context, accountId string, projectId string
 				}
 				vpcName = vpcData.Spec.Name
 			}
+
+			// if info.AccessibilityTypes contains "PUBLIC" then set PublicAccess to true
+			publicAccess := false
+			for _, accessibilityType := range info.GetAccessibilityTypes() {
+				if accessibilityType == "PUBLIC" {
+					publicAccess = true
+					break
+				}
+			}
+
+			tflog.Debug(ctx, fmt.Sprintf("For region %v, publicAccess = %v", region, publicAccess))
+
 			regionInfo := RegionInfo{
-				Region:   types.String{Value: region},
-				NumNodes: types.Int64{Value: int64(info.PlacementInfo.GetNumNodes())},
-				VPCID:    types.String{Value: vpcID},
-				VPCName:  types.String{Value: vpcName},
+				Region:       types.String{Value: region},
+				NumNodes:     types.Int64{Value: int64(info.PlacementInfo.GetNumNodes())},
+				VPCID:        types.String{Value: vpcID},
+				VPCName:      types.String{Value: vpcName},
+				PublicAccess: types.Bool{Value: publicAccess},
 			}
 			clusterRegionInfo[destIndex] = regionInfo
 		}
@@ -1584,16 +1667,43 @@ func (r resourceCluster) Update(ctx context.Context, req tfsdk.UpdateResourceReq
 		return
 	}
 
+	// The following code has a pitfall:
+	// If we change just the cluster_allow_list_ids field, then we will send a cluster edit
+	// request to the server. The server will see the spec is the same as the current spec,
+	// so there will be no task submitted.
+	// If there is no task submitted (EVER), we will get a TASK_NOT_FOUND.
+	// If there was EVER a task submitted, we will get the status of that task (likely SUCCESS).
+	//
+	// Challenges:
+	// 1. Last EDIT was not successful - the customer should first perform an edit to get out of that state.
+	// 2. To work around ANY possible race condition in the server side (task created AFTER the response),
+	// we will try twice to read the task state. If both times we can't find the task, we bail out.
+	//
+	// Something similar will happen if changing the backup schedule or the CMK spec.
+	var retries int
 	retryPolicy := retry.NewConstant(10 * time.Second)
 	retryPolicy = retry.WithMaxDuration(3600*time.Second, retryPolicy)
 	err = retry.Do(ctx, retryPolicy, func(ctx context.Context) error {
 		asState, readInfoOK, message := getTaskState(accountId, projectId, clusterId, openapiclient.ENTITYTYPEENUM_CLUSTER, openapiclient.TASKTYPEENUM_EDIT_CLUSTER, apiClient, ctx)
+
+		tflog.Info(ctx, "Cluster edit operation in progress, state: "+asState)
+
 		if readInfoOK {
 			if asState == string(openapiclient.TASKACTIONSTATEENUM_SUCCEEDED) {
 				return nil
 			}
 			if asState == string(openapiclient.TASKACTIONSTATEENUM_FAILED) {
 				return ErrFailedTask
+			}
+			if asState == "TASK_NOT_FOUND" {
+				if retries < 2 {
+					retries++
+					tflog.Info(ctx, "Cluster edit task not found, retrying...")
+					return retry.RetryableError(errors.New("Cluster not found, retrying"))
+				} else {
+					tflog.Info(ctx, "Cluster edit task not found, giving up...")
+					return nil
+				}
 			}
 		} else {
 			return retry.RetryableError(errors.New("Unable to get cluster state: " + message))
