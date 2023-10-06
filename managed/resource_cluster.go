@@ -551,7 +551,9 @@ func createClusterSpec(ctx context.Context, apiClient *openapiclient.APIClient, 
 		} else {
 			accessibilityTypes = append(accessibilityTypes, openapiclient.ACCESSIBILITYTYPE_PUBLIC)
 
-			if !regionInfo.PublicAccess.Value {
+			// If the value is specified and it is false, then it is an error because the user
+			// wants disabled public access on a non-dedicated VPC cluster.
+			if !regionInfo.PublicAccess.IsUnknown() && !regionInfo.PublicAccess.Value {
 				tflog.Debug(ctx, fmt.Sprintf("Cluster %v is in a public VPC and public access is disabled. ", plan.ClusterName.Value))
 				return nil, false, "Cluster is in a public VPC and public access is disabled. Please enable public access."
 			}
