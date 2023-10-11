@@ -45,6 +45,7 @@ data "ybm_cluster" "example_cluster"{
 - `credentials` (Attributes) (see [below for nested schema](#nestedatt--credentials))
 - `database_track` (String) The track of the database. Stable or Preview.
 - `desired_state` (String) The desired state of the database, Active or Paused. This parameter can be used to pause/resume a cluster.
+- `endpoints` (Attributes List) The endpoints used to connect to the cluster. (see [below for nested schema](#nestedatt--endpoints))
 - `fault_tolerance` (String) The fault tolerance of the cluster.
 - `node_config` (Attributes) (see [below for nested schema](#nestedatt--node_config))
 - `num_faults_to_tolerate` (Number) The number of domain faults the cluster can tolerate.
@@ -81,6 +82,7 @@ Read-Only:
 Read-Only:
 
 - `num_nodes` (Number)
+- `public_access` (Boolean)
 - `region` (String)
 - `vpc_id` (String)
 - `vpc_name` (String)
@@ -148,6 +150,16 @@ Read-Only:
 - `ycql_username` (String)
 - `ysql_password` (String)
 - `ysql_username` (String)
+
+
+<a id="nestedatt--endpoints"></a>
+### Nested Schema for `endpoints`
+
+Read-Only:
+
+- `accessibility_type` (String) The accessibility type of the endpoint. PUBLIC or PRIVATE.
+- `host` (String) The host of the endpoint.
+- `region` (String) The region of the endpoint.
 
 
 <a id="nestedatt--node_config"></a>

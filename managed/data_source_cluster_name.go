@@ -72,9 +72,12 @@ func (r dataClusterNameType) GetSchema(_ context.Context) (tfsdk.Schema, diag.Di
 						Type:     types.StringType,
 						Computed: true,
 					},
+					"public_access": {
+						Type:     types.BoolType,
+						Computed: true,
+					},
 				}),
 			},
-
 			"backup_schedules": {
 				Computed: true,
 				Attributes: tfsdk.ListNestedAttributes(map[string]tfsdk.Attribute{
@@ -355,6 +358,27 @@ func (r dataClusterNameType) GetSchema(_ context.Context) (tfsdk.Schema, diag.Di
 					ElemType: types.StringType,
 				},
 				Optional: true,
+				Computed: true,
+			},
+			"endpoints": {
+				Description: "The endpoints used to connect to the cluster.",
+				Attributes: tfsdk.ListNestedAttributes(map[string]tfsdk.Attribute{
+					"accessibility_type": {
+						Description: "The accessibility type of the endpoint. PUBLIC or PRIVATE.",
+						Type:        types.StringType,
+						Computed:    true,
+					},
+					"host": {
+						Description: "The host of the endpoint.",
+						Type:        types.StringType,
+						Computed:    true,
+					},
+					"region": {
+						Description: "The region of the endpoint.",
+						Type:        types.StringType,
+						Computed:    true,
+					},
+				}),
 				Computed: true,
 			},
 			"cluster_certificate": {
