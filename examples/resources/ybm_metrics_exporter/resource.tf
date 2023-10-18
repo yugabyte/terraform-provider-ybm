@@ -10,7 +10,7 @@ resource "ybm_metrics_exporter" "datadog" {
 
 
 # Example for Grafana
-resource "ybm_metrics_exporter" "gwenngrafna" {
+resource "ybm_metrics_exporter" "grafana" {
   config_name = "grafanaTest"
   type        = "GRAFANA"
   grafana_spec = {
