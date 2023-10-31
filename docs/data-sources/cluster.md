@@ -94,6 +94,7 @@ Read-Only:
 Read-Only:
 
 - `aws_cmk_spec` (Attributes) AWS CMK Provider Configuration. (see [below for nested schema](#nestedatt--cmk_spec--aws_cmk_spec))
+- `azure_cmk_spec` (Attributes) AZURE CMK Provider Configuration. (see [below for nested schema](#nestedatt--cmk_spec--azure_cmk_spec))
 - `gcp_cmk_spec` (Attributes) GCP CMK Provider Configuration. (see [below for nested schema](#nestedatt--cmk_spec--gcp_cmk_spec))
 - `is_enabled` (Boolean) Is Enabled
 - `provider_type` (String) CMK Provider Type.
@@ -106,6 +107,18 @@ Read-Only:
 - `access_key` (String) Access Key
 - `arn_list` (List of String) AWS ARN List
 - `secret_key` (String) Secret Key
+
+
+<a id="nestedatt--cmk_spec--azure_cmk_spec"></a>
+### Nested Schema for `cmk_spec.azure_cmk_spec`
+
+Read-Only:
+
+- `client_id` (String) Client ID
+- `client_secret` (String) Client Secret
+- `key_name` (String) Key Name
+- `key_vault_uri` (String) Key Vault URI
+- `tenant_id` (String) Tenant ID
 
 
 <a id="nestedatt--cmk_spec--gcp_cmk_spec"></a>

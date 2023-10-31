@@ -144,7 +144,7 @@ func (r resourceBackup) Create(ctx context.Context, req tfsdk.CreateResourceRequ
 	backupRetentionPeriodInDays := int32(plan.RetentionPeriodInDays.Value)
 
 	backupSpec := *openapiclient.NewBackupSpec(clusterId)
-	backupSpec.Description = &backupDescription
+	backupSpec.SetDescription(backupDescription)
 	backupSpec.RetentionPeriodInDays = &backupRetentionPeriodInDays
 
 	backupResp, response, err := apiClient.BackupApi.CreateBackup(context.Background(), accountId, projectId).BackupSpec(backupSpec).Execute()
@@ -203,7 +203,7 @@ func resourceBackupRead(accountId string, projectId string, backupId string, api
 	backup.BackupID.Value = backupId
 
 	backup.ClusterID.Value = backupResp.Data.Spec.ClusterId
-	backup.BackupDescription.Value = *(backupResp.Data.Spec.Description)
+	backup.BackupDescription.Value = *(backupResp.Data.Spec.Description.Get())
 	backup.RetentionPeriodInDays.Value = int64(*backupResp.Data.Spec.RetentionPeriodInDays)
 	backup.MostRecent.Null = true
 	backup.Timestamp.Null = true

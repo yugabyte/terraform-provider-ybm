@@ -186,6 +186,36 @@ func (mr *MockAccountApiMockRecorder) GetAllowedLoginTypesExecute(arg0 interface
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetAllowedLoginTypesExecute", reflect.TypeOf((*MockAccountApi)(nil).GetAllowedLoginTypesExecute), arg0)
 }
 
+// GetLoginRecords mocks base method.
+func (m *MockAccountApi) GetLoginRecords(arg0 context.Context, arg1 string) openapi.ApiGetLoginRecordsRequest {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetLoginRecords", arg0, arg1)
+	ret0, _ := ret[0].(openapi.ApiGetLoginRecordsRequest)
+	return ret0
+}
+
+// GetLoginRecords indicates an expected call of GetLoginRecords.
+func (mr *MockAccountApiMockRecorder) GetLoginRecords(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetLoginRecords", reflect.TypeOf((*MockAccountApi)(nil).GetLoginRecords), arg0, arg1)
+}
+
+// GetLoginRecordsExecute mocks base method.
+func (m *MockAccountApi) GetLoginRecordsExecute(arg0 openapi.ApiGetLoginRecordsRequest) (openapi.LoginRecordListResponse, *http.Response, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetLoginRecordsExecute", arg0)
+	ret0, _ := ret[0].(openapi.LoginRecordListResponse)
+	ret1, _ := ret[1].(*http.Response)
+	ret2, _ := ret[2].(error)
+	return ret0, ret1, ret2
+}
+
+// GetLoginRecordsExecute indicates an expected call of GetLoginRecordsExecute.
+func (mr *MockAccountApiMockRecorder) GetLoginRecordsExecute(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetLoginRecordsExecute", reflect.TypeOf((*MockAccountApi)(nil).GetLoginRecordsExecute), arg0)
+}
+
 // InviteAccountUser mocks base method.
 func (m *MockAccountApi) InviteAccountUser(arg0 context.Context, arg1 string) openapi.ApiInviteAccountUserRequest {
 	m.ctrl.T.Helper()

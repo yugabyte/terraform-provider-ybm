@@ -364,6 +364,7 @@ To create an AWS Cluster with Customer Managed Keys
 ```terraform
 # EAR enabled single region cluster
 # The same cmk_spec can be used for multi region/read replica clusters as well
+# Encryption at rest is supported on clusters with database version 2.16.7.0 or later
 
 variable "ysql_password" {
   type        = string
@@ -423,6 +424,7 @@ To create a GCP Cluster with Customer Managed Keys
 ```terraform
 # EAR enabled single region cluster
 # The same cmk_spec can be used for multi region/read replica clusters as well
+# Encryption at rest is supported on clusters with database version 2.16.7.0 or later
 
 variable "ysql_password" {
   type        = string
@@ -696,6 +698,7 @@ Required:
 Optional:
 
 - `aws_cmk_spec` (Attributes) AWS CMK Provider Configuration. (see [below for nested schema](#nestedatt--cmk_spec--aws_cmk_spec))
+- `azure_cmk_spec` (Attributes) AZURE CMK Provider Configuration. (see [below for nested schema](#nestedatt--cmk_spec--azure_cmk_spec))
 - `gcp_cmk_spec` (Attributes) GCP CMK Provider Configuration. (see [below for nested schema](#nestedatt--cmk_spec--gcp_cmk_spec))
 
 <a id="nestedatt--cmk_spec--aws_cmk_spec"></a>
@@ -706,6 +709,18 @@ Required:
 - `access_key` (String) Access Key
 - `arn_list` (List of String) AWS ARN List
 - `secret_key` (String) Secret Key
+
+
+<a id="nestedatt--cmk_spec--azure_cmk_spec"></a>
+### Nested Schema for `cmk_spec.azure_cmk_spec`
+
+Required:
+
+- `client_id` (String) Azure Active Directory (AD) Client ID for Key Vault service principal.
+- `client_secret` (String) Azure AD Client Secret for Key Vault service principal.
+- `key_name` (String) Name of cryptographic key in Azure Key Vault.
+- `key_vault_uri` (String) URI of Azure Key Vault storing cryptographic keys.
+- `tenant_id` (String) Azure AD Tenant ID for Key Vault service principal.
 
 
 <a id="nestedatt--cmk_spec--gcp_cmk_spec"></a>

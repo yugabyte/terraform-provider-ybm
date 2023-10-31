@@ -155,7 +155,7 @@ and modify the backup schedule of the cluster being created.`,
 						Description: "CMK Provider Type.",
 						Type:        types.StringType,
 						Required:    true,
-						Validators:  []tfsdk.AttributeValidator{stringvalidator.OneOf("AWS", "GCP")},
+						Validators:  []tfsdk.AttributeValidator{stringvalidator.OneOf("AWS", "GCP", "AZURE")},
 					},
 					"is_enabled": {
 						Description: "Is Enabled",
@@ -267,6 +267,37 @@ and modify the backup schedule of the cluster being created.`,
 										Optional:    true,
 									},
 								}),
+							},
+						}),
+					},
+					"azure_cmk_spec": {
+						Description: "AZURE CMK Provider Configuration.",
+						Optional:    true,
+						Attributes: tfsdk.SingleNestedAttributes(map[string]tfsdk.Attribute{
+							"client_id": {
+								Description: "Azure Active Directory (AD) Client ID for Key Vault service principal.",
+								Type:        types.StringType,
+								Required:    true,
+							},
+							"client_secret": {
+								Description: "Azure AD Client Secret for Key Vault service principal.",
+								Type:        types.StringType,
+								Required:    true,
+							},
+							"tenant_id": {
+								Description: "Azure AD Tenant ID for Key Vault service principal.",
+								Type:        types.StringType,
+								Required:    true,
+							},
+							"key_vault_uri": {
+								Description: "URI of Azure Key Vault storing cryptographic keys.",
+								Type:        types.StringType,
+								Required:    true,
+							},
+							"key_name": {
+								Description: "Name of cryptographic key in Azure Key Vault.",
+								Type:        types.StringType,
+								Required:    true,
 							},
 						}),
 					},
@@ -466,7 +497,7 @@ func EditBackupSchedule(ctx context.Context, backupScheduleStruct BackupSchedule
 		backupRetentionPeriodInDays := int32(backupScheduleStruct.RetentionPeriodInDays.Value)
 		backupDescription := backupDes
 		backupSpec := *openapiclient.NewBackupSpec(clusterId)
-		backupSpec.Description = &backupDescription
+		backupSpec.SetDescription(backupDescription)
 		backupSpec.RetentionPeriodInDays = &backupRetentionPeriodInDays
 		scheduleSpec := *openapiclient.NewScheduleSpec(openapiclient.ScheduleStateEnum(backupScheduleStruct.State.Value))
 		if backupScheduleStruct.TimeIntervalInDays.Value != 0 {
@@ -693,12 +724,32 @@ func validateCredentials(credentials Credentials) bool {
 
 }
 
+func validateOnlyOneCMKSpec(plan *Cluster) error {
+	count := 0
+
+	if plan.CMKSpec.GCPCMKSpec != nil {
+		count++
+	}
+	if plan.CMKSpec.AWSCMKSpec != nil {
+		count++
+	}
+	if plan.CMKSpec.AzureCMKSpec != nil {
+		count++
+	}
+
+	if count != 1 {
+		return errors.New("Invalid input. Only one CMK Provider out of AWS, GCP, or AZURE must be present.")
+	}
+
+	return nil
+}
+
 func createCmkSpec(plan Cluster) (*openapiclient.CMKSpec, error) {
 	cmkProvider := plan.CMKSpec.ProviderType.Value
 	cmkSpec := openapiclient.NewCMKSpec(openapiclient.CMKProviderEnum(cmkProvider))
 
-	if plan.CMKSpec.GCPCMKSpec != nil && plan.CMKSpec.AWSCMKSpec != nil {
-		return nil, errors.New("Invalid input. Both AWS and GCP spec cannot be present")
+	if err := validateOnlyOneCMKSpec(&plan); err != nil {
+		return nil, err
 	}
 
 	switch cmkProvider {
@@ -748,6 +799,18 @@ func createCmkSpec(plan Cluster) (*openapiclient.CMKSpec, error) {
 
 		awsCmkSpec := openapiclient.NewAWSCMKSpec(awsAccessKey, awsSecretKey, awsArnList)
 		cmkSpec.SetAwsCmkSpec(*awsCmkSpec)
+	case "AZURE":
+		if plan.CMKSpec.AzureCMKSpec == nil {
+			return nil, errors.New("Provider type is AZURE but AZURE CMK spec is missing.")
+		}
+		azureClientId := plan.CMKSpec.AzureCMKSpec.ClientID.Value
+		azureClientSecret := plan.CMKSpec.AzureCMKSpec.ClientSecret.Value
+		azureTenantId := plan.CMKSpec.AzureCMKSpec.TenantID.Value
+		azureKeyVaultUri := plan.CMKSpec.AzureCMKSpec.KeyVaultUri.Value
+		azureKeyName := plan.CMKSpec.AzureCMKSpec.KeyName.Value
+
+		azureCmkSpec := openapiclient.NewAzureCMKSpec(azureClientId, azureClientSecret, azureTenantId, azureKeyVaultUri, azureKeyName)
+		cmkSpec.SetAzureCmkSpec(*azureCmkSpec)
 	}
 
 	cmkSpec.SetIsEnabled(plan.CMKSpec.IsEnabled.Value)
@@ -1039,6 +1102,10 @@ func (r resourceCluster) Create(ctx context.Context, req tfsdk.CreateResourceReq
 		case "GCP":
 			cluster.CMKSpec.GCPCMKSpec.GcpServiceAccount.ClientId = types.String{Value: string(cmkSpec.GetGcpCmkSpec().GcpServiceAccount.ClientId)}
 			cluster.CMKSpec.GCPCMKSpec.GcpServiceAccount.PrivateKey = types.String{Value: string(*cmkSpec.GetGcpCmkSpec().GcpServiceAccount.PrivateKey)}
+		case "AZURE":
+			cluster.CMKSpec.AzureCMKSpec.ClientID = types.String{Value: string(cmkSpec.GetAzureCmkSpec().ClientId)}
+			cluster.CMKSpec.AzureCMKSpec.ClientSecret = types.String{Value: string(cmkSpec.GetAzureCmkSpec().ClientSecret)}
+			cluster.CMKSpec.AzureCMKSpec.TenantID = types.String{Value: string(cmkSpec.GetAzureCmkSpec().TenantId)}
 		}
 	}
 
@@ -1245,6 +1312,10 @@ func (r resourceCluster) Read(ctx context.Context, req tfsdk.ReadResourceRequest
 		case "GCP":
 			cluster.CMKSpec.GCPCMKSpec.GcpServiceAccount.ClientId.Value = cmkSpec.GCPCMKSpec.GcpServiceAccount.ClientId.Value
 			cluster.CMKSpec.GCPCMKSpec.GcpServiceAccount.PrivateKey.Value = cmkSpec.GCPCMKSpec.GcpServiceAccount.PrivateKey.Value
+		case "AZURE":
+			cluster.CMKSpec.AzureCMKSpec.ClientID = types.String{Value: string(cmkSpec.AzureCMKSpec.ClientID.Value)}
+			cluster.CMKSpec.AzureCMKSpec.ClientSecret = types.String{Value: string(cmkSpec.AzureCMKSpec.ClientSecret.Value)}
+			cluster.CMKSpec.AzureCMKSpec.TenantID = types.String{Value: string(cmkSpec.AzureCMKSpec.TenantID.Value)}
 		}
 	}
 
@@ -1373,6 +1444,17 @@ func resourceClusterRead(ctx context.Context, accountId string, projectId string
 			}
 
 			cmkSpec.GCPCMKSpec = &gcpCMKSpec
+			cluster.CMKSpec = &cmkSpec
+		case "AZURE":
+			azureCMKSpec := AzureCMKSpec{
+				ClientID:     types.String{Value: cmkDataSpec.GetAzureCmkSpec().ClientId},
+				ClientSecret: types.String{Value: cmkDataSpec.GetAzureCmkSpec().ClientSecret},
+				TenantID:     types.String{Value: cmkDataSpec.GetAzureCmkSpec().TenantId},
+				KeyVaultUri:  types.String{Value: cmkDataSpec.GetAzureCmkSpec().KeyVaultUri},
+				KeyName:      types.String{Value: cmkDataSpec.GetAzureCmkSpec().KeyName},
+			}
+
+			cmkSpec.AzureCMKSpec = &azureCMKSpec
 			cluster.CMKSpec = &cmkSpec
 		}
 	}
@@ -1856,7 +1938,8 @@ func (r resourceCluster) Update(ctx context.Context, req tfsdk.UpdateResourceReq
 	tflog.Debug(ctx, "Cluster Update: Allow list IDs read from API server ", map[string]interface{}{
 		"Allow List IDs": cluster.ClusterAllowListIDs})
 
-	// Update the State file with the unmasked creds for AWS (secret key,access) and GCP (client id,private key)
+	// Update the State file with the unmasked creds for AWS (Secret Key, Access Key), GCP (Client ID, Private Key)
+	// and Azure (client ID, client Secret, tenant ID)
 	if plan.CMKSpec != nil {
 		providerType := cluster.CMKSpec.ProviderType.Value
 		switch providerType {
@@ -1866,6 +1949,10 @@ func (r resourceCluster) Update(ctx context.Context, req tfsdk.UpdateResourceReq
 		case "GCP":
 			cluster.CMKSpec.GCPCMKSpec.GcpServiceAccount.ClientId = plan.CMKSpec.GCPCMKSpec.GcpServiceAccount.ClientId
 			cluster.CMKSpec.GCPCMKSpec.GcpServiceAccount.PrivateKey = plan.CMKSpec.GCPCMKSpec.GcpServiceAccount.PrivateKey
+		case "AZURE":
+			cluster.CMKSpec.AzureCMKSpec.ClientID = plan.CMKSpec.AzureCMKSpec.ClientID
+			cluster.CMKSpec.AzureCMKSpec.ClientSecret = plan.CMKSpec.AzureCMKSpec.ClientSecret
+			cluster.CMKSpec.AzureCMKSpec.TenantID = plan.CMKSpec.AzureCMKSpec.TenantID
 		}
 	}
 

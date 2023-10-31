@@ -41,10 +41,11 @@ type ClusterEndpoint struct {
 }
 
 type CMKSpec struct {
-	ProviderType types.String `tfsdk:"provider_type"`
-	AWSCMKSpec   *AWSCMKSpec  `tfsdk:"aws_cmk_spec"`
-	GCPCMKSpec   *GCPCMKSpec  `tfsdk:"gcp_cmk_spec"`
-	IsEnabled    types.Bool   `tfsdk:"is_enabled"`
+	ProviderType types.String  `tfsdk:"provider_type"`
+	AWSCMKSpec   *AWSCMKSpec   `tfsdk:"aws_cmk_spec"`
+	GCPCMKSpec   *GCPCMKSpec   `tfsdk:"gcp_cmk_spec"`
+	AzureCMKSpec *AzureCMKSpec `tfsdk:"azure_cmk_spec"`
+	IsEnabled    types.Bool    `tfsdk:"is_enabled"`
 }
 
 type AWSCMKSpec struct {
@@ -60,6 +61,15 @@ type GCPCMKSpec struct {
 	ProtectionLevel   types.String      `tfsdk:"protection_level"`
 	GcpServiceAccount GCPServiceAccount `tfsdk:"gcp_service_account"`
 }
+
+type AzureCMKSpec struct {
+	ClientID     types.String `tfsdk:"client_id"`
+	ClientSecret types.String `tfsdk:"client_secret"`
+	TenantID     types.String `tfsdk:"tenant_id"`
+	KeyVaultUri  types.String `tfsdk:"key_vault_uri"`
+	KeyName      types.String `tfsdk:"key_name"`
+}
+
 type GCPServiceAccount struct {
 	Type                    types.String `tfsdk:"type"`
 	ProjectId               types.String `tfsdk:"project_id"`
