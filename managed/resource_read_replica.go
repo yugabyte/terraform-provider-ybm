@@ -174,7 +174,7 @@ func createReadReplicasSpec(ctx context.Context, apiClient *openapiclient.APICli
 		placementInfo.SetVpcId(readReplica.VPCID.Value)
 
 		multiZone := true
-		if !readReplica.MultiZone.Null {
+		if !(readReplica.MultiZone.IsUnknown() || readReplica.MultiZone.IsNull()) {
 			multiZone = readReplica.MultiZone.Value
 		}
 		placementInfo.SetMultiZone(multiZone)
