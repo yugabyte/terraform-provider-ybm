@@ -15,8 +15,9 @@ variable "ycql_password" {
 }
 
 resource "ybm_cluster" "single_region" {
-  cluster_name = "test-cluster-with-gcp-cmk"
+  cluster_name = "test-cluster-with-azure-cmk"
   # The cloud provider for the cluster is indepedent of the CMK Provider
+  # eg. GCP cluster with AZURE CMK is supported
   cloud_type   = "GCP"
   cluster_type = "SYNCHRONOUS"
   cluster_region_info = [
@@ -28,29 +29,18 @@ resource "ybm_cluster" "single_region" {
   cluster_tier           = "PAID"
   # fault tolerance cannot be NONE for CMK enabled cluster
   fault_tolerance        = "ZONE"
-
   cmk_spec = {
-    provider_type = "GCP"
-    gcp_cmk_spec = {
-    location = "global"
-    key_ring_name = "example_cmk_key_ring"
-    key_name = "example_cmk_key"
-    protection_level = "software"
-    gcp_service_account = {
-        type = "service_account"
-        project_id = "your-project-id"
-        private_key_id = "your-private-key-id"
-        private_key = "-----BEGIN PRIVATE KEY-----\nYourPrivateRSAKey\n-----END PRIVATE KEY-----\n"
-        client_email = "your-service-account-email@your-project-id.iam.gserviceaccount.com"
-        client_id = "your-client-id"
-        auth_uri = "https://accounts.google.com/o/oauth2/auth"
-        token_uri = "https://accounts.google.com/o/oauth2/token"
-        auth_provider_x509_cert_url = "https://www.googleapis.com/oauth2/v1/certs"
-        client_x509_cert_url = "https://www.googleapis.com/.../your-service-account-email%40your-project-id.iam.gserviceaccount.com"
-        universe_domain = "googleapis.com"
-    }}
+    provider_type = "AZURE"
+    azure_cmk_spec = {
+      client_id = "your-client-id"
+      client_secret = "your-client-secret"
+      tenant_id = "your-tenant-id"
+      key_name = "your-key-name"
+      key_vault_uri = "your-key-vault-uri"
+    }
     is_enabled =  true
   }
+
   node_config = {
     num_cores    = 4
     disk_size_gb = 50

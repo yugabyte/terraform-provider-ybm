@@ -242,6 +242,37 @@ func (r dataClusterNameType) GetSchema(_ context.Context) (tfsdk.Schema, diag.Di
 							},
 						}),
 					},
+					"azure_cmk_spec": {
+						Description: "AZURE CMK Provider Configuration.",
+						Computed:    true,
+						Attributes: tfsdk.SingleNestedAttributes(map[string]tfsdk.Attribute{
+							"client_id": {
+								Description: "Client ID",
+								Type:        types.StringType,
+								Computed:    true,
+							},
+							"client_secret": {
+								Description: "Client Secret",
+								Type:        types.StringType,
+								Computed:    true,
+							},
+							"tenant_id": {
+								Description: "Tenant ID",
+								Type:        types.StringType,
+								Computed:    true,
+							},
+							"key_vault_uri": {
+								Description: "Key Vault URI",
+								Type:        types.StringType,
+								Computed:    true,
+							},
+							"key_name": {
+								Description: "Key Name",
+								Type:        types.StringType,
+								Computed:    true,
+							},
+						}),
+					},
 				}),
 			},
 			"cluster_tier": {

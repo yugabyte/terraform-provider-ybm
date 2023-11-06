@@ -1,5 +1,6 @@
 # EAR enabled single region cluster
 # The same cmk_spec can be used for multi region/read replica clusters as well
+# Encryption at rest is supported on clusters with database version 2.16.7.0 or later
 
 variable "ysql_password" {
   type        = string
