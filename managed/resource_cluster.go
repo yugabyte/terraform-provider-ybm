@@ -1103,9 +1103,7 @@ func (r resourceCluster) Create(ctx context.Context, req tfsdk.CreateResourceReq
 			cluster.CMKSpec.GCPCMKSpec.GcpServiceAccount.ClientId = types.String{Value: string(cmkSpec.GetGcpCmkSpec().GcpServiceAccount.ClientId)}
 			cluster.CMKSpec.GCPCMKSpec.GcpServiceAccount.PrivateKey = types.String{Value: string(*cmkSpec.GetGcpCmkSpec().GcpServiceAccount.PrivateKey)}
 		case "AZURE":
-			cluster.CMKSpec.AzureCMKSpec.ClientID = types.String{Value: string(cmkSpec.GetAzureCmkSpec().ClientId)}
 			cluster.CMKSpec.AzureCMKSpec.ClientSecret = types.String{Value: string(cmkSpec.GetAzureCmkSpec().ClientSecret)}
-			cluster.CMKSpec.AzureCMKSpec.TenantID = types.String{Value: string(cmkSpec.GetAzureCmkSpec().TenantId)}
 		}
 	}
 
@@ -1313,9 +1311,7 @@ func (r resourceCluster) Read(ctx context.Context, req tfsdk.ReadResourceRequest
 			cluster.CMKSpec.GCPCMKSpec.GcpServiceAccount.ClientId.Value = cmkSpec.GCPCMKSpec.GcpServiceAccount.ClientId.Value
 			cluster.CMKSpec.GCPCMKSpec.GcpServiceAccount.PrivateKey.Value = cmkSpec.GCPCMKSpec.GcpServiceAccount.PrivateKey.Value
 		case "AZURE":
-			cluster.CMKSpec.AzureCMKSpec.ClientID = types.String{Value: string(cmkSpec.AzureCMKSpec.ClientID.Value)}
 			cluster.CMKSpec.AzureCMKSpec.ClientSecret = types.String{Value: string(cmkSpec.AzureCMKSpec.ClientSecret.Value)}
-			cluster.CMKSpec.AzureCMKSpec.TenantID = types.String{Value: string(cmkSpec.AzureCMKSpec.TenantID.Value)}
 		}
 	}
 
@@ -1950,9 +1946,7 @@ func (r resourceCluster) Update(ctx context.Context, req tfsdk.UpdateResourceReq
 			cluster.CMKSpec.GCPCMKSpec.GcpServiceAccount.ClientId = plan.CMKSpec.GCPCMKSpec.GcpServiceAccount.ClientId
 			cluster.CMKSpec.GCPCMKSpec.GcpServiceAccount.PrivateKey = plan.CMKSpec.GCPCMKSpec.GcpServiceAccount.PrivateKey
 		case "AZURE":
-			cluster.CMKSpec.AzureCMKSpec.ClientID = plan.CMKSpec.AzureCMKSpec.ClientID
 			cluster.CMKSpec.AzureCMKSpec.ClientSecret = plan.CMKSpec.AzureCMKSpec.ClientSecret
-			cluster.CMKSpec.AzureCMKSpec.TenantID = plan.CMKSpec.AzureCMKSpec.TenantID
 		}
 	}
 
