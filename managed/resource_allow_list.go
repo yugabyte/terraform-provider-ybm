@@ -357,7 +357,7 @@ func removeAllowListFromCluster(ctx context.Context, accountId string, projectId
 	}
 
 	if clusterResp.GetData().Info.State == openapiclient.CLUSTERSTATE_DELETING {
-		tflog.Debug(ctx, fmt.Sprintf("Cluster %s is been deleted ", clusterId))
+		tflog.Debug(ctx, fmt.Sprintf("Cluster %s is being deleted ", clusterId))
 		return nil
 	}
 
@@ -396,7 +396,7 @@ func removeAllowListFromCluster(ctx context.Context, accountId string, projectId
 		} else {
 			return retry.RetryableError(errors.New("unable to check edit network allow list for cluster : " + message))
 		}
-		return retry.RetryableError(errors.New("allow list is been de-associated from the cluster"))
+		return retry.RetryableError(errors.New("allow list is being de-associated from the cluster"))
 	})
 
 	if err != nil {
