@@ -6,13 +6,16 @@ package managed
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"time"
 
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
+	retry "github.com/sethvargo/go-retry"
 	openapiclient "github.com/yugabyte/yugabytedb-managed-go-client-internal"
 )
 
@@ -33,27 +36,31 @@ func (r resourceAllowListType) GetSchema(_ context.Context) (tfsdk.Schema, diag.
 				Computed:    true,
 			},
 			"allow_list_id": {
-				Description: "The ID of the allow list. Created automatically when an allow list is created. Use this ID to get a specific allow list.",
-				Type:        types.StringType,
-				Computed:    true,
-				Optional:    true,
+				Description:   "The ID of the allow list. Created automatically when an allow list is created. Use this ID to get a specific allow list.",
+				Type:          types.StringType,
+				Computed:      true,
+				Optional:      true,
+				PlanModifiers: tfsdk.AttributePlanModifiers{tfsdk.RequiresReplace()},
 			},
 			"allow_list_name": {
-				Description: "The name of the allow list.",
-				Type:        types.StringType,
-				Required:    true,
+				Description:   "The name of the allow list.",
+				Type:          types.StringType,
+				Required:      true,
+				PlanModifiers: tfsdk.AttributePlanModifiers{tfsdk.RequiresReplace()},
 			},
 			"allow_list_description": {
-				Description: "The description of the allow list.",
-				Type:        types.StringType,
-				Required:    true,
+				Description:   "The description of the allow list.",
+				Type:          types.StringType,
+				Required:      true,
+				PlanModifiers: tfsdk.AttributePlanModifiers{tfsdk.RequiresReplace()},
 			},
 			"cidr_list": {
 				Description: "The CIDR list of the allow list.",
 				Type: types.SetType{
 					ElemType: types.StringType,
 				},
-				Required: true,
+				Required:      true,
+				PlanModifiers: tfsdk.AttributePlanModifiers{tfsdk.RequiresReplace()},
 			},
 			"cluster_ids": {
 				Description: "List of the IDs of the clusters the allow list is assigned to.",
@@ -182,6 +189,7 @@ func getIDsFromAllowListState(ctx context.Context, state tfsdk.State, allowList 
 	state.GetAttribute(ctx, path.Root("cidr_list"), &allowList.CIDRList)
 	state.GetAttribute(ctx, path.Root("allow_list_id"), &allowList.AllowListID)
 	state.GetAttribute(ctx, path.Root("allow_list_name"), &allowList.AllowListName)
+	state.GetAttribute(ctx, path.Root("cluster_ids"), &allowList.ClusterIDs)
 }
 
 func resourceAllowListRead(accountId string, projectId string, allowListName string, apiClient *openapiclient.APIClient) (allowList AllowList, readOK bool, errorMessage string) {
@@ -276,13 +284,22 @@ func (r resourceAllowList) Delete(ctx context.Context, req tfsdk.DeleteResourceR
 	accountId := state.AccountID.Value
 	projectId := state.ProjectID.Value
 	allowListId := state.AllowListID.Value
+	clusterIds := SliceTypesStringToSliceString(state.ClusterIDs)
 
 	apiClient := r.p.client
 
-	response, err := apiClient.NetworkApi.DeleteNetworkAllowList(context.Background(), accountId, projectId, allowListId).Execute()
+	//First we remove from cluster
+	for _, clusterId := range clusterIds {
+		err := removeAllowListFromCluster(context.Background(), accountId, projectId, clusterId, allowListId, apiClient)
+		if err != nil {
+			resp.Diagnostics.AddError("Unable to delete the allow list ", err.Error())
+			return
+		}
+	}
+
+	_, err := apiClient.NetworkApi.DeleteNetworkAllowList(context.Background(), accountId, projectId, allowListId).Execute()
 	if err != nil {
-		errMsg := getErrorMessage(response, err)
-		resp.Diagnostics.AddError("Unable to delete the allow list ", errMsg)
+		resp.Diagnostics.AddError("Unable to delete the allow list ", GetApiErrorDetails(err))
 		return
 	}
 
@@ -324,5 +341,67 @@ func getNetworkAllowListIdByName(ctx context.Context, accountId string, projectI
 	}
 
 	return "", fmt.Errorf("NetworkAllowList %s not found", networkAllowListName)
+
+}
+
+func removeAllowListFromCluster(ctx context.Context, accountId string, projectId string, clusterId string, allowListId string, apiClient *openapiclient.APIClient) error {
+
+	clusterResp, resp, err := apiClient.ClusterApi.GetCluster(ctx, accountId, projectId, clusterId).Execute()
+	if err != nil {
+		if resp.StatusCode == 404 {
+			tflog.Debug(ctx, fmt.Sprintf("Cluster %s does not exist anymore or cannot be found ", clusterId))
+			return nil
+
+		}
+		return fmt.Errorf("unable to check for cluster %s: %s", clusterId, GetApiErrorDetails(err))
+	}
+
+	if clusterResp.GetData().Info.State == openapiclient.CLUSTERSTATE_DELETING {
+		tflog.Debug(ctx, fmt.Sprintf("Cluster %s is being deleted ", clusterId))
+		return nil
+	}
+
+	//First we gather allowList for the cluster
+	clusterNalResp, r, err := apiClient.ClusterApi.ListClusterNetworkAllowLists(ctx, accountId, projectId, clusterId).Execute()
+	if err != nil {
+		//Cluster could have been deleted
+		if r.StatusCode == 404 {
+			return nil
+		}
+		return fmt.Errorf("unable to check network allow list for cluster %s: %s", clusterId, GetApiErrorDetails(err))
+	}
+	allowList := Filter(clusterNalResp.GetData(), func(ep openapiclient.NetworkAllowListData) bool {
+		return ep.GetInfo().Id != allowListId
+	})
+
+	allowListIds := []string{}
+	for _, v := range allowList {
+		allowListIds = append(allowListIds, v.GetInfo().Id)
+
+	}
+
+	_, _, err = apiClient.ClusterApi.EditClusterNetworkAllowLists(ctx, accountId, projectId, clusterId).RequestBody(allowListIds).Execute()
+	if err != nil {
+		return fmt.Errorf("unable to edit network allow list for cluster %s: %s", clusterId, GetApiErrorDetails(err))
+	}
+
+	retryPolicy := retry.NewConstant(10 * time.Second)
+	retryPolicy = retry.WithMaxDuration(2400*time.Second, retryPolicy)
+	err = retry.Do(ctx, retryPolicy, func(ctx context.Context) error {
+		asState, readInfoOK, message := getTaskState(accountId, projectId, clusterId, openapiclient.ENTITYTYPEENUM_CLUSTER, openapiclient.TASKTYPEENUM_EDIT_ALLOW_LIST, apiClient, ctx)
+		if readInfoOK {
+			if asState == string(openapiclient.TASKACTIONSTATEENUM_SUCCEEDED) {
+				return nil
+			}
+		} else {
+			return retry.RetryableError(errors.New("unable to check edit network allow list for cluster : " + message))
+		}
+		return retry.RetryableError(errors.New("allow list is being de-associated from the cluster"))
+	})
+
+	if err != nil {
+		return fmt.Errorf("unable to edit network allow list for cluster %s:%s", clusterId, err)
+	}
+	return nil
 
 }
