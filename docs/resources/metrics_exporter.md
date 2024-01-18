@@ -48,6 +48,7 @@ resource "ybm_metrics_exporter" "grafana" {
 
 - `datadog_spec` (Attributes) Configuration for Datadog metrics sink. (see [below for nested schema](#nestedatt--datadog_spec))
 - `grafana_spec` (Attributes) Configuration for Grafana metrics sink. (see [below for nested schema](#nestedatt--grafana_spec))
+- `sumologic_spec` (Attributes) Configuration for Sumologic metrics sink. (see [below for nested schema](#nestedatt--sumologic_spec))
 
 ### Read-Only
 
@@ -73,3 +74,13 @@ Required:
 - `instance_id` (String) Grafana InstanceID.
 - `org_slug` (String) Grafana OrgSlug.
 - `zone` (String) Grafana Zone.
+
+
+<a id="nestedatt--sumologic_spec"></a>
+### Nested Schema for `sumologic_spec`
+
+Required:
+
+- `access_id` (String, Sensitive) Sumo Logic Access Key ID
+- `access_key` (String, Sensitive) Sumo Logic Access Key
+- `installation_token` (String, Sensitive) A SumoLogic installation token to export metrics
