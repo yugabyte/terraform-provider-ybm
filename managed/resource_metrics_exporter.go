@@ -49,13 +49,14 @@ func (r resourceMetricsExporterType) GetSchema(_ context.Context) (tfsdk.Schema,
 				Description: "The type of third party metrics sink. ",
 				Type:        types.StringType,
 				Required:    true,
-				Validators:  []tfsdk.AttributeValidator{stringvalidator.OneOf("DATADOG", "GRAFANA")},
+				Validators:  []tfsdk.AttributeValidator{stringvalidator.OneOf("DATADOG", "GRAFANA", "SUMOLOGIC")},
 			},
 			"datadog_spec": {
 				Description: "Configuration for Datadog metrics sink.",
 				Optional:    true,
 				Validators: []tfsdk.AttributeValidator{
 					schemavalidator.ConflictsWith(path.MatchRoot("grafana_spec")),
+					schemavalidator.ConflictsWith(path.MatchRoot("sumologic_spec")),
 				},
 				Attributes: tfsdk.SingleNestedAttributes(map[string]tfsdk.Attribute{
 					"api_key": {
@@ -74,6 +75,10 @@ func (r resourceMetricsExporterType) GetSchema(_ context.Context) (tfsdk.Schema,
 			"grafana_spec": {
 				Description: "Configuration for Grafana metrics sink.",
 				Optional:    true,
+				Validators: []tfsdk.AttributeValidator{
+					schemavalidator.ConflictsWith(path.MatchRoot("datadog_spec")),
+					schemavalidator.ConflictsWith(path.MatchRoot("sumologic_spec")),
+				},
 				Attributes: tfsdk.SingleNestedAttributes(map[string]tfsdk.Attribute{
 					"access_policy_token": {
 						Description: "Grafana Access Policy Token",
@@ -98,6 +103,34 @@ func (r resourceMetricsExporterType) GetSchema(_ context.Context) (tfsdk.Schema,
 					},
 				}),
 			},
+			"sumologic_spec": {
+				Description: "Configuration for Sumologic metrics sink.",
+				Optional:    true,
+				Validators: []tfsdk.AttributeValidator{
+					schemavalidator.ConflictsWith(path.MatchRoot("datadog_spec")),
+					schemavalidator.ConflictsWith(path.MatchRoot("grafana_spec")),
+				},
+				Attributes: tfsdk.SingleNestedAttributes(map[string]tfsdk.Attribute{
+					"access_id": {
+						Description: "Sumo Logic Access Key ID",
+						Type:        types.StringType,
+						Required:    true,
+						Sensitive:   true,
+					},
+					"access_key": {
+						Description: "Sumo Logic Access Key",
+						Type:        types.StringType,
+						Required:    true,
+						Sensitive:   true,
+					},
+					"installation_token": {
+						Description: "A SumoLogic installation token to export metrics",
+						Type:        types.StringType,
+						Required:    true,
+						Sensitive:   true,
+					},
+				}),
+			},
 		},
 	}, nil
 }
@@ -118,6 +151,7 @@ func getMetricsExporterPlan(ctx context.Context, plan tfsdk.Plan, me *MetricsExp
 	diags.Append(plan.GetAttribute(ctx, path.Root("type"), &me.Type)...)
 	diags.Append(plan.GetAttribute(ctx, path.Root("datadog_spec"), &me.DataDogSpec)...)
 	diags.Append(plan.GetAttribute(ctx, path.Root("grafana_spec"), &me.GrafanaSpec)...)
+	diags.Append(plan.GetAttribute(ctx, path.Root("sumologic_spec"), &me.SumoLogicSpec)...)
 	return diags
 }
 
@@ -131,6 +165,8 @@ func getIDsFromMetricsExporterState(ctx context.Context, state tfsdk.State, me *
 		state.GetAttribute(ctx, path.Root("datadog_spec"), &me.DataDogSpec)
 	case string(openapiclient.METRICSEXPORTERCONFIGTYPEENUM_GRAFANA):
 		state.GetAttribute(ctx, path.Root("grafana_spec"), &me.GrafanaSpec)
+	case string(openapiclient.METRICSEXPORTERCONFIGTYPEENUM_SUMOLOGIC):
+		state.GetAttribute(ctx, path.Root("sumologic_spec"), &me.SumoLogicSpec)
 	}
 }
 
@@ -186,6 +222,7 @@ func (r resourceMetricsExporter) Create(ctx context.Context, req tfsdk.CreateRes
 
 	metricsExporterConfigSpec := openapiclient.NewMetricsExporterConfigurationSpec(configName, *metricsSinkTypeEnum)
 	apiKey := ""
+	var sumoSpec *SumoLogicSpec
 	switch *metricsSinkTypeEnum {
 	case openapiclient.METRICSEXPORTERCONFIGTYPEENUM_DATADOG:
 		if plan.DataDogSpec == nil {
@@ -209,10 +246,21 @@ func (r resourceMetricsExporter) Create(ctx context.Context, req tfsdk.CreateRes
 		grafanaSpec := openapiclient.NewGrafanaMetricsExporterConfigurationSpec(plan.GrafanaSpec.AccessTokenPolicy.Value, plan.GrafanaSpec.Zone.Value, plan.GrafanaSpec.InstanceId.Value, plan.GrafanaSpec.OrgSlug.Value)
 		metricsExporterConfigSpec.SetGrafanaSpec(*grafanaSpec)
 		apiKey = plan.GrafanaSpec.AccessTokenPolicy.Value
+	case openapiclient.METRICSEXPORTERCONFIGTYPEENUM_SUMOLOGIC:
+		if plan.SumoLogicSpec == nil {
+			resp.Diagnostics.AddError(
+				"sumologic_spec is required for type SUMOLOGIC",
+				"sumologic_spec is required when third party sink is SUMOLOGIC. Please include this field in the resource",
+			)
+			return
+		}
+		sumoLogicSpec := openapiclient.NewSumologicMetricsExporterConfigurationSpec(plan.SumoLogicSpec.InstallationToken.Value, plan.SumoLogicSpec.AccessId.Value, plan.SumoLogicSpec.AccessKey.Value)
+		metricsExporterConfigSpec.SetSumologicSpec(*sumoLogicSpec)
+		sumoSpec = plan.SumoLogicSpec
 	default:
 		//We should never go there normally
 		resp.Diagnostics.AddError(
-			"Only DATADOG and GRAFANA is currently supported as a third party sink",
+			"Only DATADOG,GRAFANA,SUMOLOGIC are currently supported as a third party sink",
 			"",
 		)
 		return
@@ -226,7 +274,7 @@ func (r resourceMetricsExporter) Create(ctx context.Context, req tfsdk.CreateRes
 
 	metricsExporterId := CreateResp.GetData().Info.Id
 
-	config, readOK, message := resourceMetricsExporterRead(accountId, projectId, metricsExporterId, "", apiKey, apiClient)
+	config, readOK, message := resourceMetricsExporterRead(accountId, projectId, metricsExporterId, "", apiKey, apiClient, sumoSpec)
 	if !readOK {
 		resp.Diagnostics.AddError("Unable to read the state of the metrics exporter config ", message)
 		return
@@ -246,6 +294,7 @@ func (r resourceMetricsExporter) Read(ctx context.Context, req tfsdk.ReadResourc
 	getIDsFromMetricsExporterState(ctx, req.State, &state)
 	configID := state.ConfigID.Value
 	apiKey := ""
+	var sumoSpec *SumoLogicSpec
 
 	// We cannot use the api return as the apikey return by the api is masked.
 	// We need to use the one provided by the user which should be in the state
@@ -254,6 +303,8 @@ func (r resourceMetricsExporter) Read(ctx context.Context, req tfsdk.ReadResourc
 		apiKey = state.DataDogSpec.ApiKey.Value
 	case string(openapiclient.METRICSEXPORTERCONFIGTYPEENUM_GRAFANA):
 		apiKey = state.GrafanaSpec.AccessTokenPolicy.Value
+	case string(openapiclient.METRICSEXPORTERCONFIGTYPEENUM_SUMOLOGIC):
+		sumoSpec = state.SumoLogicSpec
 	}
 
 	apiClient := r.p.client
@@ -270,7 +321,7 @@ func (r resourceMetricsExporter) Read(ctx context.Context, req tfsdk.ReadResourc
 		return
 	}
 
-	config, readOK, message := resourceMetricsExporterRead(accountId, projectId, configID, "", apiKey, apiClient)
+	config, readOK, message := resourceMetricsExporterRead(accountId, projectId, configID, "", apiKey, apiClient, sumoSpec)
 	if !readOK {
 		resp.Diagnostics.AddError("Unable to read the state of the metrics exporter config ", message)
 		return
@@ -286,6 +337,16 @@ func (r resourceMetricsExporter) Read(ctx context.Context, req tfsdk.ReadResourc
 	case string(openapiclient.METRICSEXPORTERCONFIGTYPEENUM_GRAFANA):
 		if config.GrafanaSpec.AccessTokenPolicy.Value == state.GrafanaSpec.EncryptedKey() {
 			config.GrafanaSpec.AccessTokenPolicy.Value = apiKey
+		}
+	case string(openapiclient.METRICSEXPORTERCONFIGTYPEENUM_SUMOLOGIC):
+		if config.SumoLogicSpec.AccessKey.Value == state.SumoLogicSpec.EncryptedKey("access_key") {
+			config.SumoLogicSpec.AccessKey.Value = sumoSpec.AccessKey.Value
+		}
+		if config.SumoLogicSpec.AccessId.Value == state.SumoLogicSpec.EncryptedKey("access_id") {
+			config.SumoLogicSpec.AccessId.Value = sumoSpec.AccessId.Value
+		}
+		if config.SumoLogicSpec.InstallationToken.Value == state.SumoLogicSpec.EncryptedKey("installation_token") {
+			config.SumoLogicSpec.InstallationToken.Value = sumoSpec.InstallationToken.Value
 		}
 	}
 
@@ -320,6 +381,7 @@ func (r resourceMetricsExporter) Update(ctx context.Context, req tfsdk.UpdateRes
 
 	metricsExporterConfigSpec := openapiclient.NewMetricsExporterConfigurationSpec(configName, *metricsSinkTypeEnum)
 	apiKey := ""
+	var sumoSpec *SumoLogicSpec
 	switch *metricsSinkTypeEnum {
 	case openapiclient.METRICSEXPORTERCONFIGTYPEENUM_DATADOG:
 		if plan.DataDogSpec == nil {
@@ -343,10 +405,21 @@ func (r resourceMetricsExporter) Update(ctx context.Context, req tfsdk.UpdateRes
 		grafanaSpec := openapiclient.NewGrafanaMetricsExporterConfigurationSpec(plan.GrafanaSpec.AccessTokenPolicy.Value, plan.GrafanaSpec.Zone.Value, plan.GrafanaSpec.InstanceId.Value, plan.GrafanaSpec.OrgSlug.Value)
 		metricsExporterConfigSpec.SetGrafanaSpec(*grafanaSpec)
 		apiKey = plan.GrafanaSpec.AccessTokenPolicy.Value
+	case openapiclient.METRICSEXPORTERCONFIGTYPEENUM_SUMOLOGIC:
+		if plan.SumoLogicSpec == nil {
+			resp.Diagnostics.AddError(
+				"sumologic_spec is required for type SUMOLOGIC",
+				"sumologic_spec is required when third party sink is SUMOLOGIC. Please include this field in the resource",
+			)
+			return
+		}
+		sumoLogicSpec := openapiclient.NewSumologicMetricsExporterConfigurationSpec(plan.SumoLogicSpec.InstallationToken.Value, plan.SumoLogicSpec.AccessId.Value, plan.SumoLogicSpec.AccessKey.Value)
+		metricsExporterConfigSpec.SetSumologicSpec(*sumoLogicSpec)
+		sumoSpec = plan.SumoLogicSpec
 	default:
 		//We should never go there normally
 		resp.Diagnostics.AddError(
-			"Only DATADOG and GRAFANA is currently supported as a third party sink",
+			"Only DATADOG, GRAFANA and SUMOLOGIC are currently supported as a third party sink",
 			"",
 		)
 		return
@@ -360,7 +433,7 @@ func (r resourceMetricsExporter) Update(ctx context.Context, req tfsdk.UpdateRes
 
 	metricsExporterId := updateResp.GetData().Info.Id
 
-	config, readOK, message := resourceMetricsExporterRead(accountId, projectId, metricsExporterId, "", apiKey, apiClient)
+	config, readOK, message := resourceMetricsExporterRead(accountId, projectId, metricsExporterId, "", apiKey, apiClient, sumoSpec)
 	if !readOK {
 		resp.Diagnostics.AddError("Unable to read the state of the metrics exporter config ", message)
 		return
@@ -386,7 +459,7 @@ func (r resourceMetricsExporter) Update(ctx context.Context, req tfsdk.UpdateRes
 
 }
 
-func resourceMetricsExporterRead(accountId string, projectId string, configID string, configName string, apiKey string, apiClient *openapiclient.APIClient) (me MetricsExporter, readOK bool, errorMessage string) {
+func resourceMetricsExporterRead(accountId string, projectId string, configID string, configName string, apiKey string, apiClient *openapiclient.APIClient, sumoSpec *SumoLogicSpec) (me MetricsExporter, readOK bool, errorMessage string) {
 
 	config, err := GetConfigByNameorID(accountId, projectId, configID, configName, apiClient)
 	if err != nil {
@@ -415,6 +488,8 @@ func resourceMetricsExporterRead(accountId string, projectId string, configID st
 			InstanceId:        types.String{Value: string(config.GetSpec().GrafanaSpec.Get().InstanceId)},
 			OrgSlug:           types.String{Value: string(config.GetSpec().GrafanaSpec.Get().OrgSlug)},
 		}
+	case openapiclient.METRICSEXPORTERCONFIGTYPEENUM_SUMOLOGIC:
+		me.SumoLogicSpec = sumoSpec
 	}
 
 	return me, true, ""
