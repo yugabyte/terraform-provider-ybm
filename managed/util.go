@@ -82,10 +82,14 @@ func SliceStringToSliceTypesString(slice []string) []types.String {
 }
 
 func obfuscateString(s string) string {
+	return obfuscateStringLenght(s, 2)
+}
+
+func obfuscateStringLenght(s string, l int) string {
 	if len(s) < 6 {
 		return "X"
 	}
-	substring := s[2 : len(s)-2]
+	substring := s[l : len(s)-l]
 	replaced := strings.Replace(s, substring, strings.Repeat("X", len(substring)), 1)
 	return replaced
 }

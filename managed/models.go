@@ -256,13 +256,14 @@ type ApiKey struct {
 }
 
 type MetricsExporter struct {
-	AccountID   types.String `tfsdk:"account_id"`
-	ProjectID   types.String `tfsdk:"project_id"`
-	ConfigID    types.String `tfsdk:"config_id"`
-	ConfigName  types.String `tfsdk:"config_name"`
-	Type        types.String `tfsdk:"type"`
-	DataDogSpec *DataDogSpec `tfsdk:"datadog_spec"`
-	GrafanaSpec *GrafanaSpec `tfsdk:"grafana_spec"`
+	AccountID     types.String   `tfsdk:"account_id"`
+	ProjectID     types.String   `tfsdk:"project_id"`
+	ConfigID      types.String   `tfsdk:"config_id"`
+	ConfigName    types.String   `tfsdk:"config_name"`
+	Type          types.String   `tfsdk:"type"`
+	DataDogSpec   *DataDogSpec   `tfsdk:"datadog_spec"`
+	GrafanaSpec   *GrafanaSpec   `tfsdk:"grafana_spec"`
+	SumoLogicSpec *SumoLogicSpec `tfsdk:"sumologic_spec"`
 }
 
 type DataDogSpec struct {
@@ -277,12 +278,31 @@ type GrafanaSpec struct {
 	OrgSlug           types.String `tfsdk:"org_slug"`
 }
 
+type SumoLogicSpec struct {
+	AccessKey         types.String `tfsdk:"access_key"`
+	AccessId          types.String `tfsdk:"access_id"`
+	InstallationToken types.String `tfsdk:"installation_token"`
+}
+
 func (d DataDogSpec) EncryptedKey() string {
 	return obfuscateString(d.ApiKey.Value)
 }
 
 func (g GrafanaSpec) EncryptedKey() string {
-	return obfuscateString(g.AccessTokenPolicy.Value)
+	return obfuscateStringLenght(g.AccessTokenPolicy.Value, 5)
+}
+
+func (s SumoLogicSpec) EncryptedKey(key string) string {
+	switch key {
+
+	case "access_key":
+		return obfuscateString(s.AccessKey.Value)
+	case "access_id":
+		return obfuscateString(s.AccessId.Value)
+	case "installation_token":
+		return obfuscateString(s.InstallationToken.Value)
+	}
+	return ""
 }
 
 type AssociateMetricsExporterCluster struct {
