@@ -126,6 +126,8 @@ func (p *provider) Configure(ctx context.Context, req tfsdk.ConfigureProviderReq
 	configuration.Host = host
 	if use_secure_host {
 		configuration.Scheme = "https"
+	} else {
+		configuration.Scheme = "http"
 	}
 	api_client := openapiclient.NewAPIClient(configuration)
 
