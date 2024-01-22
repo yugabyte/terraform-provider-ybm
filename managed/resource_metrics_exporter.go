@@ -450,6 +450,16 @@ func (r resourceMetricsExporter) Update(ctx context.Context, req tfsdk.UpdateRes
 		if config.GrafanaSpec.AccessTokenPolicy.Value == plan.GrafanaSpec.EncryptedKey() {
 			config.GrafanaSpec.AccessTokenPolicy.Value = apiKey
 		}
+	case string(openapiclient.METRICSEXPORTERCONFIGTYPEENUM_SUMOLOGIC):
+		if config.SumoLogicSpec.AccessKey.Value == plan.SumoLogicSpec.EncryptedKey("access_key") {
+			config.SumoLogicSpec.AccessKey.Value = sumoSpec.AccessKey.Value
+		}
+		if config.SumoLogicSpec.AccessId.Value == plan.SumoLogicSpec.EncryptedKey("access_id") {
+			config.SumoLogicSpec.AccessId.Value = sumoSpec.AccessId.Value
+		}
+		if config.SumoLogicSpec.InstallationToken.Value == plan.SumoLogicSpec.EncryptedKey("installation_token") {
+			config.SumoLogicSpec.InstallationToken.Value = sumoSpec.InstallationToken.Value
+		}
 	}
 	diags := resp.State.Set(ctx, &config)
 	resp.Diagnostics.Append(diags...)
