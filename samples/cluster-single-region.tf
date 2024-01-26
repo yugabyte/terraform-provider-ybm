@@ -1,7 +1,7 @@
 terraform {
   required_providers {
     ybm = {
-      version = "0.1.0"
+      version = "0.1.0-dev"
       source  = "registry.terraform.io/yugabyte/ybm"
     }
   }
@@ -39,7 +39,6 @@ resource "ybm_cluster" "single_region" {
     {
       region    = "us-west2"
       num_nodes = 1
-      vpc_id    = ybm_vpc.newvpc.vpc_id
     }
   ]
   cluster_tier           = "PAID"
@@ -47,15 +46,16 @@ resource "ybm_cluster" "single_region" {
   fault_tolerance        = "NONE"
   node_config = {
     num_cores    = 2
-    disk_size_gb = 10
+    disk_size_gb = 50
   }
   // for custom_backup_schedule to be activated pass true 
 
   backup_schedules = [
     {
       state                    = "ACTIVE"
-      retention_period_in_days = 10
+      retention_period_in_days = 8
       time_interval_in_days    = 10
+      incremental_interval_in_mins = 30
     }
   ]
   credentials = {
@@ -67,9 +67,9 @@ resource "ybm_cluster" "single_region" {
 
 }
 
-data "ybm_cluster" "clustername" {
-  cluster_name = "terraform-test-posriniv-1"
-}
+# data "ybm_cluster" "clustername" {
+#   cluster_name = "terraform-test-posriniv-1"
+# }
 
 resource "ybm_allow_list" "mylist" {
   allow_list_name        = "all"
@@ -91,49 +91,49 @@ resource "ybm_allow_list" "mylist" {
 # }
 
 
-resource "ybm_vpc" "newvpc" {
-  name       = "terraform-vpc"
-  cloud      = "GCP"
-  # Use only one among global cidr and region cidr
-  global_cidr = "10.9.0.0/18"
-  # region_cidr_info = [
-  #   {
-  #     region = "europe-central2"
-  #     cidr = "10.231.0.0/24"
-  #   },
-  #   {
-  #     region = "us-west2" 
-  #     cidr = "10.9.0.0/24"
-  #   }
-  # ]
-}
+# resource "ybm_vpc" "newvpc" {
+#   name       = "terraform-vpc"
+#   cloud      = "GCP"
+#   # Use only one among global cidr and region cidr
+#   global_cidr = "10.9.0.0/18"
+#   # region_cidr_info = [
+#   #   {
+#   #     region = "europe-central2"
+#   #     cidr = "10.231.0.0/24"
+#   #   },
+#   #   {
+#   #     region = "us-west2" 
+#   #     cidr = "10.9.0.0/24"
+#   #   }
+#   # ]
+# }
 
 
-resource "ybm_read_replicas" "myrr" {
-  read_replicas_info = [
-    {
-      cloud_type   = "GCP"
-      num_replicas = 1
-      num_nodes    = 1
-      region       = "us-east4"
-      vpc_id       = ybm_vpc.newvpc.vpc_id
-      node_config = {
-        num_cores    = 2
-        disk_size_gb = 10
-      }
-    }
-  ]
-  primary_cluster_id = ybm_cluster.single_region.cluster_id
-}
+# resource "ybm_read_replicas" "myrr" {
+#   read_replicas_info = [
+#     {
+#       cloud_type   = "GCP"
+#       num_replicas = 1
+#       num_nodes    = 1
+#       region       = "us-east4"
+#       vpc_id       = ybm_vpc.newvpc.vpc_id
+#       node_config = {
+#         num_cores    = 2
+#         disk_size_gb = 10
+#       }
+#     }
+#   ]
+#   primary_cluster_id = ybm_cluster.single_region.cluster_id
+# }
 
-resource "ybm_vpc_peering" "example_vpc_peering" {
-  name              = "example_name"
-  yugabytedb_vpc_id = "example_vpc_id"
-  application_vpc_info = {
-    cloud   = "GCP"
-    project = "example_project"
-    region  = "us-west1"
-    vpc_id  = "application_vpc_id"
-    cidr    = "example_cidr"
-  }
-}
+# resource "ybm_vpc_peering" "example_vpc_peering" {
+#   name              = "example_name"
+#   yugabytedb_vpc_id = "example_vpc_id"
+#   application_vpc_info = {
+#     cloud   = "GCP"
+#     project = "example_project"
+#     region  = "us-west1"
+#     vpc_id  = "application_vpc_id"
+#     cidr    = "example_cidr"
+#   }
+# }

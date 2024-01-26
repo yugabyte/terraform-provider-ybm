@@ -117,14 +117,18 @@ and modify the backup schedule of the cluster being created.`,
 						Computed:    true,
 						Optional:    true,
 					},
-
 					"time_interval_in_days": {
 						Description: "The time interval in days for the backup schedule.",
 						Type:        types.Int64Type,
 						Computed:    true,
 						Optional:    true,
 					},
-
+					"incremental_interval_in_mins": {
+						Description: "The time interval in minutes for the incremental backup schedule.",
+						Type:        types.Int64Type,
+						Computed:    true,
+						Optional:    true,
+					},
 					"retention_period_in_days": {
 						Description: "The retention period of the backup schedule.",
 						Type:        types.Int64Type,
@@ -495,25 +499,31 @@ type resourceCluster struct {
 func EditBackupSchedule(ctx context.Context, backupScheduleStruct BackupScheduleInfo, scheduleId string, backupDes string, accountId string, projectId string, clusterId string, apiClient *openapiclient.APIClient) error {
 	if backupScheduleStruct.State.Value != "" && backupScheduleStruct.RetentionPeriodInDays.Value != 0 {
 		backupRetentionPeriodInDays := int32(backupScheduleStruct.RetentionPeriodInDays.Value)
-		backupDescription := backupDes
-		backupSpec := *openapiclient.NewBackupSpec(clusterId)
-		backupSpec.SetDescription(backupDescription)
-		backupSpec.RetentionPeriodInDays = &backupRetentionPeriodInDays
-		scheduleSpec := *openapiclient.NewScheduleSpec(openapiclient.ScheduleStateEnum(backupScheduleStruct.State.Value))
+		backupScheduleSpec := *openapiclient.NewScheduleSpecV2WithDefaults()
+		backupScheduleSpec.SetDescription(backupDes)
+		backupScheduleSpec.SetRetentionPeriodInDays(backupRetentionPeriodInDays)
+		backupScheduleSpec.SetState(openapiclient.ScheduleStateEnum(backupScheduleStruct.State.Value))
+		if backupScheduleStruct.IncrementalIntervalInMins.Value != 0 {
+			incrementalIntervalInMins := int32(backupScheduleStruct.IncrementalIntervalInMins.Value)
+			backupScheduleSpec.SetIncrementalIntervalInMinutes(incrementalIntervalInMins)
+		} else {
+			backupScheduleSpec.UnsetIncrementalIntervalInMinutes()
+		}
 		if backupScheduleStruct.TimeIntervalInDays.Value != 0 {
 			timeIntervalInDays := int32(backupScheduleStruct.TimeIntervalInDays.Value)
-			scheduleSpec.TimeIntervalInDays = &timeIntervalInDays
-
+			backupScheduleSpec.SetTimeIntervalInDays(timeIntervalInDays)
+			backupScheduleSpec.UnsetCronExpression()
 		}
 		if backupScheduleStruct.CronExpression.Value != "" {
 			cronExp := backupScheduleStruct.CronExpression.Value
-			scheduleSpec.SetCronExpression(cronExp)
+			backupScheduleSpec.SetCronExpression(cronExp)
+			backupScheduleSpec.TimeIntervalInDays = 0
 		}
 		if backupScheduleStruct.TimeIntervalInDays.Value != 0 && backupScheduleStruct.CronExpression.Value != "" {
 			return errors.New("Unable to create custom backup schedule. You can't pass both the cron expression and time interval in days.")
 		}
-		backupScheduleSpec := *openapiclient.NewBackupScheduleSpec(backupSpec, scheduleSpec)
-		_, res, err := apiClient.BackupApi.ModifyBackupSchedule(ctx, accountId, projectId, scheduleId).BackupScheduleSpec(backupScheduleSpec).Execute()
+
+		_, res, err := apiClient.BackupApi.ModifyBackupScheduleV2(ctx, accountId, projectId, clusterId, scheduleId).ScheduleSpecV2(backupScheduleSpec).Execute()
 		if err != nil {
 			errMsg := getErrorMessage(res, err)
 			return errors.New("Unable to modify the backup schedule. " + errMsg)
@@ -997,14 +1007,14 @@ func (r resourceCluster) Create(ctx context.Context, req tfsdk.CreateResourceReq
 
 	// Backup_schedule
 
-	scheduleResp, r1, err := apiClient.BackupApi.ListBackupSchedules(ctx, accountId, projectId).EntityId(clusterId).Execute()
+	scheduleResp, r1, err := apiClient.BackupApi.ListBackupSchedulesV2(ctx, accountId, projectId, clusterId).Execute()
 	if err != nil {
 		resp.Diagnostics.AddError("Unable to fetch the backup schedule for the cluster "+r1.Status, "Try again")
 		return
 	}
 	list := scheduleResp.GetData()
 	scheduleId := list[0].GetInfo().Id
-	params := list[0].GetInfo().TaskParams
+	spec := list[0].GetSpec()
 	var backUpSchedules []BackupScheduleInfo
 	if plan.BackupSchedules != nil && len(plan.BackupSchedules) > 0 {
 		if len(plan.BackupSchedules) > 1 {
@@ -1020,7 +1030,7 @@ func (r resourceCluster) Create(ctx context.Context, req tfsdk.CreateResourceReq
 			resp.Diagnostics.AddError("Could not create custom backup schedule", "Pass both state and retention period in days ")
 			return
 		}
-		description := params["description"].(string)
+		description := spec.GetDescription()
 		//Edit Backup Schedule
 		tflog.Info(ctx, fmt.Sprintf("User defined description '%v' default description '%v'", plan.BackupSchedules[0].BackupDescription.Value, description))
 		newDescription := ""
@@ -1360,25 +1370,25 @@ func resourceClusterRead(ctx context.Context, accountId string, projectId string
 		if backUpSchedules[0].ScheduleID.Value == "" {
 			backupScheduleInfo := make([]BackupScheduleInfo, 0)
 			cluster.BackupSchedules = backupScheduleInfo
-		}
-		if backUpSchedules[0].ScheduleID.Value != "" {
-			backupScheduleResp, res, err := apiClient.BackupApi.GetBackupSchedule(context.Background(), accountId, projectId, backUpSchedules[0].ScheduleID.Value).Execute()
+		} else {
+			backupScheduleResp, res, err := apiClient.BackupApi.GetBackupScheduleV2(context.Background(), accountId, projectId, clusterId, backUpSchedules[0].ScheduleID.Value).Execute()
 			if err != nil {
 				errMsg := getErrorMessage(res, err)
 				return cluster, false, errMsg
 			}
 			// fill all fields of schema except credentials - credentials are not returned by api call
 
-			params := backupScheduleResp.Data.Info.GetTaskParams()
+			spec := backupScheduleResp.Data.GetSpec()
 			backupScheduleInfo := make([]BackupScheduleInfo, 1)
 			backupScheduleStruct := BackupScheduleInfo{
 
-				State:                 types.String{Value: string(backupScheduleResp.Data.Spec.GetState())},
-				CronExpression:        types.String{Value: backupScheduleResp.Data.Spec.GetCronExpression()},
-				BackupDescription:     types.String{Value: params["description"].(string)},
-				RetentionPeriodInDays: types.Int64{Value: int64(params["retention_period_in_days"].(float64))},
-				TimeIntervalInDays:    types.Int64{Value: int64(backupScheduleResp.Data.Spec.GetTimeIntervalInDays())},
-				ScheduleID:            types.String{Value: backUpSchedules[0].ScheduleID.Value},
+				State:                     types.String{Value: string(spec.GetState())},
+				CronExpression:            types.String{Value: spec.GetCronExpression()},
+				BackupDescription:         types.String{Value: spec.GetDescription()},
+				RetentionPeriodInDays:     types.Int64{Value: int64(spec.GetRetentionPeriodInDays())},
+				TimeIntervalInDays:        types.Int64{Value: int64(spec.GetTimeIntervalInDays())},
+				IncrementalIntervalInMins: types.Int64{Value: int64(spec.GetIncrementalIntervalInMinutes())},
+				ScheduleID:                types.String{Value: backUpSchedules[0].ScheduleID.Value},
 			}
 			backupScheduleInfo[0] = backupScheduleStruct
 			cluster.BackupSchedules = backupScheduleInfo
@@ -1712,15 +1722,15 @@ func (r resourceCluster) Update(ctx context.Context, req tfsdk.UpdateResourceReq
 		}
 	}
 
-	scheduleResp, r1, err := apiClient.BackupApi.ListBackupSchedules(ctx, accountId, projectId).EntityId(clusterId).Execute()
+	scheduleResp, r1, err := apiClient.BackupApi.ListBackupSchedulesV2(ctx, accountId, projectId, clusterId).Execute()
 	if err != nil {
 		resp.Diagnostics.AddError("Could not fetch the backup schedule for the cluster "+r1.Status, "Try again")
 		return
 	}
 	list := scheduleResp.GetData()
 	scheduleId := list[0].GetInfo().Id
-	params := list[0].GetInfo().TaskParams
-	backupDescription := params["description"].(string)
+	spec := list[0].GetSpec()
+	backupDescription := spec.GetDescription()
 
 	clusterSpec, clusterOK, message := createClusterSpec(ctx, apiClient, accountId, projectId, plan, false)
 	if !clusterOK {
@@ -1857,7 +1867,6 @@ func (r resourceCluster) Update(ctx context.Context, req tfsdk.UpdateResourceReq
 	if plan.BackupSchedules != nil && len(plan.BackupSchedules) == 0 {
 		backupScheduleStruct := BackupScheduleInfo{}
 		backUpSchedules = append(backUpSchedules, backupScheduleStruct)
-
 	}
 
 	if plan.CMKSpec != nil {

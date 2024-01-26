@@ -85,12 +85,13 @@ type GCPServiceAccount struct {
 }
 
 type BackupScheduleInfo struct {
-	State                 types.String `tfsdk:"state"`
-	RetentionPeriodInDays types.Int64  `tfsdk:"retention_period_in_days"`
-	ScheduleID            types.String `tfsdk:"schedule_id"`
-	BackupDescription     types.String `tfsdk:"backup_description"`
-	CronExpression        types.String `tfsdk:"cron_expression"`
-	TimeIntervalInDays    types.Int64  `tfsdk:"time_interval_in_days"`
+	State                     types.String `tfsdk:"state"`
+	RetentionPeriodInDays     types.Int64  `tfsdk:"retention_period_in_days"`
+	ScheduleID                types.String `tfsdk:"schedule_id"`
+	BackupDescription         types.String `tfsdk:"backup_description"`
+	CronExpression            types.String `tfsdk:"cron_expression"`
+	TimeIntervalInDays        types.Int64  `tfsdk:"time_interval_in_days"`
+	IncrementalIntervalInMins types.Int64  `tfsdk:"incremental_interval_in_mins"`
 }
 type RegionInfo struct {
 	Region       types.String `tfsdk:"region"`
