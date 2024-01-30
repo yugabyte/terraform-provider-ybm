@@ -12,6 +12,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
 	"github.com/hashicorp/terraform-plugin-framework/types"
+	"github.com/yugabyte/terraform-provider-ybm/managed/fflags"
 	//"github.com/hashicorp/terraform-plugin-log/tflog"
 	//"fmt"
 )
@@ -79,46 +80,8 @@ func (r dataClusterNameType) GetSchema(_ context.Context) (tfsdk.Schema, diag.Di
 				}),
 			},
 			"backup_schedules": {
-				Computed: true,
-				Attributes: tfsdk.ListNestedAttributes(map[string]tfsdk.Attribute{
-
-					"state": {
-
-						Description: "The state of the backup schedule. Used to pause or resume the backup schedule. Valid values are ACTIVE or PAUSED.",
-						Type:        types.StringType,
-						Computed:    true,
-					},
-
-					"cron_expression": {
-						Description: "The cron expression for the backup schedule.",
-						Type:        types.StringType,
-						Computed:    true,
-					},
-
-					"time_interval_in_days": {
-						Description: "The time interval in days for the backup schedule.",
-						Type:        types.Int64Type,
-						Computed:    true,
-					},
-
-					"retention_period_in_days": {
-						Description: "The retention period of the backup schedule.",
-						Type:        types.Int64Type,
-						Computed:    true,
-					},
-
-					"backup_description": {
-						Description: "The description of the backup schedule.",
-						Type:        types.StringType,
-						Computed:    true,
-					},
-
-					"schedule_id": {
-						Description: "The ID of the backup schedule. Created automatically when the backup schedule is created. Used to get a specific backup schedule.",
-						Type:        types.StringType,
-						Computed:    true,
-					},
-				}),
+				Computed:   true,
+				Attributes: tfsdk.ListNestedAttributes(getBackupScheduleAttributes()),
 			},
 			"cmk_spec": {
 				Description: "KMS Provider Configuration.",
@@ -514,5 +477,59 @@ func (r dataClusterName) Read(ctx context.Context, req tfsdk.ReadDataSourceReque
 	if resp.Diagnostics.HasError() {
 		return
 	}
+
+}
+
+func getBackupScheduleDsAttributes() map[string]tfsdk.Attribute {
+
+	backupScheduleAttributes := map[string]tfsdk.Attribute{
+
+		"state": {
+
+			Description: "The state of the backup schedule. Used to pause or resume the backup schedule. Valid values are ACTIVE or PAUSED.",
+			Type:        types.StringType,
+			Computed:    true,
+		},
+
+		"cron_expression": {
+			Description: "The cron expression for the backup schedule.",
+			Type:        types.StringType,
+			Computed:    true,
+		},
+
+		"time_interval_in_days": {
+			Description: "The time interval in days for the backup schedule.",
+			Type:        types.Int64Type,
+			Computed:    true,
+		},
+
+		"retention_period_in_days": {
+			Description: "The retention period of the backup schedule.",
+			Type:        types.Int64Type,
+			Computed:    true,
+		},
+
+		"backup_description": {
+			Description: "The description of the backup schedule.",
+			Type:        types.StringType,
+			Computed:    true,
+		},
+
+		"schedule_id": {
+			Description: "The ID of the backup schedule. Created automatically when the backup schedule is created. Used to get a specific backup schedule.",
+			Type:        types.StringType,
+			Computed:    true,
+		},
+	}
+
+	if fflags.IsFeatureFlagEnabled(fflags.INCREMENTAL_BACKUP) {
+		backupScheduleAttributes["incremental_interval_in_mins"] = tfsdk.Attribute{
+			Description: "The time interval in minutes for the incremental backup schedule.",
+			Type:        types.Int64Type,
+			Computed:    true,
+		}
+	}
+
+	return backupScheduleAttributes
 
 }

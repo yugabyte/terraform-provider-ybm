@@ -2,7 +2,7 @@
  * Copyright © 2022-present Yugabyte, Inc. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
-package managed
+package util
 
 import (
 	"strings"
@@ -10,7 +10,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/types"
 )
 
-func areListsEqual(l1 []string, l2 []string) bool {
+func AreListsEqual(l1 []string, l2 []string) bool {
 	if len(l1) != len(l2) {
 		return false
 	}
@@ -22,14 +22,14 @@ func areListsEqual(l1 []string, l2 []string) bool {
 	return true
 }
 
-func isDiskSizeValid(clusterTier string, diskSize int64) bool {
+func IsDiskSizeValid(clusterTier string, diskSize int64) bool {
 	if clusterTier == "PAID" && diskSize < 50 {
 		return false
 	}
 	return true
 }
 
-func isDiskIopsValid(cloudType string, clusterTier string, diskIops int64) (bool, string) {
+func IsDiskIopsValid(cloudType string, clusterTier string, diskIops int64) (bool, string) {
 	err := ""
 	if cloudType != "AWS" {
 		err = "Custom Disk IOPS is only supported for AWS"
@@ -81,11 +81,11 @@ func SliceStringToSliceTypesString(slice []string) []types.String {
 	return result
 }
 
-func obfuscateString(s string) string {
-	return obfuscateStringLenght(s, 2)
+func ObfuscateString(s string) string {
+	return ObfuscateStringLenght(s, 2)
 }
 
-func obfuscateStringLenght(s string, l int) string {
+func ObfuscateStringLenght(s string, l int) string {
 	if len(s) < 6 {
 		return "X"
 	}

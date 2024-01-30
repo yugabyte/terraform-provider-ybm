@@ -16,6 +16,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
 	retry "github.com/sethvargo/go-retry"
+	"github.com/yugabyte/terraform-provider-ybm/managed/util"
 	openapiclient "github.com/yugabyte/yugabytedb-managed-go-client-internal"
 )
 
@@ -284,7 +285,7 @@ func (r resourceAllowList) Delete(ctx context.Context, req tfsdk.DeleteResourceR
 	accountId := state.AccountID.Value
 	projectId := state.ProjectID.Value
 	allowListId := state.AllowListID.Value
-	clusterIds := SliceTypesStringToSliceString(state.ClusterIDs)
+	clusterIds := util.SliceTypesStringToSliceString(state.ClusterIDs)
 
 	apiClient := r.p.client
 
@@ -370,7 +371,7 @@ func removeAllowListFromCluster(ctx context.Context, accountId string, projectId
 		}
 		return fmt.Errorf("unable to check network allow list for cluster %s: %s", clusterId, GetApiErrorDetails(err))
 	}
-	allowList := Filter(clusterNalResp.GetData(), func(ep openapiclient.NetworkAllowListData) bool {
+	allowList := util.Filter(clusterNalResp.GetData(), func(ep openapiclient.NetworkAllowListData) bool {
 		return ep.GetInfo().Id != allowListId
 	})
 
