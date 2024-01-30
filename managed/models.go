@@ -84,7 +84,6 @@ type GCPServiceAccount struct {
 	ClientX509CertUrl       types.String `tfsdk:"client_x509_cert_url"`
 	UniverseDomain          types.String `tfsdk:"universe_domain"`
 }
-
 type BackupScheduleInfo struct {
 	State                     types.String `tfsdk:"state"`
 	RetentionPeriodInDays     types.Int64  `tfsdk:"retention_period_in_days"`

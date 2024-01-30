@@ -103,8 +103,57 @@ and modify the backup schedule of the cluster being created.`,
 				}),
 			},
 			"backup_schedules": {
-				Optional:   true,
-				Attributes: tfsdk.ListNestedAttributes(getBackupScheduleAttributes()),
+				Optional: true,
+				Attributes: tfsdk.ListNestedAttributes(map[string]tfsdk.Attribute{
+
+					"state": {
+
+						Description: "The state of the backup schedule. Used to pause or resume the backup schedule. Valid values are ACTIVE or PAUSED.",
+						Type:        types.StringType,
+						Computed:    true,
+						Optional:    true,
+					},
+
+					"cron_expression": {
+						Description: "The cron expression for the backup schedule",
+						Type:        types.StringType,
+						Computed:    true,
+						Optional:    true,
+					},
+
+					"time_interval_in_days": {
+						Description: "The time interval in days for the backup schedule.",
+						Type:        types.Int64Type,
+						Computed:    true,
+						Optional:    true,
+					},
+
+					"retention_period_in_days": {
+						Description: "The retention period of the backup schedule.",
+						Type:        types.Int64Type,
+						Computed:    true,
+						Optional:    true,
+					},
+
+					"backup_description": {
+						Description: "The description of the backup schedule.",
+						Type:        types.StringType,
+						Computed:    true,
+						Optional:    true,
+					},
+
+					"schedule_id": {
+						Description: "The ID of the backup schedule. Created automatically when the backup schedule is created. Used to get a specific backup schedule.",
+						Type:        types.StringType,
+						Computed:    true,
+						Optional:    true,
+					},
+					"incremental_interval_in_mins": {
+						Description: "The time interval in minutes for the incremental backup schedule.",
+						Type:        types.Int64Type,
+						Optional:    true,
+					},
+				}),
 			},
 			"cmk_spec": {
 				Description: "KMS Provider Configuration.",
@@ -465,7 +514,7 @@ func editBackupScheduleV2(ctx context.Context, backupScheduleStruct BackupSchedu
 		backupScheduleSpec.SetDescription(backupDes)
 		backupScheduleSpec.SetRetentionPeriodInDays(backupRetentionPeriodInDays)
 		backupScheduleSpec.SetState(openapiclient.ScheduleStateEnum(backupScheduleStruct.State.Value))
-		if backupScheduleStruct.IncrementalIntervalInMins.Value != 0 {
+		if !backupScheduleStruct.IncrementalIntervalInMins.IsNull() && !backupScheduleStruct.IncrementalIntervalInMins.IsUnknown() && backupScheduleStruct.IncrementalIntervalInMins.Value != 0 {
 			incrementalIntervalInMins := int32(backupScheduleStruct.IncrementalIntervalInMins.Value)
 			backupScheduleSpec.SetIncrementalIntervalInMinutes(incrementalIntervalInMins)
 		} else {
@@ -1416,6 +1465,9 @@ func readBackupScheduleInfoV2(ctx context.Context, apiClient *openapiclient.APIC
 		IncrementalIntervalInMins: types.Int64{Value: int64(spec.GetIncrementalIntervalInMinutes())},
 		ScheduleID:                types.String{Value: scheduleId},
 	}
+	if backupScheduleStruct.IncrementalIntervalInMins.Value == 0 {
+		backupScheduleStruct.IncrementalIntervalInMins.Null = true
+	}
 	backupScheduleInfo[0] = backupScheduleStruct
 
 	return backupScheduleInfo, nil, nil
@@ -2075,63 +2127,4 @@ func (r resourceCluster) Delete(ctx context.Context, req tfsdk.DeleteResourceReq
 func (r resourceCluster) ImportState(ctx context.Context, req tfsdk.ImportResourceStateRequest, resp *tfsdk.ImportResourceStateResponse) {
 	// Save the import identifier in the id attribute
 	tfsdk.ResourceImportStatePassthroughID(ctx, path.Root("id"), req, resp)
-}
-
-func getBackupScheduleAttributes() map[string]tfsdk.Attribute {
-	backupScheduleAttributes := map[string]tfsdk.Attribute{
-
-		"state": {
-
-			Description: "The state of the backup schedule. Used to pause or resume the backup schedule. Valid values are ACTIVE or PAUSED.",
-			Type:        types.StringType,
-			Computed:    true,
-			Optional:    true,
-		},
-
-		"cron_expression": {
-			Description: "The cron expression for the backup schedule",
-			Type:        types.StringType,
-			Computed:    true,
-			Optional:    true,
-		},
-
-		"time_interval_in_days": {
-			Description: "The time interval in days for the backup schedule.",
-			Type:        types.Int64Type,
-			Computed:    true,
-			Optional:    true,
-		},
-
-		"retention_period_in_days": {
-			Description: "The retention period of the backup schedule.",
-			Type:        types.Int64Type,
-			Computed:    true,
-			Optional:    true,
-		},
-
-		"backup_description": {
-			Description: "The description of the backup schedule.",
-			Type:        types.StringType,
-			Computed:    true,
-			Optional:    true,
-		},
-
-		"schedule_id": {
-			Description: "The ID of the backup schedule. Created automatically when the backup schedule is created. Used to get a specific backup schedule.",
-			Type:        types.StringType,
-			Computed:    true,
-			Optional:    true,
-		},
-	}
-
-	if fflags.IsFeatureFlagEnabled(fflags.INCREMENTAL_BACKUP) {
-		backupScheduleAttributes["incremental_interval_in_mins"] = tfsdk.Attribute{
-			Description: "The time interval in minutes for the incremental backup schedule.",
-			Type:        types.Int64Type,
-			Computed:    true,
-			Optional:    true,
-		}
-	}
-
-	return backupScheduleAttributes
 }
