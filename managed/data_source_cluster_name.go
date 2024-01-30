@@ -81,7 +81,7 @@ func (r dataClusterNameType) GetSchema(_ context.Context) (tfsdk.Schema, diag.Di
 			},
 			"backup_schedules": {
 				Computed:   true,
-				Attributes: tfsdk.ListNestedAttributes(getBackupScheduleAttributes()),
+				Attributes: tfsdk.ListNestedAttributes(getBackupScheduleDsAttributes()),
 			},
 			"cmk_spec": {
 				Description: "KMS Provider Configuration.",
