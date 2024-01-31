@@ -2,7 +2,7 @@
  * Copyright © 2022-present Yugabyte, Inc. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
-package managed
+package util
 
 import (
 	"testing"
@@ -43,9 +43,9 @@ func TestAreListsEqual(t *testing.T) {
 
 	for _, testCase := range testCases {
 		t.Run(testCase.TestName, func(t *testing.T) {
-			gotResponse := areListsEqual(testCase.FirstList, testCase.SecondList)
+			gotResponse := AreListsEqual(testCase.FirstList, testCase.SecondList)
 			if gotResponse != testCase.ExpectedResponse {
-				t.Errorf("areListsEqual(%v,%v) = %v; want %v", testCase.FirstList, testCase.SecondList, gotResponse, testCase.ExpectedResponse)
+				t.Errorf("AreListsEqual(%v,%v) = %v; want %v", testCase.FirstList, testCase.SecondList, gotResponse, testCase.ExpectedResponse)
 			}
 		})
 	}
@@ -80,9 +80,9 @@ func TestIsDiskSizeValid(t *testing.T) {
 
 	for _, testCase := range testCases {
 		t.Run(testCase.TestName, func(t *testing.T) {
-			gotResponse := isDiskSizeValid(testCase.ClusterTier, testCase.DiskSize)
+			gotResponse := IsDiskSizeValid(testCase.ClusterTier, testCase.DiskSize)
 			if gotResponse != testCase.ExpectedResponse {
-				t.Errorf("isDiskSizeValid(%v,%v) = %v; want %v", testCase.ClusterTier, testCase.DiskSize, gotResponse, testCase.ExpectedResponse)
+				t.Errorf("IsDiskSizeValid(%v,%v) = %v; want %v", testCase.ClusterTier, testCase.DiskSize, gotResponse, testCase.ExpectedResponse)
 			}
 		})
 	}

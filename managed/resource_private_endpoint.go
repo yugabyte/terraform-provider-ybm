@@ -17,6 +17,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
 	retry "github.com/sethvargo/go-retry"
+	"github.com/yugabyte/terraform-provider-ybm/managed/util"
 	openapiclient "github.com/yugabyte/yugabytedb-managed-go-client-internal"
 )
 
@@ -215,7 +216,7 @@ func (r resourcePrivateEndpoint) Create(ctx context.Context, req tfsdk.CreateRes
 	}
 
 	allClusterRegions := clusterData.Info.ClusterRegionInfoDetails
-	desiredRegions := Filter(allClusterRegions, func(regionInfo openapiclient.ClusterRegionInfoDetails) bool {
+	desiredRegions := util.Filter(allClusterRegions, func(regionInfo openapiclient.ClusterRegionInfoDetails) bool {
 		return regionInfo.Region == region
 	})
 
@@ -229,7 +230,7 @@ func (r resourcePrivateEndpoint) Create(ctx context.Context, req tfsdk.CreateRes
 	}
 
 	regionArnMap := make(map[string][]string)
-	regionArnMap[desiredRegions[0].Id] = SliceTypesStringToSliceString(securityPrincipals)
+	regionArnMap[desiredRegions[0].Id] = util.SliceTypesStringToSliceString(securityPrincipals)
 	createPseSpec := createPrivateServiceEndpointSpec(regionArnMap)
 
 	createResp, _, err := apiClient.ClusterApi.CreatePrivateServiceEndpoint(context.Background(), accountId, projectId, clusterId).PrivateServiceEndpointSpec(createPseSpec[0]).Execute()
@@ -237,7 +238,7 @@ func (r resourcePrivateEndpoint) Create(ctx context.Context, req tfsdk.CreateRes
 		resp.Diagnostics.AddError("unable to create private service endpoint", GetApiErrorDetails(err))
 		return
 	}
-	psEps := Filter(createResp.GetData(), func(ep openapiclient.PrivateServiceEndpointRegionData) bool {
+	psEps := util.Filter(createResp.GetData(), func(ep openapiclient.PrivateServiceEndpointRegionData) bool {
 		return *ep.GetSpec().ClusterRegionInfoId.Get() == desiredRegions[0].Id
 	})
 
@@ -295,8 +296,8 @@ func resourcePrivateEndpointRead(accountId string, projectId string, pseID strin
 	pse.ClusterID.Value = clusterId
 	pse.ServiceName.Value = pseResp.Data.Info.GetServiceName()
 
-	pse.AvailabilityZones = SliceStringToSliceTypesString(pseResp.Data.Info.AvailabilityZones)
-	pse.SecurityPrincipals = SliceStringToSliceTypesString(pseResp.Data.Spec.Get().SecurityPrincipals)
+	pse.AvailabilityZones = util.SliceStringToSliceTypesString(pseResp.Data.Info.AvailabilityZones)
+	pse.SecurityPrincipals = util.SliceStringToSliceTypesString(pseResp.Data.Spec.Get().SecurityPrincipals)
 
 	pse.ClusterRegionInfoId.Value = pseResp.Data.Spec.Get().GetClusterRegionInfoId()
 
@@ -308,10 +309,10 @@ func resourcePrivateEndpointRead(accountId string, projectId string, pseID strin
 	}
 	clusterData := clusterResp.GetData()
 	pse.ClusterRegionInfoId.Value = pseResp.Data.Spec.Get().GetClusterRegionInfoId()
-	desiredRegions := Filter(clusterData.Info.ClusterRegionInfoDetails, func(regionInfo openapiclient.ClusterRegionInfoDetails) bool {
+	desiredRegions := util.Filter(clusterData.Info.ClusterRegionInfoDetails, func(regionInfo openapiclient.ClusterRegionInfoDetails) bool {
 		return regionInfo.Id == pse.ClusterRegionInfoId.Value
 	})
-	desiredEndpoints := Filter(clusterData.Info.ClusterEndpoints, func(endpoint openapiclient.Endpoint) bool {
+	desiredEndpoints := util.Filter(clusterData.Info.ClusterEndpoints, func(endpoint openapiclient.Endpoint) bool {
 		if !endpoint.HasPseId() {
 			return false
 		}
@@ -349,7 +350,7 @@ func (r resourcePrivateEndpoint) Update(ctx context.Context, req tfsdk.UpdateRes
 	securityPrincipals := plan.SecurityPrincipals
 
 	regionArnMap := make(map[string][]string)
-	regionArnMap[ClusterRegionInfoId] = SliceTypesStringToSliceString(securityPrincipals)
+	regionArnMap[ClusterRegionInfoId] = util.SliceTypesStringToSliceString(securityPrincipals)
 	createPseSpec := createPrivateServiceEndpointRegionSpec(regionArnMap)
 
 	_, _, err := apiClient.ClusterApi.EditPrivateServiceEndpoint(context.Background(), accountId, projectId, clusterId, pseId).PrivateServiceEndpointRegionSpec(createPseSpec[0]).Execute()
@@ -498,7 +499,7 @@ func getPrivateServiceEndpointStateFromCluster(accountId string, projectId strin
 		return "", false, GetApiErrorDetails(err)
 	}
 	clusterData := clusterResp.GetData()
-	desiredEndpoints := Filter(clusterData.Info.ClusterEndpoints, func(endpoint openapiclient.Endpoint) bool {
+	desiredEndpoints := util.Filter(clusterData.Info.ClusterEndpoints, func(endpoint openapiclient.Endpoint) bool {
 		if !endpoint.HasPseId() {
 			return false
 		}

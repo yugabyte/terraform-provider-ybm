@@ -6,6 +6,7 @@ package managed
 
 import (
 	"github.com/hashicorp/terraform-plugin-framework/types"
+	"github.com/yugabyte/terraform-provider-ybm/managed/util"
 )
 
 type Cluster struct {
@@ -83,14 +84,14 @@ type GCPServiceAccount struct {
 	ClientX509CertUrl       types.String `tfsdk:"client_x509_cert_url"`
 	UniverseDomain          types.String `tfsdk:"universe_domain"`
 }
-
 type BackupScheduleInfo struct {
-	State                 types.String `tfsdk:"state"`
-	RetentionPeriodInDays types.Int64  `tfsdk:"retention_period_in_days"`
-	ScheduleID            types.String `tfsdk:"schedule_id"`
-	BackupDescription     types.String `tfsdk:"backup_description"`
-	CronExpression        types.String `tfsdk:"cron_expression"`
-	TimeIntervalInDays    types.Int64  `tfsdk:"time_interval_in_days"`
+	State                     types.String `tfsdk:"state"`
+	RetentionPeriodInDays     types.Int64  `tfsdk:"retention_period_in_days"`
+	ScheduleID                types.String `tfsdk:"schedule_id"`
+	BackupDescription         types.String `tfsdk:"backup_description"`
+	CronExpression            types.String `tfsdk:"cron_expression"`
+	TimeIntervalInDays        types.Int64  `tfsdk:"time_interval_in_days"`
+	IncrementalIntervalInMins types.Int64  `tfsdk:"incremental_interval_in_mins"`
 }
 type RegionInfo struct {
 	Region       types.String `tfsdk:"region"`
@@ -285,22 +286,22 @@ type SumoLogicSpec struct {
 }
 
 func (d DataDogSpec) EncryptedKey() string {
-	return obfuscateString(d.ApiKey.Value)
+	return util.ObfuscateString(d.ApiKey.Value)
 }
 
 func (g GrafanaSpec) EncryptedKey() string {
-	return obfuscateStringLenght(g.AccessTokenPolicy.Value, 5)
+	return util.ObfuscateStringLenght(g.AccessTokenPolicy.Value, 5)
 }
 
 func (s SumoLogicSpec) EncryptedKey(key string) string {
 	switch key {
 
 	case "access_key":
-		return obfuscateString(s.AccessKey.Value)
+		return util.ObfuscateString(s.AccessKey.Value)
 	case "access_id":
-		return obfuscateString(s.AccessId.Value)
+		return util.ObfuscateString(s.AccessId.Value)
 	case "installation_token":
-		return obfuscateString(s.InstallationToken.Value)
+		return util.ObfuscateString(s.InstallationToken.Value)
 	}
 	return ""
 }

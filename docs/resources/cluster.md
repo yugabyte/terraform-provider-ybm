@@ -681,6 +681,7 @@ Optional:
 
 - `backup_description` (String) The description of the backup schedule.
 - `cron_expression` (String) The cron expression for the backup schedule
+- `incremental_interval_in_mins` (Number) The time interval in minutes for the incremental backup schedule.
 - `retention_period_in_days` (Number) The retention period of the backup schedule.
 - `schedule_id` (String) The ID of the backup schedule. Created automatically when the backup schedule is created. Used to get a specific backup schedule.
 - `state` (String) The state of the backup schedule. Used to pause or resume the backup schedule. Valid values are ACTIVE or PAUSED.

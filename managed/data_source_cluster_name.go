@@ -118,6 +118,12 @@ func (r dataClusterNameType) GetSchema(_ context.Context) (tfsdk.Schema, diag.Di
 						Type:        types.StringType,
 						Computed:    true,
 					},
+
+					"incremental_interval_in_mins": {
+						Description: "The time interval in minutes for the incremental backup schedule.",
+						Type:        types.Int64Type,
+						Computed:    true,
+					},
 				}),
 			},
 			"cmk_spec": {
