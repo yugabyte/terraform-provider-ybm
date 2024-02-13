@@ -1012,7 +1012,7 @@ func (r resourceCluster) Create(ctx context.Context, req tfsdk.CreateResourceReq
 				return ErrFailedTask
 			}
 		} else {
-			return handleReadFailure(ctx, &readClusterRetries, message)
+			return handleReadFailureWithRetries(ctx, &readClusterRetries, 2, message)
 		}
 		return retry.RetryableError(errors.New("The cluster creation is in progress"))
 	})
@@ -1037,7 +1037,7 @@ func (r resourceCluster) Create(ctx context.Context, req tfsdk.CreateResourceReq
 				return nil
 			}
 		} else {
-			return handleReadFailure(ctx, &readClusterRetries, message)
+			return handleReadFailureWithRetries(ctx, &readClusterRetries, 2, message)
 		}
 		return retry.RetryableError(errors.New("The cluster creation is in progress"))
 	})
@@ -1254,7 +1254,7 @@ func pauseCluster(ctx context.Context, apiClient *openapiclient.APIClient, accou
 				return nil
 			}
 		} else {
-			return handleReadFailure(ctx, &readClusterRetries, message)
+			return handleReadFailureWithRetries(ctx, &readClusterRetries, 2, message)
 		}
 		return retry.RetryableError(errors.New("The cluster is being paused."))
 	})
@@ -1288,7 +1288,7 @@ func editClusterCmk(ctx context.Context, apiClient *openapiclient.APIClient, acc
 				return nil
 			}
 		} else {
-			return handleReadFailure(ctx, &readClusterRetries, message)
+			return handleReadFailureWithRetries(ctx, &readClusterRetries, 2, message)
 		}
 		return retry.RetryableError(errors.New("Cluster CMK is getting updated."))
 	})
@@ -1300,9 +1300,9 @@ func editClusterCmk(ctx context.Context, apiClient *openapiclient.APIClient, acc
 	return nil
 }
 
-func handleReadFailure(ctx context.Context, readClusterRetries *int, errMsg string) error {
+func handleReadFailureWithRetries(ctx context.Context, readClusterRetries *int, maxRetries int, errMsg string) error {
 
-	if *readClusterRetries < 2 {
+	if *readClusterRetries < maxRetries {
 		*readClusterRetries++
 		tflog.Info(ctx, "Unable to get cluster state, retrying...")
 		return retry.RetryableError(errors.New("unable to get cluster state, retrying"))
@@ -1334,7 +1334,7 @@ func resumeCluster(ctx context.Context, apiClient *openapiclient.APIClient, acco
 				return nil
 			}
 		} else {
-			return handleReadFailure(ctx, &readClusterRetries, message)
+			return handleReadFailureWithRetries(ctx, &readClusterRetries, 2, message)
 		}
 		return retry.RetryableError(errors.New("The cluster is being resumed."))
 	})
@@ -1926,7 +1926,7 @@ func (r resourceCluster) Update(ctx context.Context, req tfsdk.UpdateResourceReq
 				}
 			}
 		} else {
-			return handleReadFailure(ctx, &readClusterRetries, message)
+			return handleReadFailureWithRetries(ctx, &readClusterRetries, 2, message)
 		}
 		return retry.RetryableError(errors.New("Cluster edit operation in progress"))
 	})
@@ -1951,7 +1951,7 @@ func (r resourceCluster) Update(ctx context.Context, req tfsdk.UpdateResourceReq
 				return nil
 			}
 		} else {
-			return handleReadFailure(ctx, &readClusterRetries, message)
+			return handleReadFailureWithRetries(ctx, &readClusterRetries, 2, message)
 		}
 		return retry.RetryableError(errors.New("Cluster creation in progress"))
 	})
