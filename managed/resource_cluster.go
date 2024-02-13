@@ -999,7 +999,7 @@ func (r resourceCluster) Create(ctx context.Context, req tfsdk.CreateResourceReq
 		return
 	}
 	clusterId := clusterResp.Data.Info.Id
-
+	readClusterRetries := 0
 	retryPolicy := retry.NewConstant(10 * time.Second)
 	retryPolicy = retry.WithMaxDuration(3600*time.Second, retryPolicy)
 	err = retry.Do(ctx, retryPolicy, func(ctx context.Context) error {
@@ -1012,7 +1012,7 @@ func (r resourceCluster) Create(ctx context.Context, req tfsdk.CreateResourceReq
 				return ErrFailedTask
 			}
 		} else {
-			return retry.RetryableError(errors.New("Unable to get cluster state: " + message))
+			return handleReadFailure(ctx, &readClusterRetries, message)
 		}
 		return retry.RetryableError(errors.New("The cluster creation is in progress"))
 	})
@@ -1029,6 +1029,7 @@ func (r resourceCluster) Create(ctx context.Context, req tfsdk.CreateResourceReq
 	// read status, wait for status to be done
 	retryPolicyA := retry.NewConstant(10 * time.Second)
 	retryPolicyA = retry.WithMaxDuration(3600*time.Second, retryPolicyA)
+	readClusterRetries = 0
 	err = retry.Do(ctx, retryPolicyA, func(ctx context.Context) error {
 		clusterState, readInfoOK, message := getClusterState(ctx, accountId, projectId, clusterId, apiClient)
 		if readInfoOK {
@@ -1036,7 +1037,7 @@ func (r resourceCluster) Create(ctx context.Context, req tfsdk.CreateResourceReq
 				return nil
 			}
 		} else {
-			return retry.RetryableError(errors.New("Unable to get cluster state: " + message))
+			return handleReadFailure(ctx, &readClusterRetries, message)
 		}
 		return retry.RetryableError(errors.New("The cluster creation is in progress"))
 	})
@@ -1243,6 +1244,7 @@ func pauseCluster(ctx context.Context, apiClient *openapiclient.APIClient, accou
 	}
 
 	// read status, wait for status to be done
+	readClusterRetries := 0
 	retryPolicy := retry.NewConstant(10 * time.Second)
 	retryPolicy = retry.WithMaxDuration(1200*time.Second, retryPolicy)
 	err = retry.Do(ctx, retryPolicy, func(ctx context.Context) error {
@@ -1252,7 +1254,7 @@ func pauseCluster(ctx context.Context, apiClient *openapiclient.APIClient, accou
 				return nil
 			}
 		} else {
-			return retry.RetryableError(errors.New("Unable to get cluster state: " + message))
+			return handleReadFailure(ctx, &readClusterRetries, message)
 		}
 		return retry.RetryableError(errors.New("The cluster is being paused."))
 	})
@@ -1276,6 +1278,7 @@ func editClusterCmk(ctx context.Context, apiClient *openapiclient.APIClient, acc
 	}
 
 	// read status, wait for status to be done
+	readClusterRetries := 0
 	retryPolicy := retry.NewConstant(10 * time.Second)
 	retryPolicy = retry.WithMaxDuration(1200*time.Second, retryPolicy)
 	err = retry.Do(ctx, retryPolicy, func(ctx context.Context) error {
@@ -1285,7 +1288,7 @@ func editClusterCmk(ctx context.Context, apiClient *openapiclient.APIClient, acc
 				return nil
 			}
 		} else {
-			return retry.RetryableError(errors.New("Unable to get cluster state: " + message))
+			return handleReadFailure(ctx, &readClusterRetries, message)
 		}
 		return retry.RetryableError(errors.New("Cluster CMK is getting updated."))
 	})
@@ -1295,6 +1298,18 @@ func editClusterCmk(ctx context.Context, apiClient *openapiclient.APIClient, acc
 	}
 
 	return nil
+}
+
+func handleReadFailure(ctx context.Context, readClusterRetries *int, errMsg string) error {
+
+	if *readClusterRetries < 2 {
+		*readClusterRetries++
+		tflog.Info(ctx, "Unable to get cluster state, retrying...")
+		return retry.RetryableError(errors.New("unable to get cluster state, retrying"))
+	}
+
+	tflog.Info(ctx, "Unable to get cluster state, giving up...")
+	return errors.New("Unable to get cluster state: " + errMsg)
 }
 
 func resumeCluster(ctx context.Context, apiClient *openapiclient.APIClient, accountId string, projectId string, clusterId string) (err error) {
@@ -1309,6 +1324,7 @@ func resumeCluster(ctx context.Context, apiClient *openapiclient.APIClient, acco
 	}
 
 	// read status, wait for status to be done
+	readClusterRetries := 0
 	retryPolicy := retry.NewConstant(10 * time.Second)
 	retryPolicy = retry.WithMaxDuration(1200*time.Second, retryPolicy)
 	err = retry.Do(ctx, retryPolicy, func(ctx context.Context) error {
@@ -1318,7 +1334,7 @@ func resumeCluster(ctx context.Context, apiClient *openapiclient.APIClient, acco
 				return nil
 			}
 		} else {
-			return retry.RetryableError(errors.New("Unable to get cluster state: " + message))
+			return handleReadFailure(ctx, &readClusterRetries, message)
 		}
 		return retry.RetryableError(errors.New("The cluster is being resumed."))
 	})
@@ -1883,7 +1899,8 @@ func (r resourceCluster) Update(ctx context.Context, req tfsdk.UpdateResourceReq
 	// we will try twice to read the task state. If both times we can't find the task, we bail out.
 	//
 	// Something similar will happen if changing the backup schedule or the CMK spec.
-	var retries int
+	retries := 0
+	readClusterRetries := 0
 	retryPolicy := retry.NewConstant(10 * time.Second)
 	retryPolicy = retry.WithMaxDuration(3600*time.Second, retryPolicy)
 	err = retry.Do(ctx, retryPolicy, func(ctx context.Context) error {
@@ -1905,11 +1922,11 @@ func (r resourceCluster) Update(ctx context.Context, req tfsdk.UpdateResourceReq
 					return retry.RetryableError(errors.New("Cluster not found, retrying"))
 				} else {
 					tflog.Info(ctx, "Cluster edit task not found, giving up...")
-					return nil
+					return errors.New("Cluster edit task not found")
 				}
 			}
 		} else {
-			return retry.RetryableError(errors.New("Unable to get cluster state: " + message))
+			return handleReadFailure(ctx, &readClusterRetries, message)
 		}
 		return retry.RetryableError(errors.New("Cluster edit operation in progress"))
 	})
@@ -1924,6 +1941,7 @@ func (r resourceCluster) Update(ctx context.Context, req tfsdk.UpdateResourceReq
 	}
 
 	// read status, wait for status to be active
+	readClusterRetries = 0
 	retryPolicyA := retry.NewConstant(10 * time.Second)
 	retryPolicyA = retry.WithMaxDuration(3600*time.Second, retryPolicyA)
 	err = retry.Do(ctx, retryPolicyA, func(ctx context.Context) error {
@@ -1933,7 +1951,7 @@ func (r resourceCluster) Update(ctx context.Context, req tfsdk.UpdateResourceReq
 				return nil
 			}
 		} else {
-			return retry.RetryableError(errors.New("Unable to get cluster state: " + message))
+			return handleReadFailure(ctx, &readClusterRetries, message)
 		}
 		return retry.RetryableError(errors.New("Cluster creation in progress"))
 	})
