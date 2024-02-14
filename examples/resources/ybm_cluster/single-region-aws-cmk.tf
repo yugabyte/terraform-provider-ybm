@@ -26,9 +26,9 @@ resource "ybm_cluster" "single_region" {
       num_nodes = 6
     }
   ]
-  cluster_tier           = "PAID"
+  cluster_tier = "PAID"
   # fault tolerance cannot be NONE for CMK enabled cluster
-  fault_tolerance        = "ZONE"
+  fault_tolerance = "ZONE"
 
   cmk_spec = {
     provider_type = "AWS"
@@ -39,7 +39,7 @@ resource "ybm_cluster" "single_region" {
         "arn:aws:kms:us-west-2:111122223333:key/1234abcd-12ab-34cd-56ef-1234567890ab"
       ]
     }
-    is_enabled =  true
+    is_enabled = true
   }
 
   node_config = {

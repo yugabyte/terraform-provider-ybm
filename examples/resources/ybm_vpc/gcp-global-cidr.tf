@@ -1,5 +1,5 @@
 resource "ybm_vpc" "example-vpc" {
-  name = "example-vpc"
+  name  = "example-vpc"
   cloud = "GCP"
   # Use only one of either global cidr or region cidr
   global_cidr = "10.9.0.0/18"

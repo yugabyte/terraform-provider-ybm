@@ -15,9 +15,9 @@ The resource to create a manual backup of tables in a particular cluster.
 
 ```terraform
 resource "ybm_backup" "example_backup" {
-  cluster_id = "example-cluster-id"
-  backup_description = "example-backup-description"
-  retention_period_in_days = 2  
+  cluster_id               = "example-cluster-id"
+  backup_description       = "example-backup-description"
+  retention_period_in_days = 2
 }
 ```
 

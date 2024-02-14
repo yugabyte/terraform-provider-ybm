@@ -12,7 +12,7 @@ The data source to fetch the cluster ID and other information about a cluster gi
 ## Example Usage
 
 ```terraform
-data "ybm_cluster" "example_cluster"{
+data "ybm_cluster" "example_cluster" {
   cluster_name = "example-cluster"
 }
 ```

@@ -15,11 +15,11 @@ To issue an API Key with predefined built-in roles like Admin, Developer, Viewer
 
 ```terraform
 resource "ybm_api_key" "example_api_key" {
-    name = "example-api-key-name"
-    description = "example API Key description" #Optional
-    duration = 10
-    unit = "Hours"
-    role_name = "Developer"
+  name        = "example-api-key-name"
+  description = "example API Key description" #Optional
+  duration    = 10
+  unit        = "Hours"
+  role_name   = "Developer"
 }
 ```
 
@@ -27,11 +27,11 @@ To issue an API Key with custom user defined roles
 
 ```terraform
 resource "ybm_api_key" "example_custom_role_api_key" {
-    name = "example-api-key-name"
-    description = "example API Key description" #Optional
-    duration = 1
-    unit = "Months"
-    role_name = "example-custom-role-name"
+  name        = "example-api-key-name"
+  description = "example API Key description" #Optional
+  duration    = 1
+  unit        = "Months"
+  role_name   = "example-custom-role-name"
 }
 ```
 

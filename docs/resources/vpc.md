@@ -13,7 +13,7 @@ The resource to create a VPC in YugabyteDB Managed.
 
 ```terraform
 resource "ybm_vpc" "example-vpc" {
-  name = "example-vpc"
+  name  = "example-vpc"
   cloud = "GCP"
   # Use only one of either global cidr or region cidr
   global_cidr = "10.9.0.0/18"
@@ -34,12 +34,12 @@ resource "ybm_vpc" "example-vpc" {
 
 ```terraform
 resource "ybm_vpc" "example-vpc" {
-  name = "example-vpc"
+  name  = "example-vpc"
   cloud = "AWS"
   region_cidr_info = [
     {
       region = "us-east-1"
-      cidr = "10.231.0.0/24"
+      cidr   = "10.231.0.0/24"
     }
   ]
 }
@@ -49,7 +49,7 @@ resource "ybm_vpc" "example-vpc" {
 
 ```terraform
 resource "ybm_vpc" "example-vpc" {
-  name = "example-vpc"
+  name  = "example-vpc"
   cloud = "AZURE"
   region_cidr_info = [
     {

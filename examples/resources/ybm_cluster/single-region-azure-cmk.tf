@@ -26,19 +26,19 @@ resource "ybm_cluster" "single_region" {
       num_nodes = 6
     }
   ]
-  cluster_tier           = "PAID"
+  cluster_tier = "PAID"
   # fault tolerance cannot be NONE for CMK enabled cluster
-  fault_tolerance        = "ZONE"
+  fault_tolerance = "ZONE"
   cmk_spec = {
     provider_type = "AZURE"
     azure_cmk_spec = {
-      client_id = "your-client-id"
+      client_id     = "your-client-id"
       client_secret = "your-client-secret"
-      tenant_id = "your-tenant-id"
-      key_name = "your-key-name"
+      tenant_id     = "your-tenant-id"
+      key_name      = "your-key-name"
       key_vault_uri = "your-key-vault-uri"
     }
-    is_enabled =  true
+    is_enabled = true
   }
 
   node_config = {
