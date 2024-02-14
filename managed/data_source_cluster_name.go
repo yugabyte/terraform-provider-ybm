@@ -64,6 +64,18 @@ func (r dataClusterNameType) GetSchema(_ context.Context) (tfsdk.Schema, diag.Di
 						Type:     types.StringType,
 						Computed: true,
 					},
+					"num_cores": {
+						Type:     types.Int64Type,
+						Computed: true,
+					},
+					"disk_size_gb": {
+						Type:     types.Int64Type,
+						Computed: true,
+					},
+					"disk_iops": {
+						Type:     types.Int64Type,
+						Computed: true,
+					},
 					"vpc_id": {
 						Type:     types.StringType,
 						Computed: true,

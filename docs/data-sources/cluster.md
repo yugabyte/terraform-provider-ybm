@@ -82,6 +82,9 @@ Read-Only:
 
 Read-Only:
 
+- `disk_iops` (Number)
+- `disk_size_gb` (Number)
+- `num_cores` (Number)
 - `num_nodes` (Number)
 - `public_access` (Boolean)
 - `region` (String)
