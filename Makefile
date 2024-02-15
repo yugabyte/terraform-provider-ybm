@@ -51,3 +51,12 @@ update-client:
 
 clean:
 	rm -rf terraform-provider-ybm
+
+fmt:
+	go fmt ./...
+	terraform fmt --recursive
+	
+fmt-check:
+	@echo "Verifying formatting, failures can be fixed with 'make fmt'"
+	@!(gofmt -l -s -d . | grep '[a-z]')
+	terraform fmt -check --recursive

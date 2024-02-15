@@ -1,5 +1,5 @@
 resource "ybm_vpc" "example-vpc" {
-  name = "example-vpc"
+  name  = "example-vpc"
   cloud = "AZURE"
   region_cidr_info = [
     {

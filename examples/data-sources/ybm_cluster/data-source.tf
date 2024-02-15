@@ -1,3 +1,3 @@
-data "ybm_cluster" "example_cluster"{
+data "ybm_cluster" "example_cluster" {
   cluster_name = "example-cluster"
-} 
+}

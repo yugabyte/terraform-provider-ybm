@@ -12,7 +12,7 @@ The data source to fetch the cluster ID and other information about a cluster gi
 ## Example Usage
 
 ```terraform
-data "ybm_cluster" "example_cluster"{
+data "ybm_cluster" "example_cluster" {
   cluster_name = "example-cluster"
 }
 ```
@@ -82,6 +82,9 @@ Read-Only:
 
 Read-Only:
 
+- `disk_iops` (Number)
+- `disk_size_gb` (Number)
+- `num_cores` (Number)
 - `num_nodes` (Number)
 - `public_access` (Boolean)
 - `region` (String)

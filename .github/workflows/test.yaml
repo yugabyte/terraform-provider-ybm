@@ -42,6 +42,14 @@ jobs:
             exit 1                                                                          
           fi                                                                                                 
         name: Check documentation
+      - run: |
+          make fmt-check
+          git status -s
+          if [[ -n $(git status -s) ]]; then
+            echo "The formatting is not proper. Please ensure that your run 'make fmt'"                                                                   
+            exit 1                                                                          
+          fi                                                                                                 
+        name: Check formatting
   unit:
     name: Unit Tests
     runs-on: ubuntu-latest

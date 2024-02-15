@@ -92,8 +92,8 @@ resource "ybm_allow_list" "mylist" {
 
 
 resource "ybm_vpc" "newvpc" {
-  name       = "terraform-vpc"
-  cloud      = "GCP"
+  name  = "terraform-vpc"
+  cloud = "GCP"
   # Use only one among global cidr and region cidr
   global_cidr = "10.9.0.0/18"
   # region_cidr_info = [

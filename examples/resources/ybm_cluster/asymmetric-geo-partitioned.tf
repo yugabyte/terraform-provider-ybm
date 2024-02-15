@@ -4,49 +4,42 @@ variable "password" {
   sensitive   = true
 }
 
-# Multi Region Cluster
-resource "ybm_cluster" "multi_region_cluster" {
-  cluster_name = "multi-region-cluster"
+# Asymmetric Geo Partitioned Cluster
+# Creates 3 regions us-west1/asia-east1/europe-central2 with num_cores as 2/4/4 respectively
+resource "ybm_cluster" "asymmetric_geo_partitioned_cluster" {
+  cluster_name = "asymmetric-geo-partitioned-cluster"
   cloud_type   = "GCP"
-  cluster_type = "SYNCHRONOUS"
+  cluster_type = "GEO_PARTITIONED"
   cluster_region_info = [
     {
-      region    = "us-west1"
-      num_nodes = 1
-      vpc_id    = "example-vpc-id" #Optional
+      region       = "us-west1"
+      num_nodes    = 1
+      num_cores    = 2
+      disk_size_gb = 50               #Optional
+      vpc_id       = "example-vpc-id" #Optional
       #vpc_name = "example-vpc-name" #Optional You can also use the VPC Name in place of vpc_id
     },
     {
-      region    = "asia-east1"
-      num_nodes = 1
-      vpc_id    = "example-vpc-id" #Optional
+      region       = "asia-east1"
+      num_nodes    = 1
+      num_cores    = 4
+      disk_size_gb = 100              #Optional
+      vpc_id       = "example-vpc-id" #Optional
       #vpc_name = "example-vpc-name" #Optional You can also use the VPC Name in place of vpc_id
     },
     {
-      region    = "europe-central2"
-      num_nodes = 1
-      vpc_id    = "example-vpc-id" #Optional
-      #vpc_name = "example-vpc-name" #Optional You can also use the VPC Name in place of vpc_id
-    },
-    {
-      region    = "us-east1"
-      num_nodes = 1
-      vpc_id    = "example-vpc-id" #Optional
-      #vpc_name = "example-vpc-name" #Optional You can also use the VPC Name in place of vpc_id
-    },
-    {
-      region    = "us-west4"
-      num_nodes = 1
-      vpc_id    = "example-vpc-id" #Optional
+      region       = "europe-central2"
+      num_nodes    = 1
+      num_cores    = 4
+      disk_size_gb = 100              # Optional
+      vpc_id       = "example-vpc-id" #Optional
       #vpc_name = "example-vpc-name" #Optional You can also use the VPC Name in place of vpc_id
     }
-
   ]
   cluster_tier           = "PAID"
   cluster_allow_list_ids = ["example-allow-list-id-1", "example-allow-list-id-2"] #Optional
   restore_backup_id      = "example-backup-id"                                    #Optional
   fault_tolerance        = "REGION"
-  num_faults_to_tolerate = 2
   node_config = {
     num_cores    = 2
     disk_size_gb = 50 #Optional
@@ -63,4 +56,3 @@ resource "ybm_cluster" "multi_region_cluster" {
     password = var.password
   }
 }
-

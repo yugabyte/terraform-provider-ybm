@@ -15,8 +15,8 @@ To invite a user with predefined built-in roles like Admin, Developer, Viewer
 
 ```terraform
 resource "ybm_user" "example_user" {
-    email = "example@example.com"
-    role_name = "Developer"
+  email     = "example@example.com"
+  role_name = "Developer"
 }
 ```
 
@@ -24,8 +24,8 @@ To invite a user with custom user defined roles
 
 ```terraform
 resource "ybm_user" "example_custom_role_user" {
-    email = "example@example.com"
-    role_name = "example-custom-role-name"
+  email     = "example@example.com"
+  role_name = "example-custom-role-name"
 }
 ```
 

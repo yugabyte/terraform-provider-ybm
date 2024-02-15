@@ -82,6 +82,24 @@ and modify the backup schedule of the cluster being created.`,
 						Type:     types.StringType,
 						Required: true,
 					},
+					"num_cores": {
+						Description: "Number of CPU cores in the nodes of the region.",
+						Type:        types.Int64Type,
+						Optional:    true,
+						Computed:    true,
+					},
+					"disk_size_gb": {
+						Description: "Disk size of the nodes of the region.",
+						Type:        types.Int64Type,
+						Optional:    true,
+						Computed:    true,
+					},
+					"disk_iops": {
+						Description: "Disk IOPS of the nodes of the region.",
+						Type:        types.Int64Type,
+						Optional:    true,
+						Computed:    true,
+					},
 					"vpc_id": {
 						Type:     types.StringType,
 						Optional: true,
@@ -616,6 +634,35 @@ func createClusterSpec(ctx context.Context, apiClient *openapiclient.APIClient, 
 			regionInfo.VPCID.Value = vpcData.Info.Id
 		}
 
+		if !regionInfo.NumCores.IsUnknown() && !regionInfo.NumCores.IsNull() {
+			cloud := plan.CloudType.Value
+			tier := plan.ClusterTier.Value
+			region := regionInfo.Region.Value
+			numCores := int32(regionInfo.NumCores.Value)
+			memoryMb, memoryOK, message = getMemoryFromInstanceType(ctx, apiClient, accountId, cloud, tier, region, numCores)
+			if !memoryOK {
+				return nil, false, message
+			}
+
+			if !regionInfo.DiskSizeGb.IsUnknown() && !regionInfo.DiskSizeGb.IsNull() {
+				diskSizeGb = int32(regionInfo.DiskSizeGb.Value)
+			} else {
+				diskSizeGb, diskSizeOK, message = getDiskSizeFromInstanceType(ctx, apiClient, accountId, cloud, tier, region, numCores)
+				if !diskSizeOK {
+					return nil, false, message
+				}
+			}
+
+			nodeInfo := *openapiclient.NewClusterNodeInfo(numCores, memoryMb, diskSizeGb)
+			if !regionInfo.DiskIops.IsUnknown() && !regionInfo.DiskIops.IsNull() {
+				nodeInfo.SetDiskIops(int32(regionInfo.DiskIops.Value))
+			}
+
+			info.SetNodeInfo(nodeInfo)
+		} else {
+			info.UnsetNodeInfo()
+		}
+
 		// Create an array of AccessibilityType and populate it according to
 		// the following logic:
 		// if the cluster is in a private VPC, it MUST always have PRIVATE.
@@ -941,6 +988,26 @@ func (r resourceCluster) Create(ctx context.Context, req tfsdk.CreateResourceReq
 				)
 				return
 			}
+		}
+		numCoresPresent := false
+		diskSizePresent := false
+		diskIopsPresent := false
+		if !regionInfo.NumCores.Unknown && !regionInfo.NumCores.Null {
+			numCoresPresent = true
+		}
+		if !regionInfo.DiskSizeGb.Unknown && !regionInfo.DiskSizeGb.Null {
+			diskSizePresent = true
+		}
+		if !regionInfo.DiskIops.Unknown && !regionInfo.DiskIops.Null {
+			diskIopsPresent = true
+		}
+
+		if !numCoresPresent && (diskSizePresent || diskIopsPresent) {
+			resp.Diagnostics.AddError(
+				"Specify num_cores per region, since per-region disk_size or disk_iops are specified.",
+				"To specify per-region node configuration, num_cores must be provided.",
+			)
+			return
 		}
 	}
 
@@ -1690,6 +1757,9 @@ func resourceClusterRead(ctx context.Context, accountId string, projectId string
 			regionInfo := RegionInfo{
 				Region:       types.String{Value: region},
 				NumNodes:     types.Int64{Value: int64(info.PlacementInfo.GetNumNodes())},
+				NumCores:     types.Int64{Value: int64(info.NodeInfo.Get().GetNumCores())},
+				DiskSizeGb:   types.Int64{Value: int64(info.NodeInfo.Get().GetDiskSizeGb())},
+				DiskIops:     types.Int64{Value: int64(info.NodeInfo.Get().GetDiskIops())},
 				VPCID:        types.String{Value: vpcID},
 				VPCName:      types.String{Value: vpcName},
 				PublicAccess: types.Bool{Value: publicAccess},

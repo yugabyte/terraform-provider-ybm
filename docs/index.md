@@ -26,9 +26,9 @@ variable "auth_token" {
 }
 
 provider "ybm" {
-  host = "cloud.yugabyte.com"
+  host            = "cloud.yugabyte.com"
   use_secure_host = false # True by default
-  auth_token = var.auth_token
+  auth_token      = var.auth_token
 }
 ```
 
