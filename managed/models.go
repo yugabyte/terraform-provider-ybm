@@ -317,3 +317,27 @@ type AssociateMetricsExporterCluster struct {
 	ClusterID   types.String `tfsdk:"cluster_id"`
 	ClusterName types.String `tfsdk:"cluster_name"`
 }
+
+type DbAuditExporterConfig struct {
+	AccountID  types.String `tfsdk:"account_id"`
+	ProjectID  types.String `tfsdk:"project_id"`
+	ClusterID  types.String `tfsdk:"cluster_id"`
+	ExporterID types.String `tfsdk:"exporter_id"`
+	YsqlConfig *YsqlConfig  `tfsdk:"ysql_config"`
+	State      types.String `tfsdk:"state"`
+	ConfigID   types.String `tfsdk:"config_id"`
+}
+
+type YsqlConfig struct {
+	LogSettings      *LogSettings   `tfsdk:"log_settings"`
+	StatementClasses []types.String `tfsdk:"statement_classes"`
+}
+
+type LogSettings struct {
+	LogCatalog       types.Bool   `tfsdk:"log_catalog"`
+	LogClient        types.Bool   `tfsdk:"log_client"`
+	LogLevel         types.String `tfsdk:"log_level"`
+	LogParameter     types.Bool   `tfsdk:"log_parameter"`
+	LogRelation      types.Bool   `tfsdk:"log_relation"`
+	LogStatementOnce types.Bool   `tfsdk:"log_statement_once"`
+}

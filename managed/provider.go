@@ -155,6 +155,7 @@ func (p *provider) GetResources(_ context.Context) (map[string]tfsdk.ResourceTyp
 		"ybm_api_key":                            resourceApiKeyType{},
 		"ybm_metrics_exporter":                   resourceMetricsExporterType{},
 		"ybm_associate_metrics_exporter_cluster": resourceAssociateMetricsExporterClusterType{},
+		"ybm_associate_db_audit_export_config_cluster": resourceAssociateDbAuditExportConfigClusterType{},
 	}, nil
 }
 
