@@ -538,7 +538,7 @@ func editBackupScheduleV2(ctx context.Context, backupScheduleStruct BackupSchedu
 		} else {
 			backupScheduleSpec.UnsetIncrementalIntervalInMinutes()
 		}
-		if backupScheduleStruct.TimeIntervalInDays.Value != 0 {
+		if !backupScheduleStruct.TimeIntervalInDays.IsNull() && !backupScheduleStruct.TimeIntervalInDays.IsUnknown() && backupScheduleStruct.TimeIntervalInDays.Value != 0 {
 			timeIntervalInDays := int32(backupScheduleStruct.TimeIntervalInDays.Value)
 			backupScheduleSpec.SetTimeIntervalInDays(timeIntervalInDays)
 			backupScheduleSpec.UnsetCronExpression()
@@ -546,7 +546,7 @@ func editBackupScheduleV2(ctx context.Context, backupScheduleStruct BackupSchedu
 		if backupScheduleStruct.CronExpression.Value != "" {
 			cronExp := backupScheduleStruct.CronExpression.Value
 			backupScheduleSpec.SetCronExpression(cronExp)
-			backupScheduleSpec.TimeIntervalInDays = 0
+			backupScheduleSpec.UnsetTimeIntervalInDays()
 		}
 		if backupScheduleStruct.TimeIntervalInDays.Value != 0 && backupScheduleStruct.CronExpression.Value != "" {
 			return errors.New("Unable to create custom backup schedule. You can't pass both the cron expression and time interval in days.")
@@ -569,9 +569,9 @@ func editbackupSchedule(ctx context.Context, backupScheduleStruct BackupSchedule
 		backupSpec.SetDescription(backupDescription)
 		backupSpec.RetentionPeriodInDays = &backupRetentionPeriodInDays
 		scheduleSpec := *openapiclient.NewScheduleSpec(openapiclient.ScheduleStateEnum(backupScheduleStruct.State.Value))
-		if backupScheduleStruct.TimeIntervalInDays.Value != 0 {
+		if !backupScheduleStruct.TimeIntervalInDays.IsNull() && !backupScheduleStruct.TimeIntervalInDays.IsUnknown() && backupScheduleStruct.TimeIntervalInDays.Value != 0 {
 			timeIntervalInDays := int32(backupScheduleStruct.TimeIntervalInDays.Value)
-			scheduleSpec.TimeIntervalInDays = &timeIntervalInDays
+			scheduleSpec.TimeIntervalInDays = *openapiclient.NewNullableInt32(&timeIntervalInDays)
 
 		}
 		if backupScheduleStruct.CronExpression.Value != "" {
@@ -653,7 +653,7 @@ func createClusterSpec(ctx context.Context, apiClient *openapiclient.APIClient, 
 				}
 			}
 
-			nodeInfo := *openapiclient.NewClusterNodeInfo(numCores, memoryMb, diskSizeGb)
+			nodeInfo := *openapiclient.NewOptionalClusterNodeInfo(numCores, memoryMb, diskSizeGb)
 			if !regionInfo.DiskIops.IsUnknown() && !regionInfo.DiskIops.IsNull() {
 				nodeInfo.SetDiskIops(int32(regionInfo.DiskIops.Value))
 			}
