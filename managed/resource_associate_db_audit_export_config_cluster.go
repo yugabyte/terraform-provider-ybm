@@ -372,15 +372,111 @@ func (r resourceAssociateDbAuditExportConfigCluster) Read(ctx context.Context, r
 
 // Update Db Audit log configuration for a cluster
 func (r resourceAssociateDbAuditExportConfigCluster) Update(ctx context.Context, req tfsdk.UpdateResourceRequest, resp *tfsdk.UpdateResourceResponse) {
-	resp.Diagnostics.AddError("Update is not currently supported", "")
+	var plan DbAuditExporterConfig
+	resp.Diagnostics.Append(getClusterDbAuditLogConfigPlan(ctx, req.Plan, &plan)...)
+	if resp.Diagnostics.HasError() {
+		tflog.Debug(ctx, "Error while getting the plan for the Db audit exporter config")
+		return
+	}
+
+	apiClient := r.p.client
+	var state DbAuditExporterConfig
+	getIDsFromAssocDbAuditExporterConfigClusterState(ctx, req.State, &state)
+	accountId := state.AccountID.Value
+	projectId := state.ProjectID.Value
+	clusterId := state.ClusterID.Value
+	configId := state.ConfigID.Value
+
+	dbAuditExporterConfigSpec, err := getDbAuditExporterConfigSpec(plan)
+	if err != nil {
+		resp.Diagnostics.AddError("Unable to obtain DbAuditExporterConfigSpec", GetApiErrorDetails(err))
+		return
+	}
+
+	_, _, err = apiClient.ClusterApi.UpdateDbAuditExporterConfig(ctx, accountId, projectId, clusterId, configId).DbAuditExporterConfigSpec(*dbAuditExporterConfigSpec).Execute()
+	if err != nil {
+		resp.Diagnostics.AddError(fmt.Sprintf("Unable to update DB Audit Log Configuration with id: %s for cluster: %s", configId, clusterId), GetApiErrorDetails(err))
+		return
+	}
+
+	retryPolicy := retry.NewConstant(10 * time.Second)
+	retryPolicy = retry.WithMaxDuration(2400*time.Second, retryPolicy)
+	err = retry.Do(ctx, retryPolicy, func(ctx context.Context) error {
+		asState, readInfoOK, message := getTaskState(accountId, projectId, clusterId, openapiclient.ENTITYTYPEENUM_CLUSTER, openapiclient.TASKTYPEENUM_MODIFY_DB_AUDIT_EXPORT_CONFIG, apiClient, ctx)
+		if readInfoOK {
+			if asState == string(openapiclient.TASKACTIONSTATEENUM_SUCCEEDED) {
+				return nil
+			}
+			if asState == string(openapiclient.TASKACTIONSTATEENUM_FAILED) {
+				return fmt.Errorf("unable to update db audit log configuration, operation failed")
+			}
+		} else {
+			return retry.RetryableError(errors.New("unable to get check db audit log configuration update status: " + message))
+		}
+		return retry.RetryableError(errors.New("db audit log config is being updated"))
+	})
+
+	if err != nil {
+		errorSummary := fmt.Sprintf("Unable to update DB Audit log config with id: %s to cluster: %s", configId, clusterId)
+		resp.Diagnostics.AddError(errorSummary, "The operation timed out waiting for db audit log config update operation.")
+		return
+	}
+
+	plan.ConfigID.Value = configId
+
+	dae, readOK, readErrMsg := resourceAssociateDbAuditExporterConfigClusterRead(ctx, accountId, projectId, clusterId, configId, apiClient)
+	if !readOK {
+		resp.Diagnostics.AddError("Unable to read the state of Db Audit log config cluster association ", readErrMsg)
+		return
+	}
+
+	diags := resp.State.Set(ctx, &dae)
+	resp.Diagnostics.Append(diags...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
 }
 
-// Delete Db Audit Log Config for a cluster
+// Delete Db Audit Export Config for a cluster
 func (r resourceAssociateDbAuditExportConfigCluster) Delete(ctx context.Context, req tfsdk.DeleteResourceRequest, resp *tfsdk.DeleteResourceResponse) {
-	resp.Diagnostics.AddError("Delete is not currently supported", "")
+	apiClient := r.p.client
+	var state DbAuditExporterConfig
+	getIDsFromAssocDbAuditExporterConfigClusterState(ctx, req.State, &state)
+	accountId := state.AccountID.Value
+	projectId := state.ProjectID.Value
+	clusterId := state.ClusterID.Value
+	configId := state.ConfigID.Value
+
+	_, _, err := apiClient.ClusterApi.RemoveDbAuditLogExporterConfig(ctx, accountId, projectId, clusterId, configId).Execute()
+	if err != nil {
+		resp.Diagnostics.AddError(fmt.Sprintf("Unable to remove DB audit log exporter config with id: %s for cluster: %s", configId, clusterId), GetApiErrorDetails(err))
+		return
+	}
+
+	retryPolicy := retry.NewConstant(10 * time.Second)
+	retryPolicy = retry.WithMaxDuration(2400*time.Second, retryPolicy)
+	err = retry.Do(ctx, retryPolicy, func(ctx context.Context) error {
+		asState, readInfoOK, message := getTaskState(accountId, projectId, clusterId, openapiclient.ENTITYTYPEENUM_CLUSTER, openapiclient.TASKTYPEENUM_MODIFY_DB_AUDIT_EXPORT_CONFIG, apiClient, ctx)
+		if readInfoOK {
+			if asState == string(openapiclient.TASKACTIONSTATEENUM_SUCCEEDED) {
+				return nil
+			}
+		} else {
+			return retry.RetryableError(errors.New("Unable to check DB audit log config removal: " + message))
+		}
+		return retry.RetryableError(errors.New("DB Audit log configuration is being removed from the cluster"))
+	})
+
+	if err != nil {
+		resp.Diagnostics.AddError("Unable to de-associated metrics exporter from the cluster ", "The operation timed out waiting for metrics exporter cluster de-association.")
+		return
+	}
+
+	resp.State.RemoveResource(ctx)
+
 }
 
-// Import API Key
+// Import
 func (r resourceAssociateDbAuditExportConfigCluster) ImportState(ctx context.Context, req tfsdk.ImportResourceStateRequest, resp *tfsdk.ImportResourceStateResponse) {
 	resp.Diagnostics.AddError("Import is not currently supported", "")
 }
