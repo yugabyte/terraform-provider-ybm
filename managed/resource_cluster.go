@@ -1528,6 +1528,7 @@ func readBackupScheduleInfo(ctx context.Context, apiClient *openapiclient.APICli
 		TimeIntervalInDays:    types.Int64{Value: int64(backupScheduleResp.Data.Spec.GetTimeIntervalInDays())},
 		ScheduleID:            types.String{Value: scheduleId},
 	}
+	backupScheduleStruct.IncrementalIntervalInMins.Null = true
 	backupScheduleInfo[0] = backupScheduleStruct
 	return backupScheduleInfo, nil, nil
 }
