@@ -1081,7 +1081,7 @@ func (r resourceCluster) Create(ctx context.Context, req tfsdk.CreateResourceReq
 		} else {
 			return handleReadFailureWithRetries(ctx, &readClusterRetries, 2, message)
 		}
-		return retry.RetryableError(errors.New("The cluster creation is in progress"))
+		return retry.RetryableError(errors.New("the cluster creation is in progress"))
 	})
 
 	if err != nil {
@@ -2195,23 +2195,41 @@ func (r resourceCluster) Delete(ctx context.Context, req tfsdk.DeleteResourceReq
 
 	apiClient := r.p.client
 
-	response, err := apiClient.ClusterApi.DeleteCluster(context.Background(), accountId, projectId, clusterId).Execute()
+	_, err := apiClient.ClusterApi.DeleteCluster(context.Background(), accountId, projectId, clusterId).Execute()
 	if err != nil {
-		errMsg := getErrorMessage(response, err)
-		resp.Diagnostics.AddError("Unable to delete the cluster ", errMsg)
+		resp.Diagnostics.AddError("Unable to delete the cluster ", GetApiErrorDetails(err))
 		return
 	}
 
-	for {
-		_, resp, err := apiClient.ClusterApi.GetCluster(context.Background(), accountId, projectId, clusterId).Execute()
-		if err != nil {
-			if resp.StatusCode == 404 {
-				break
-			}
-		}
-		time.Sleep(10 * time.Second)
-	}
+	readClusterRetries := 0
+	retryPolicy := retry.NewConstant(10 * time.Second)
+	retryPolicy = retry.WithMaxDuration(3600*time.Second, retryPolicy)
+	err = retry.Do(ctx, retryPolicy, func(ctx context.Context) error {
+		asState, readInfoOK, message := getTaskState(accountId, projectId, clusterId, openapiclient.ENTITYTYPEENUM_CLUSTER, openapiclient.TASKTYPEENUM_DELETE_CLUSTER, apiClient, ctx)
 
+		tflog.Info(ctx, "Cluster delete operation in progress, state: "+asState)
+
+		if readInfoOK {
+			if asState == string(openapiclient.TASKACTIONSTATEENUM_SUCCEEDED) {
+				return nil
+			}
+			if asState == string(openapiclient.TASKACTIONSTATEENUM_FAILED) {
+				return ErrFailedTask
+			}
+		} else {
+			return handleReadFailureWithRetries(ctx, &readClusterRetries, 2, message)
+		}
+		return retry.RetryableError(errors.New("Cluster deletion operation in progress"))
+	})
+
+	if err != nil {
+		msg := "The operation timed out waiting for cluster deletion to complete."
+		if errors.Is(err, ErrFailedTask) {
+			msg = "cluster deletion operation failed"
+		}
+		resp.Diagnostics.AddError("Unable to delete cluster:", msg)
+		return
+	}
 	resp.State.RemoveResource(ctx)
 }
 
