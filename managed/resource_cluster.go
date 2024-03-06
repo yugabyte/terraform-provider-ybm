@@ -1987,13 +1987,16 @@ func (r resourceCluster) Update(ctx context.Context, req tfsdk.UpdateResourceReq
 				return ErrFailedTask
 			}
 			if asState == "TASK_NOT_FOUND" {
-				if retries < 2 {
+				// We try for a minute waiting for the tasks to be spawned. If edit cluster responded with a success
+				// without creating a task for about a minute, we can safely assume that a task is not required to be spawned.
+				// We also test for the cluster to be in an active state in that code that follows. So, we can safely do this.
+				if retries < 6 {
 					retries++
 					tflog.Info(ctx, "Cluster edit task not found, retrying...")
 					return retry.RetryableError(errors.New("Cluster not found, retrying"))
 				} else {
-					tflog.Info(ctx, "Cluster edit task not found, giving up...")
-					return errors.New("Cluster edit task not found")
+					tflog.Info(ctx, "Cluster edit task not found, the change would not have required a task creation")
+					return nil
 				}
 			}
 		} else {
@@ -2024,7 +2027,7 @@ func (r resourceCluster) Update(ctx context.Context, req tfsdk.UpdateResourceReq
 		} else {
 			return handleReadFailureWithRetries(ctx, &readClusterRetries, 2, message)
 		}
-		return retry.RetryableError(errors.New("Cluster creation in progress"))
+		return retry.RetryableError(errors.New("Cluster edit is in progress"))
 	})
 
 	if err != nil {

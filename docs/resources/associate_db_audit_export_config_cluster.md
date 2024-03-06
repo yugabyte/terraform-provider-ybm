@@ -50,3 +50,5 @@ Optional:
 - `log_parameter` (Boolean) Include the parameters that were passed with the statement in the logs
 - `log_relation` (Boolean) Create separate log entries for each relation (TABLE, VIEW, and so on) referenced in a SELECT or DML statement
 - `log_statement_once` (Boolean) Enable this setting to only include statement text and parameters for the first entry for a statement or sub-statement combination
+
+
