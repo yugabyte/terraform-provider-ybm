@@ -21,7 +21,7 @@ resource "ybm_associate_db_audit_export_config_cluster" "sample-db-audit-log-con
       log_catalog        = true
       log_client         = false
       log_relation       = true
-      log_level          = "DEBUG1"
+      log_level          = "LOG"
       log_statement_once = true
       log_parameter      = false
     }

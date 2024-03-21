@@ -1,0 +1,26 @@
+---
+page_title: "{{.Name}} {{.Type}} - {{.RenderedProviderName}}"
+description: |-
+{{ .Description | plainmarkdown | trimspace | prefixlines "  " }}
+---
+
+# {{.Name}} ({{.Type}})
+
+{{ .Description | trimspace }}
+
+
+## Example Usage
+
+To create Datadog integration
+
+{{ tffile "examples/resources/ybm_integration/datadog-integration.tf" }}
+
+To create Grafana integration
+
+{{ tffile "examples/resources/ybm_integration/grafana-integration.tf" }}
+
+To create Sumologic integration
+
+{{ tffile "examples/resources/ybm_integration/sumologic-integration.tf" }}
+
+{{ .SchemaMarkdown | trimspace }}

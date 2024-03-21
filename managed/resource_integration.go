@@ -19,29 +19,29 @@ import (
 	openapiclient "github.com/yugabyte/yugabytedb-managed-go-client-internal"
 )
 
-type resourceTelemetryProviderType struct{}
+type resourceIntegrationType struct{}
 
-func (r resourceTelemetryProviderType) GetSchema(_ context.Context) (tfsdk.Schema, diag.Diagnostics) {
+func (r resourceIntegrationType) GetSchema(_ context.Context) (tfsdk.Schema, diag.Diagnostics) {
 	return tfsdk.Schema{
-		Description: `The resource to create a telemetry provider config in YugabyteDB Managed.`,
+		Description: `The resource to create an integration in YugabyteDB Managed.`,
 		Attributes: map[string]tfsdk.Attribute{
 			"account_id": {
-				Description: "The ID of the account this telemetry provider config belongs to.",
+				Description: "The ID of the account this integration belongs to.",
 				Type:        types.StringType,
 				Computed:    true,
 			},
 			"project_id": {
-				Description: "The ID of the project this telemetry provider config belongs to.",
+				Description: "The ID of the project this integration belongs to.",
 				Type:        types.StringType,
 				Computed:    true,
 			},
 			"config_id": {
-				Description: "The ID of the telemetry provider config.",
+				Description: "The ID of the integration.",
 				Type:        types.StringType,
 				Computed:    true,
 			},
 			"config_name": {
-				Description: "The name of the telemetry provider configuration",
+				Description: "The name of the integration",
 				Type:        types.StringType,
 				Required:    true,
 			},
@@ -52,12 +52,12 @@ func (r resourceTelemetryProviderType) GetSchema(_ context.Context) (tfsdk.Schem
 				Validators:  []tfsdk.AttributeValidator{stringvalidator.OneOf("DATADOG", "GRAFANA", "SUMOLOGIC")},
 			},
 			"is_valid": {
-				Description: "Signifies whether the configuration is valid or not ",
+				Description: "Signifies whether the integration configuration is valid or not ",
 				Type:        types.BoolType,
 				Computed:    true,
 			},
 			"datadog_spec": {
-				Description: "The specifications of a Datadog telemetry provider.",
+				Description: "The specifications of a Datadog integration.",
 				Optional:    true,
 				Validators: []tfsdk.AttributeValidator{
 					schemavalidator.ConflictsWith(path.MatchRoot("grafana_spec")),
@@ -78,7 +78,7 @@ func (r resourceTelemetryProviderType) GetSchema(_ context.Context) (tfsdk.Schem
 				}),
 			},
 			"grafana_spec": {
-				Description: "The specifications of a Grafana telemetry provider.",
+				Description: "The specifications of a Grafana integration.",
 				Optional:    true,
 				Validators: []tfsdk.AttributeValidator{
 					schemavalidator.ConflictsWith(path.MatchRoot("datadog_spec")),
@@ -109,7 +109,7 @@ func (r resourceTelemetryProviderType) GetSchema(_ context.Context) (tfsdk.Schem
 				}),
 			},
 			"sumologic_spec": {
-				Description: "The specifications of a Sumo Logic telemetry provider.",
+				Description: "The specifications of a Sumo Logic integration.",
 				Optional:    true,
 				Validators: []tfsdk.AttributeValidator{
 					schemavalidator.ConflictsWith(path.MatchRoot("datadog_spec")),
@@ -140,17 +140,17 @@ func (r resourceTelemetryProviderType) GetSchema(_ context.Context) (tfsdk.Schem
 	}, nil
 }
 
-func (r resourceTelemetryProviderType) NewResource(_ context.Context, p tfsdk.Provider) (tfsdk.Resource, diag.Diagnostics) {
-	return resourceTelemetryProvider{
+func (r resourceIntegrationType) NewResource(_ context.Context, p tfsdk.Provider) (tfsdk.Resource, diag.Diagnostics) {
+	return resourceIntegration{
 		p: *(p.(*provider)),
 	}, nil
 }
 
-type resourceTelemetryProvider struct {
+type resourceIntegration struct {
 	p provider
 }
 
-func getTelemetryProviderPlan(ctx context.Context, plan tfsdk.Plan, tp *TelemetryProvider) diag.Diagnostics { // TODO Sid - Replace me
+func getIntegrationPlan(ctx context.Context, plan tfsdk.Plan, tp *TelemetryProvider) diag.Diagnostics {
 	var diags diag.Diagnostics
 	diags.Append(plan.GetAttribute(ctx, path.Root("config_name"), &tp.ConfigName)...)
 	diags.Append(plan.GetAttribute(ctx, path.Root("type"), &tp.Type)...)
@@ -160,7 +160,7 @@ func getTelemetryProviderPlan(ctx context.Context, plan tfsdk.Plan, tp *Telemetr
 	return diags
 }
 
-func getIDsFromTelemetryProviderState(ctx context.Context, state tfsdk.State, tp *TelemetryProvider) {
+func getIDsFromIntegrationState(ctx context.Context, state tfsdk.State, tp *TelemetryProvider) {
 	state.GetAttribute(ctx, path.Root("account_id"), &tp.AccountID)
 	state.GetAttribute(ctx, path.Root("project_id"), &tp.ProjectID)
 	state.GetAttribute(ctx, path.Root("config_id"), &tp.ConfigID)
@@ -175,7 +175,7 @@ func getIDsFromTelemetryProviderState(ctx context.Context, state tfsdk.State, tp
 	}
 }
 
-func (r resourceTelemetryProvider) Create(ctx context.Context, req tfsdk.CreateResourceRequest, resp *tfsdk.CreateResourceResponse) {
+func (r resourceIntegration) Create(ctx context.Context, req tfsdk.CreateResourceRequest, resp *tfsdk.CreateResourceResponse) {
 
 	if !r.p.configured {
 		resp.Diagnostics.AddError(
@@ -188,16 +188,16 @@ func (r resourceTelemetryProvider) Create(ctx context.Context, req tfsdk.CreateR
 	var plan TelemetryProvider
 	var accountId, message string
 	var getAccountOK bool
-	resp.Diagnostics.Append(getTelemetryProviderPlan(ctx, req.Plan, &plan)...)
+	resp.Diagnostics.Append(getIntegrationPlan(ctx, req.Plan, &plan)...)
 	if resp.Diagnostics.HasError() {
-		tflog.Debug(ctx, "Error while getting the plan for the telemetry provider")
+		tflog.Debug(ctx, "Error while getting the plan for the integration")
 		return
 	}
 
 	if plan.ConfigID.Value != "" {
 		resp.Diagnostics.AddError(
-			"Telemetry provider Config ID provided for new telemetry provider config",
-			"The config_id was provided even though a new telemetry provider config is being created. Please include this field in the provider when creating it.",
+			"Config ID provided for new integration",
+			"The config_id was provided even though a new integration is being created. Please exclude this field in the provider when creating it.",
 		)
 		return
 	}
@@ -270,7 +270,7 @@ func (r resourceTelemetryProvider) Create(ctx context.Context, req tfsdk.CreateR
 
 	CreateResp, _, err := apiClient.TelemetryProviderApi.CreateTelemetryProvider(ctx, accountId, projectId).TelemetryProviderSpec(*telemetryProviderSpec).Execute()
 	if err != nil {
-		resp.Diagnostics.AddError("Unable to create telemetry provider", GetApiErrorDetails(err))
+		resp.Diagnostics.AddError("Unable to create integration", GetApiErrorDetails(err))
 		return
 	}
 
@@ -278,7 +278,7 @@ func (r resourceTelemetryProvider) Create(ctx context.Context, req tfsdk.CreateR
 
 	telemetryProvider, readOK, message := resourceTelemetryProviderRead(accountId, projectId, telemetryProviderId, "", apiKey, apiClient, sumoSpec)
 	if !readOK {
-		resp.Diagnostics.AddError("Unable to read the state of the telemetry provider config ", message)
+		resp.Diagnostics.AddError("Unable to read the state of the integration", message)
 		return
 	}
 
@@ -289,10 +289,10 @@ func (r resourceTelemetryProvider) Create(ctx context.Context, req tfsdk.CreateR
 	}
 }
 
-func (r resourceTelemetryProvider) Read(ctx context.Context, req tfsdk.ReadResourceRequest, resp *tfsdk.ReadResourceResponse) {
+func (r resourceIntegration) Read(ctx context.Context, req tfsdk.ReadResourceRequest, resp *tfsdk.ReadResourceResponse) {
 	var state TelemetryProvider
 
-	getIDsFromTelemetryProviderState(ctx, req.State, &state)
+	getIDsFromIntegrationState(ctx, req.State, &state)
 	configID := state.ConfigID.Value
 	var apiKey string
 	var sumoSpec *SumoLogicSpec
@@ -324,7 +324,7 @@ func (r resourceTelemetryProvider) Read(ctx context.Context, req tfsdk.ReadResou
 
 	config, readOK, message := resourceTelemetryProviderRead(accountId, projectId, configID, "", apiKey, apiClient, sumoSpec)
 	if !readOK {
-		resp.Diagnostics.AddError("Unable to read the state of the telemetry provider config ", message)
+		resp.Diagnostics.AddError("Unable to read the state of the integration", message)
 		return
 	}
 	// If value returned by API is the same as the encrypted version of our KEY
@@ -357,17 +357,17 @@ func (r resourceTelemetryProvider) Read(ctx context.Context, req tfsdk.ReadResou
 		return
 	}
 }
-func (r resourceTelemetryProvider) Update(ctx context.Context, req tfsdk.UpdateResourceRequest, resp *tfsdk.UpdateResourceResponse) {
+func (r resourceIntegration) Update(ctx context.Context, req tfsdk.UpdateResourceRequest, resp *tfsdk.UpdateResourceResponse) {
 	var plan TelemetryProvider
-	resp.Diagnostics.Append(getTelemetryProviderPlan(ctx, req.Plan, &plan)...)
+	resp.Diagnostics.Append(getIntegrationPlan(ctx, req.Plan, &plan)...)
 	if resp.Diagnostics.HasError() {
-		tflog.Debug(ctx, "Error while getting the plan for the telemetry provider config")
+		tflog.Debug(ctx, "Error while getting the plan for the integration")
 		return
 	}
 
 	apiClient := r.p.client
 	var state TelemetryProvider
-	getIDsFromTelemetryProviderState(ctx, req.State, &state)
+	getIDsFromIntegrationState(ctx, req.State, &state)
 	accountId := state.AccountID.Value
 	projectId := state.ProjectID.Value
 	configId := state.ConfigID.Value
@@ -428,7 +428,7 @@ func (r resourceTelemetryProvider) Update(ctx context.Context, req tfsdk.UpdateR
 
 	updateResp, _, err := apiClient.TelemetryProviderApi.UpdateTelemetryProvider(ctx, accountId, projectId, configId).TelemetryProviderSpec(*telemetryProviderSpec).Execute()
 	if err != nil {
-		resp.Diagnostics.AddError("Unable to update telemetry provider config", GetApiErrorDetails(err))
+		resp.Diagnostics.AddError("Unable to update integration", GetApiErrorDetails(err))
 		return
 	}
 
@@ -436,7 +436,7 @@ func (r resourceTelemetryProvider) Update(ctx context.Context, req tfsdk.UpdateR
 
 	config, readOK, message := resourceTelemetryProviderRead(accountId, projectId, telemetryProviderId, "", apiKey, apiClient, sumoSpec)
 	if !readOK {
-		resp.Diagnostics.AddError("Unable to read the state of the telemetry provider config ", message)
+		resp.Diagnostics.AddError("Unable to read the state of the integration", message)
 		return
 	}
 
@@ -507,17 +507,17 @@ func resourceTelemetryProviderRead(accountId string, projectId string, configID 
 	return tp, true, ""
 }
 
-func (r resourceTelemetryProvider) Delete(ctx context.Context, req tfsdk.DeleteResourceRequest, resp *tfsdk.DeleteResourceResponse) {
+func (r resourceIntegration) Delete(ctx context.Context, req tfsdk.DeleteResourceRequest, resp *tfsdk.DeleteResourceResponse) {
 	apiClient := r.p.client
 	var state TelemetryProvider
-	getIDsFromTelemetryProviderState(ctx, req.State, &state)
+	getIDsFromIntegrationState(ctx, req.State, &state)
 	accountId := state.AccountID.Value
 	projectId := state.ProjectID.Value
 	configId := state.ConfigID.Value
 
 	_, err := apiClient.TelemetryProviderApi.DeleteTelemetryProvider(ctx, accountId, projectId, configId).Execute()
 	if err != nil {
-		resp.Diagnostics.AddError("Unable to delete telemetry provider config", GetApiErrorDetails(err))
+		resp.Diagnostics.AddError("Unable to delete the integration", GetApiErrorDetails(err))
 		return
 	}
 
@@ -537,11 +537,11 @@ func GetTelemetryProviderById(accountId string, projectId string, configID strin
 		}
 	}
 
-	return nil, fmt.Errorf("could not find telemetry provider with id: %s", configID)
+	return nil, fmt.Errorf("could not find integration with id: %s", configID)
 }
 
 // Import API Key
-func (r resourceTelemetryProvider) ImportState(ctx context.Context, req tfsdk.ImportResourceStateRequest, resp *tfsdk.ImportResourceStateResponse) {
+func (r resourceIntegration) ImportState(ctx context.Context, req tfsdk.ImportResourceStateRequest, resp *tfsdk.ImportResourceStateResponse) {
 	// Save the import identifier in the id attribute
 	tfsdk.ResourceImportStatePassthroughID(ctx, path.Root("id"), req, resp)
 }

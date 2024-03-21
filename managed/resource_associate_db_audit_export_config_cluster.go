@@ -88,7 +88,7 @@ func (r resourceAssociateDbAuditExportConfigClusterType) GetSchema(ctx context.C
 								Description: "Sets the severity level of logs written to clients",
 								Type:        types.StringType,
 								Optional:    true,
-								Validators:  []tfsdk.AttributeValidator{stringvalidator.OneOf("DEBUG1", "DEBUG2", "DEBUG3", "DEBUG4", "DEBUG5", "INFO", "NOTICE", "WARNING", "LOG")},
+								Validators:  []tfsdk.AttributeValidator{stringvalidator.OneOf("NOTICE", "WARNING", "LOG")},
 							},
 							"log_statement_once": {
 								Description: "Enable this setting to only include statement text and parameters for the first entry for a statement or sub-statement combination",

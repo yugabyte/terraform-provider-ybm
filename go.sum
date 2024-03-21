@@ -179,6 +179,8 @@ github.com/yugabyte/yugabytedb-managed-go-client-internal v0.0.0-20240309161213-
 github.com/yugabyte/yugabytedb-managed-go-client-internal v0.0.0-20240309161213-e81ba8ac5ac4/go.mod h1:5vW0xIzIZw+1djkiWKx0qqNmqbRBSf4mjc4qw8lIMik=
 github.com/yugabyte/yugabytedb-managed-go-client-internal v0.0.0-20240312040213-164dc138a00a h1:gCQbgQFhrR3h4nUE2NHrroU3usIW0kcOCBPqfiOp74I=
 github.com/yugabyte/yugabytedb-managed-go-client-internal v0.0.0-20240312040213-164dc138a00a/go.mod h1:5vW0xIzIZw+1djkiWKx0qqNmqbRBSf4mjc4qw8lIMik=
+github.com/yugabyte/yugabytedb-managed-go-client-internal v0.0.0-20240320231402-1f5991e33004 h1:EdtBUP/Ne4eXQhKJ0Dl+pg+UmnOA2HGWrwHpHQeSBgw=
+github.com/yugabyte/yugabytedb-managed-go-client-internal v0.0.0-20240320231402-1f5991e33004/go.mod h1:5vW0xIzIZw+1djkiWKx0qqNmqbRBSf4mjc4qw8lIMik=
 github.com/yuin/goldmark v1.1.25/go.mod h1:3hX8gzYuyVAZsxl0MRgGTJEmQBFcNTphYh9decYSb74=
 github.com/yuin/goldmark v1.1.27/go.mod h1:3hX8gzYuyVAZsxl0MRgGTJEmQBFcNTphYh9decYSb74=
 github.com/yuin/goldmark v1.1.32/go.mod h1:3hX8gzYuyVAZsxl0MRgGTJEmQBFcNTphYh9decYSb74=
