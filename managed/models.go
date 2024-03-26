@@ -341,3 +341,15 @@ type LogSettings struct {
 	LogRelation      types.Bool   `tfsdk:"log_relation"`
 	LogStatementOnce types.Bool   `tfsdk:"log_statement_once"`
 }
+
+type TelemetryProvider struct {
+	AccountID     types.String   `tfsdk:"account_id"`
+	ProjectID     types.String   `tfsdk:"project_id"`
+	ConfigID      types.String   `tfsdk:"config_id"`
+	ConfigName    types.String   `tfsdk:"config_name"`
+	Type          types.String   `tfsdk:"type"`
+	DataDogSpec   *DataDogSpec   `tfsdk:"datadog_spec"`
+	GrafanaSpec   *GrafanaSpec   `tfsdk:"grafana_spec"`
+	SumoLogicSpec *SumoLogicSpec `tfsdk:"sumologic_spec"`
+	IsValid       types.Bool     `tfsdk:"is_valid"`
+}
