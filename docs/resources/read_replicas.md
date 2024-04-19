@@ -2,7 +2,7 @@
 page_title: "ybm_read_replicas Resource - YugabyteDB Managed"
 description: |-
   The resource to create read replicas of a particular cluster. You can create multiple read replicas
-          in different regions using a single resource.
+  in different regions using a single resource.
 ---
 
 # ybm_read_replicas (Resource)
