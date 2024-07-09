@@ -1,5 +1,5 @@
 ---
-page_title: "ybm_cluster Data Source - YugabyteDB Managed"
+page_title: "ybm_cluster Data Source - YugabyteDB Aeon"
 description: |-
   The data source to fetch the cluster ID and other information about a cluster given the cluster name.
 ---

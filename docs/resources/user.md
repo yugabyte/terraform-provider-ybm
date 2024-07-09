@@ -1,12 +1,12 @@
 ---
-page_title: "ybm_user Resource - YugabyteDB Managed"
+page_title: "ybm_user Resource - YugabyteDB Aeon"
 description: |-
-  The resource to invite a user in YugabyteDB Managed.
+  The resource to invite a user in YugabyteDB Aeon.
 ---
 
 # ybm_user (Resource)
 
-The resource to invite a user in YugabyteDB Managed.
+The resource to invite a user in YugabyteDB Aeon.
 
 
 ## Example Usage

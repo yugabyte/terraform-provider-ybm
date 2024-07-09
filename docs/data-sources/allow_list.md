@@ -1,12 +1,12 @@
 ---
-page_title: "ybm_allow_list Data Source - YugabyteDB Managed"
+page_title: "ybm_allow_list Data Source - YugabyteDB Aeon"
 description: |-
-  The data source to fetch an allow list in YugabyteDB Managed.
+  The data source to fetch an allow list in YugabyteDB Aeon.
 ---
 
 # ybm_allow_list (Data Source)
 
-The data source to fetch an allow list in YugabyteDB Managed.
+The data source to fetch an allow list in YugabyteDB Aeon.
 
 
 ## Example Usage

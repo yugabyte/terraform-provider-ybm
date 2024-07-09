@@ -23,7 +23,7 @@ type resourceMetricsExporterType struct{}
 
 func (r resourceMetricsExporterType) GetSchema(_ context.Context) (tfsdk.Schema, diag.Diagnostics) {
 	return tfsdk.Schema{
-		Description: `The resource to create a metrics exporter config in YugabyteDB Managed.`,
+		Description: `The resource to create a metrics exporter config in YugabyteDB Aeon.`,
 		Attributes: map[string]tfsdk.Attribute{
 			"account_id": {
 				Description: "The ID of the account this metrics exporter config belongs to.",

@@ -1,12 +1,12 @@
 ---
-page_title: "ybm_associate_db_audit_export_config_cluster Resource - YugabyteDB Managed"
+page_title: "ybm_associate_db_audit_export_config_cluster Resource - YugabyteDB Aeon"
 description: |-
-  The resource to manage DB Audit log configuration for a cluster in YugabyteDB Managed.
+  The resource to manage DB Audit log configuration for a cluster in YugabyteDB Aeon.
 ---
 
 # ybm_associate_db_audit_export_config_cluster (Resource)
 
-The resource to manage DB Audit log configuration for a cluster in YugabyteDB Managed.
+The resource to manage DB Audit log configuration for a cluster in YugabyteDB Aeon.
 
 
 ## Example Usage

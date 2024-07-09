@@ -1,12 +1,12 @@
 ---
-page_title: "ybm_integration Resource - YugabyteDB Managed"
+page_title: "ybm_integration Resource - YugabyteDB Aeon"
 description: |-
-  The resource to create an integration in YugabyteDB Managed.
+  The resource to create an integration in YugabyteDB Aeon.
 ---
 
 # ybm_integration (Resource)
 
-The resource to create an integration in YugabyteDB Managed.
+The resource to create an integration in YugabyteDB Aeon.
 
 
 ## Example Usage

@@ -23,7 +23,7 @@ type resourceVPCPeeringType struct{}
 
 func (r resourceVPCPeeringType) GetSchema(_ context.Context) (tfsdk.Schema, diag.Diagnostics) {
 	return tfsdk.Schema{
-		Description: `The resource to create a VPC peering in YugabyteDB Managed.`,
+		Description: `The resource to create a VPC peering in YugabyteDB Aeon.`,
 		Attributes: map[string]tfsdk.Attribute{
 			"account_id": {
 				Description: "The ID of the account this VPC peering belongs to.",

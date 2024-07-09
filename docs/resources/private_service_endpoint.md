@@ -1,12 +1,12 @@
 ---
-page_title: "ybm_private_service_endpoint Resource - YugabyteDB Managed"
+page_title: "ybm_private_service_endpoint Resource - YugabyteDB Aeon"
 description: |-
-  The resource to create an endpoint in YugabyteDB Managed.
+  The resource to create an endpoint in YugabyteDB Aeon.
 ---
 
 # ybm_private_service_endpoint (Resource)
 
-The resource to create an endpoint in YugabyteDB Managed.
+The resource to create an endpoint in YugabyteDB Aeon.
 
 
 ## Example Usage

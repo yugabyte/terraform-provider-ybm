@@ -1,6 +1,6 @@
-# YugabyteDB Managed Terraform Provider
+# YugabyteDB Aeon Terraform Provider
 
-Terraform Provider for YugabyteDB Managed
+Terraform Provider for YugabyteDB Aeon
 
 ## Build Provider
 

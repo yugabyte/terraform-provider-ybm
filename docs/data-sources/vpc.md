@@ -1,12 +1,12 @@
 ---
-page_title: "ybm_vpc Data Source - YugabyteDB Managed"
+page_title: "ybm_vpc Data Source - YugabyteDB Aeon"
 description: |-
-  The data source to fetch VPC in YugabyteDB Managed by VPC name or ID.
+  The data source to fetch VPC in YugabyteDB Aeon by VPC name or ID.
 ---
 
 # ybm_vpc (Data Source)
 
-The data source to fetch VPC in YugabyteDB Managed by VPC name or ID.
+The data source to fetch VPC in YugabyteDB Aeon by VPC name or ID.
 
 
 ## Example Usage
@@ -35,7 +35,7 @@ data "ybm_vpc" "example_vpc" {
 
 - `account_id` (String) The ID of the account this VPC belongs to.
 - `cloud` (String) The cloud provider (AWS, AZURE or GCP) where the VPC is to be created.
-- `external_vpc_id` (String) The ID of the cloud provider(AWS/GCP/Azure) VPC where YBM resources are created
+- `external_vpc_id` (String) The ID of the cloud provider(AWS/GCP/Azure) VPC where YugabyteDB Aeon resources are created
 - `global_cidr` (String) The global CIDR of the VPC (GCP only).
 - `project_id` (String) The ID of the project this VPC belongs to.
 - `region_cidr_info` (Attributes List) The CIDR information for all the regions for the VPC. (see [below for nested schema](#nestedatt--region_cidr_info))

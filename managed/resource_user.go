@@ -19,7 +19,7 @@ type resourceUserType struct{}
 
 func (r resourceUserType) GetSchema(_ context.Context) (tfsdk.Schema, diag.Diagnostics) {
 	return tfsdk.Schema{
-		Description: `The resource to invite a user in YugabyteDB Managed.`,
+		Description: `The resource to invite a user in YugabyteDB Aeon.`,
 		Attributes: map[string]tfsdk.Attribute{
 			"account_id": {
 				Description: "The ID of the account this user belongs to.",

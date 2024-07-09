@@ -19,7 +19,7 @@ type resourceApiKeyType struct{}
 
 func (r resourceApiKeyType) GetSchema(_ context.Context) (tfsdk.Schema, diag.Diagnostics) {
 	return tfsdk.Schema{
-		Description: `The resource to issue an API Key in YugabyteDB Managed.`,
+		Description: `The resource to issue an API Key in YugabyteDB Aeon.`,
 		Attributes: map[string]tfsdk.Attribute{
 			"account_id": {
 				Description: "The ID of the account this user belongs to.",

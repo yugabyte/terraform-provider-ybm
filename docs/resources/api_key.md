@@ -1,12 +1,12 @@
 ---
-page_title: "ybm_api_key Resource - YugabyteDB Managed"
+page_title: "ybm_api_key Resource - YugabyteDB Aeon"
 description: |-
-  The resource to issue an API Key in YugabyteDB Managed.
+  The resource to issue an API Key in YugabyteDB Aeon.
 ---
 
 # ybm_api_key (Resource)
 
-The resource to issue an API Key in YugabyteDB Managed.
+The resource to issue an API Key in YugabyteDB Aeon.
 
 
 ## Example Usage
