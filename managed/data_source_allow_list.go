@@ -14,7 +14,7 @@ type dataSourceAllowListType struct{}
 
 func (r dataSourceAllowListType) GetSchema(_ context.Context) (tfsdk.Schema, diag.Diagnostics) {
 	return tfsdk.Schema{
-		Description: `The data source to fetch an allow list in YugabyteDB Managed.`,
+		Description: `The data source to fetch an allow list in YugabyteDB Aeon.`,
 		Attributes: map[string]tfsdk.Attribute{
 			"account_id": {
 				Description: "The ID of the account this allow list belongs to.",

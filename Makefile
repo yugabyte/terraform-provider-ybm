@@ -43,7 +43,7 @@ testacc:
 
 doc:
 	./scripts/install_tfplugindocs.sh $(OS)_$(ARCH)
-	tfplugindocs generate --rendered-provider-name 'YugabyteDB Managed' --provider-name ybm
+	tfplugindocs generate --rendered-provider-name 'YugabyteDB Aeon' --provider-name ybm
 
 update-client:
 	go get github.com/yugabyte/yugabytedb-managed-go-client-internal

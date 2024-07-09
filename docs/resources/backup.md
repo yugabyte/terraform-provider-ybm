@@ -1,5 +1,5 @@
 ---
-page_title: "ybm_backup Resource - YugabyteDB Managed"
+page_title: "ybm_backup Resource - YugabyteDB Aeon"
 description: |-
   The resource to create a manual backup of tables in a particular cluster.
   Ensure that the cluster for which the backup is being taken has data.

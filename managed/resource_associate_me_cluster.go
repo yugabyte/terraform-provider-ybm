@@ -20,7 +20,7 @@ type resourceAssociateMetricsExporterClusterType struct{}
 
 func (r resourceAssociateMetricsExporterClusterType) GetSchema(_ context.Context) (tfsdk.Schema, diag.Diagnostics) {
 	return tfsdk.Schema{
-		Description: `The resource to associate a metrics exporter config to a cluster in YugabyteDB Managed.`,
+		Description: `The resource to associate a metrics exporter config to a cluster in YugabyteDB Aeon.`,
 		Attributes: map[string]tfsdk.Attribute{
 			"account_id": {
 				Description: "The ID of the account this private service endpoint belongs to.",

@@ -1,12 +1,12 @@
 ---
-page_title: "ybm_metrics_exporter Resource - YugabyteDB Managed"
+page_title: "ybm_metrics_exporter Resource - YugabyteDB Aeon"
 description: |-
-  The resource to create a metrics exporter config in YugabyteDB Managed.
+  The resource to create a metrics exporter config in YugabyteDB Aeon.
 ---
 
 # ybm_metrics_exporter (Resource)
 
-The resource to create a metrics exporter config in YugabyteDB Managed.
+The resource to create a metrics exporter config in YugabyteDB Aeon.
 
 
 ## Example Usage

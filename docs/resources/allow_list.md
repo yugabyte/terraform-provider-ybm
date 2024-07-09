@@ -1,12 +1,12 @@
 ---
-page_title: "ybm_allow_list Resource - YugabyteDB Managed"
+page_title: "ybm_allow_list Resource - YugabyteDB Aeon"
 description: |-
-  The resource to create an allow list in YugabyteDB Managed.
+  The resource to create an allow list in YugabyteDB Aeon.
 ---
 
 # ybm_allow_list (Resource)
 
-The resource to create an allow list in YugabyteDB Managed.
+The resource to create an allow list in YugabyteDB Aeon.
 
 
 ## Example Usage

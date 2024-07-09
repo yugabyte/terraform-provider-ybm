@@ -1,12 +1,12 @@
 ---
-page_title: "ybm_vpc_peering Resource - YugabyteDB Managed"
+page_title: "ybm_vpc_peering Resource - YugabyteDB Aeon"
 description: |-
-  The resource to create a VPC peering in YugabyteDB Managed.
+  The resource to create a VPC peering in YugabyteDB Aeon.
 ---
 
 # ybm_vpc_peering (Resource)
 
-The resource to create a VPC peering in YugabyteDB Managed.
+The resource to create a VPC peering in YugabyteDB Aeon.
 
 
 ## Example Usage

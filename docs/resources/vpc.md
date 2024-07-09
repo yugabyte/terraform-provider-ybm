@@ -1,12 +1,12 @@
 ---
-page_title: "ybm_vpc Resource - YugabyteDB Managed"
+page_title: "ybm_vpc Resource - YugabyteDB Aeon"
 description: |-
-  The resource to create a VPC in YugabyteDB Managed.
+  The resource to create a VPC in YugabyteDB Aeon.
 ---
 
 # ybm_vpc (Resource)
 
-The resource to create a VPC in YugabyteDB Managed.
+The resource to create a VPC in YugabyteDB Aeon.
 
 
 ## Example Usage - GCP VPC with Global CIDR
@@ -78,7 +78,7 @@ resource "ybm_vpc" "example-vpc" {
 ### Read-Only
 
 - `account_id` (String) The ID of the account this VPC belongs to.
-- `external_vpc_id` (String) The ID of the cloud provider(AWS/GCP/Azure) VPC where YBM resources are created
+- `external_vpc_id` (String) The ID of the cloud provider(AWS/GCP/Azure) VPC where YugabyteDB Aeon resources are created
 - `project_id` (String) The ID of the project this VPC belongs to.
 
 <a id="nestedatt--region_cidr_info"></a>

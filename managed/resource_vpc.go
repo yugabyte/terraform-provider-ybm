@@ -25,7 +25,7 @@ type resourceVPCType struct{}
 
 func (r resourceVPCType) GetSchema(_ context.Context) (tfsdk.Schema, diag.Diagnostics) {
 	return tfsdk.Schema{
-		Description: `The resource to create a VPC in YugabyteDB Managed.`,
+		Description: `The resource to create a VPC in YugabyteDB Aeon.`,
 		Attributes: map[string]tfsdk.Attribute{
 			"account_id": {
 				Description: "The ID of the account this VPC belongs to.",
@@ -44,7 +44,7 @@ func (r resourceVPCType) GetSchema(_ context.Context) (tfsdk.Schema, diag.Diagno
 				Optional:    true,
 			},
 			"external_vpc_id": {
-				Description: "The ID of the cloud provider(AWS/GCP/Azure) VPC where YBM resources are created",
+				Description: "The ID of the cloud provider(AWS/GCP/Azure) VPC where YugabyteDB Aeon resources are created",
 				Type:        types.StringType,
 				Computed:    true,
 			},

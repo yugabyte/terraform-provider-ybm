@@ -1,5 +1,5 @@
 ---
-page_title: "ybm_backup Data Source - YugabyteDB Managed"
+page_title: "ybm_backup Data Source - YugabyteDB Aeon"
 description: |-
   The data source to fetch the backup ID and other information about the most recent backup.
 ---

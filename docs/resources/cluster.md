@@ -1,5 +1,5 @@
 ---
-page_title: "ybm_cluster Resource - YugabyteDB Managed"
+page_title: "ybm_cluster Resource - YugabyteDB Aeon"
 description: |-
   The resource to create a YugabyteDB cluster. Use this resource to create both
   single- and multi-region clusters. You can also use this resource to bind allow lists to the cluster

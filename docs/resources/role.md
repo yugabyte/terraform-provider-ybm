@@ -1,12 +1,12 @@
 ---
-page_title: "ybm_role Resource - YugabyteDB Managed"
+page_title: "ybm_role Resource - YugabyteDB Aeon"
 description: |-
-  The resource to create a custom role in YugabyteDB Managed.
+  The resource to create a custom role in YugabyteDB Aeon.
 ---
 
 # ybm_role (Resource)
 
-The resource to create a custom role in YugabyteDB Managed.
+The resource to create a custom role in YugabyteDB Aeon.
 
 
 ## Example Usage

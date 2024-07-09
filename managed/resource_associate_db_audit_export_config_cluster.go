@@ -20,7 +20,7 @@ type resourceAssociateDbAuditExportConfigClusterType struct{}
 
 func (r resourceAssociateDbAuditExportConfigClusterType) GetSchema(ctx context.Context) (tfsdk.Schema, diag.Diagnostics) {
 	return tfsdk.Schema{
-		Description: `The resource to manage DB Audit log configuration for a cluster in YugabyteDB Managed.`,
+		Description: `The resource to manage DB Audit log configuration for a cluster in YugabyteDB Aeon.`,
 		Attributes: map[string]tfsdk.Attribute{
 			"account_id": {
 				Description: "ID of the account this DB Audit log configuration belongs to.",
