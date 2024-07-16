@@ -117,6 +117,16 @@ and modify the backup schedule of the cluster being created.`,
 						Optional: true,
 						Computed: true,
 					},
+					"is_preferred": {
+						Type:     types.BoolType,
+						Optional: true,
+						Computed: true,
+					},
+					"is_default": {
+						Type:     types.BoolType,
+						Optional: true,
+						Computed: true,
+					},
 				}),
 			},
 			"backup_schedules": {
@@ -662,6 +672,13 @@ func createClusterSpec(ctx context.Context, apiClient *openapiclient.APIClient, 
 			info.PlacementInfo.SetMultiZone(false)
 		}
 		info.SetIsDefault(false)
+		info.SetIsAffinitized(false)
+		if !regionInfo.IsPreferred.IsUnknown() && !regionInfo.IsPreferred.IsNull() {
+			info.SetIsAffinitized(regionInfo.IsPreferred.Value)
+		}
+		if !regionInfo.IsDefault.IsUnknown() && !regionInfo.IsDefault.IsNull() {
+			info.SetIsDefault(regionInfo.IsDefault.Value)
+		}
 		clusterRegionInfo = append(clusterRegionInfo, info)
 	}
 
@@ -1691,6 +1708,8 @@ func resourceClusterRead(ctx context.Context, accountId string, projectId string
 				VPCID:        types.String{Value: vpcID},
 				VPCName:      types.String{Value: vpcName},
 				PublicAccess: types.Bool{Value: publicAccess},
+				IsPreferred:  types.Bool{Value: info.GetIsAffinitized()},
+				IsDefault:    types.Bool{Value: info.GetIsDefault()},
 			}
 			clusterRegionInfo[destIndex] = regionInfo
 		}
