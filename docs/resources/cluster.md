@@ -645,6 +645,8 @@ Optional:
 
 - `disk_iops` (Number) Disk IOPS of the nodes of the region.
 - `disk_size_gb` (Number) Disk size of the nodes of the region.
+- `is_default` (Boolean)
+- `is_preferred` (Boolean)
 - `num_cores` (Number) Number of CPU cores in the nodes of the region.
 - `public_access` (Boolean)
 - `vpc_id` (String)

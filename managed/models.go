@@ -102,6 +102,8 @@ type RegionInfo struct {
 	VPCID        types.String `tfsdk:"vpc_id"`
 	VPCName      types.String `tfsdk:"vpc_name"`
 	PublicAccess types.Bool   `tfsdk:"public_access"`
+	IsPreferred  types.Bool   `tfsdk:"is_preferred"`
+	IsDefault    types.Bool   `tfsdk:"is_default"`
 }
 
 type NodeConfig struct {
