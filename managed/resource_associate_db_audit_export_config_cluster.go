@@ -461,6 +461,9 @@ func (r resourceAssociateDbAuditExportConfigCluster) Delete(ctx context.Context,
 			if asState == string(openapiclient.TASKACTIONSTATEENUM_SUCCEEDED) {
 				return nil
 			}
+			if asState == string(openapiclient.TASKACTIONSTATEENUM_FAILED) {
+				return ErrFailedTask
+			}
 		} else {
 			return retry.RetryableError(errors.New("Unable to check DB audit log config removal: " + message))
 		}

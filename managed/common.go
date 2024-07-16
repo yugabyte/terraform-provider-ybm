@@ -16,7 +16,7 @@ import (
 )
 
 // Use to differentiate errors
-var ErrFailedTask = errors.New("")
+var ErrFailedTask = errors.New("the task failed")
 
 func getProjectId(ctx context.Context, apiClient *openapiclient.APIClient, accountId string) (projectId string, projectIdOK bool, errorMessage string) {
 	accountResp, resp, err := apiClient.AccountApi.ListAccounts(ctx).Execute()

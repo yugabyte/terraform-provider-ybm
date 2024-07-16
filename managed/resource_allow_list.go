@@ -394,6 +394,9 @@ func removeAllowListFromCluster(ctx context.Context, accountId string, projectId
 			if asState == string(openapiclient.TASKACTIONSTATEENUM_SUCCEEDED) {
 				return nil
 			}
+			if asState == string(openapiclient.TASKACTIONSTATEENUM_FAILED) {
+				return ErrFailedTask
+			}
 		} else {
 			return retry.RetryableError(errors.New("unable to check edit network allow list for cluster : " + message))
 		}
