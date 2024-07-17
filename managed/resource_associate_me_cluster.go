@@ -156,6 +156,9 @@ func (r resourceAssociateMetricsExporterCluster) Create(ctx context.Context, req
 			if asState == string(openapiclient.TASKACTIONSTATEENUM_SUCCEEDED) {
 				return nil
 			}
+			if asState == string(openapiclient.TASKACTIONSTATEENUM_FAILED) {
+				return ErrFailedTask
+			}
 		} else {
 			return retry.RetryableError(errors.New("Unable to get check metrics exporter cluster association: " + message))
 		}
@@ -250,6 +253,9 @@ func (r resourceAssociateMetricsExporterCluster) Delete(ctx context.Context, req
 		if readInfoOK {
 			if asState == string(openapiclient.TASKACTIONSTATEENUM_SUCCEEDED) {
 				return nil
+			}
+			if asState == string(openapiclient.TASKACTIONSTATEENUM_FAILED) {
+				return ErrFailedTask
 			}
 		} else {
 			return retry.RetryableError(errors.New("Unable to check metrics exporter cluster association: " + message))
