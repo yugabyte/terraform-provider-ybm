@@ -717,18 +717,19 @@ func createClusterSpec(ctx context.Context, apiClient *openapiclient.APIClient, 
 		isProduction = false
 	}
 
+	clusterInfo := *openapiclient.NewClusterInfo(
+		openapiclient.ClusterTier(tier),
+		int32(totalNodes),
+		openapiclient.ClusterFaultTolerance(plan.FaultTolerance.Value),
+		isProduction,
+	)
+
 	nodeInfo := *openapiclient.NewClusterNodeInfo(numCores, memoryMb, diskSizeGb)
 	if !plan.NodeConfig.DiskIops.IsUnknown() {
 		nodeInfo.SetDiskIops(int32(plan.NodeConfig.DiskIops.Value))
 	}
 
-	clusterInfo := *openapiclient.NewClusterInfo(
-		openapiclient.ClusterTier(tier),
-		int32(totalNodes),
-		openapiclient.ClusterFaultTolerance(plan.FaultTolerance.Value),
-		nodeInfo,
-		isProduction,
-	)
+	clusterInfo.SetNodeInfo(nodeInfo)
 
 	if !plan.NumFaultsToTolerate.IsUnknown() {
 		clusterInfo.SetNumFaultsToTolerate(int32(plan.NumFaultsToTolerate.Value))
