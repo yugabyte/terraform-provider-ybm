@@ -848,6 +848,7 @@ func createCmkSpec(plan Cluster) (*openapiclient.CMKSpec, error) {
 		gcpServiceAccountSpec := openapiclient.NewGCPServiceAccount(
 			gcpServiceAccount.Type.Value,
 			gcpServiceAccount.ProjectId.Value,
+			"",
 			gcpServiceAccount.PrivateKeyId.Value,
 			gcpServiceAccount.ClientEmail.Value,
 			gcpServiceAccount.ClientId.Value,
@@ -856,15 +857,12 @@ func createCmkSpec(plan Cluster) (*openapiclient.CMKSpec, error) {
 			gcpServiceAccount.AuthProviderX509CertUrl.Value,
 			gcpServiceAccount.ClientX509CertUrl.Value,
 		)
-
-		// Appending the optional fields
-		if (!gcpServiceAccount.PrivateKey.Unknown && !gcpServiceAccount.PrivateKey.Null) || gcpServiceAccount.PrivateKey.Value != "" {
+		if !gcpServiceAccount.PrivateKey.Null && !gcpServiceAccount.PrivateKey.Unknown && gcpServiceAccount.PrivateKey.Value != "" {
 			gcpServiceAccountSpec.SetPrivateKey(gcpServiceAccount.PrivateKey.Value)
 		}
-		if (!gcpServiceAccount.UniverseDomain.Unknown && !gcpServiceAccount.UniverseDomain.Null) || gcpServiceAccount.UniverseDomain.Value != "" {
+		if !gcpServiceAccount.UniverseDomain.Null && !gcpServiceAccount.UniverseDomain.Unknown && gcpServiceAccount.UniverseDomain.Value != "" {
 			gcpServiceAccountSpec.SetUniverseDomain(gcpServiceAccount.UniverseDomain.Value)
 		}
-
 		gcpCmkSpec := openapiclient.NewGCPCMKSpec(gcpKeyRingName, gcpKeyName, gcpLocation, gcpProtectionLevel)
 		gcpCmkSpec.SetGcpServiceAccount(*gcpServiceAccountSpec)
 		cmkSpec.SetGcpCmkSpec(*gcpCmkSpec)
@@ -1205,8 +1203,15 @@ func (r resourceCluster) Create(ctx context.Context, req tfsdk.CreateResourceReq
 			cluster.CMKSpec.AWSCMKSpec.SecretKey = types.String{Value: string(cmkSpec.GetAwsCmkSpec().SecretKey)}
 			cluster.CMKSpec.AWSCMKSpec.AccessKey = types.String{Value: string(cmkSpec.GetAwsCmkSpec().AccessKey)}
 		case "GCP":
-			cluster.CMKSpec.GCPCMKSpec.GcpServiceAccount.ClientId = types.String{Value: string(cmkSpec.GetGcpCmkSpec().GcpServiceAccount.ClientId)}
-			cluster.CMKSpec.GCPCMKSpec.GcpServiceAccount.PrivateKey = types.String{Value: string(*cmkSpec.GetGcpCmkSpec().GcpServiceAccount.PrivateKey)}
+			if cmkSpec.GetGcpCmkSpec().GcpServiceAccount.IsSet() {
+				gcpServiceAccountData := cmkSpec.GetGcpCmkSpec().GcpServiceAccount.Get()
+				cluster.CMKSpec.GCPCMKSpec.GcpServiceAccount.ClientId = types.String{Value: gcpServiceAccountData.ClientId}
+				if gcpServiceAccountData.GetPrivateKey() != "" {
+					cluster.CMKSpec.GCPCMKSpec.GcpServiceAccount.PrivateKey = types.String{Value: gcpServiceAccountData.GetPrivateKey()}
+				} else {
+					cluster.CMKSpec.GCPCMKSpec.GcpServiceAccount.PrivateKey.Null = true
+				}
+			}
 		case "AZURE":
 			cluster.CMKSpec.AzureCMKSpec.ClientSecret = types.String{Value: string(cmkSpec.GetAzureCmkSpec().ClientSecret)}
 		}
@@ -1562,25 +1567,25 @@ func resourceClusterRead(ctx context.Context, accountId string, projectId string
 				Location:        types.String{Value: cmkDataSpec.GetGcpCmkSpec().Location},
 				ProtectionLevel: types.String{Value: cmkDataSpec.GetGcpCmkSpec().ProtectionLevel},
 			}
-			if cmkDataSpec.GetGcpCmkSpec().GcpServiceAccount != nil {
+
+			if cmkDataSpec.GetGcpCmkSpec().GcpServiceAccount.IsSet() {
+				gcpServiceAccountData := cmkDataSpec.GetGcpCmkSpec().GcpServiceAccount.Get()
 				gcpServiceAccount := GCPServiceAccount{
-					Type:                    types.String{Value: cmkDataSpec.GetGcpCmkSpec().GcpServiceAccount.Type},
-					ProjectId:               types.String{Value: cmkDataSpec.GetGcpCmkSpec().GcpServiceAccount.ProjectId},
-					PrivateKeyId:            types.String{Value: cmkDataSpec.GetGcpCmkSpec().GcpServiceAccount.PrivateKeyId},
-					ClientEmail:             types.String{Value: cmkDataSpec.GetGcpCmkSpec().GcpServiceAccount.ClientEmail},
-					ClientId:                types.String{Value: cmkDataSpec.GetGcpCmkSpec().GcpServiceAccount.ClientId},
-					AuthUri:                 types.String{Value: cmkDataSpec.GetGcpCmkSpec().GcpServiceAccount.AuthUri},
-					TokenUri:                types.String{Value: cmkDataSpec.GetGcpCmkSpec().GcpServiceAccount.TokenUri},
-					AuthProviderX509CertUrl: types.String{Value: cmkDataSpec.GetGcpCmkSpec().GcpServiceAccount.AuthProviderX509CertUrl},
-					ClientX509CertUrl:       types.String{Value: cmkDataSpec.GetGcpCmkSpec().GcpServiceAccount.ClientX509CertUrl},
+					Type:                    types.String{Value: gcpServiceAccountData.Type},
+					ProjectId:               types.String{Value: gcpServiceAccountData.ProjectId},
+					PrivateKeyId:            types.String{Value: gcpServiceAccountData.PrivateKeyId},
+					ClientEmail:             types.String{Value: gcpServiceAccountData.ClientEmail},
+					ClientId:                types.String{Value: gcpServiceAccountData.ClientId},
+					AuthUri:                 types.String{Value: gcpServiceAccountData.AuthUri},
+					TokenUri:                types.String{Value: gcpServiceAccountData.TokenUri},
+					AuthProviderX509CertUrl: types.String{Value: gcpServiceAccountData.AuthProviderX509CertUrl},
+					ClientX509CertUrl:       types.String{Value: gcpServiceAccountData.ClientX509CertUrl},
 				}
-				if cmkDataSpec.GetGcpCmkSpec().GcpServiceAccount.GetPrivateKey() != "" {
-					privateKey := types.String{Value: cmkDataSpec.GetGcpCmkSpec().GcpServiceAccount.GetPrivateKey()}
-					gcpServiceAccount.PrivateKey = privateKey
+				if gcpServiceAccountData.GetPrivateKey() != "" {
+					gcpServiceAccount.PrivateKey = types.String{Value: gcpServiceAccountData.GetPrivateKey()}
 				}
-				if cmkDataSpec.GetGcpCmkSpec().GcpServiceAccount.GetUniverseDomain() != "" {
-					universeDomain := types.String{Value: cmkDataSpec.GetGcpCmkSpec().GcpServiceAccount.GetUniverseDomain()}
-					gcpServiceAccount.UniverseDomain = universeDomain
+				if gcpServiceAccountData.GetUniverseDomain() != "" {
+					gcpServiceAccount.UniverseDomain = types.String{Value: gcpServiceAccountData.GetUniverseDomain()}
 				} else {
 					gcpServiceAccount.UniverseDomain.Null = true
 				}
