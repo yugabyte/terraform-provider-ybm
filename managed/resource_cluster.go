@@ -1628,11 +1628,14 @@ func resourceClusterRead(ctx context.Context, accountId string, projectId string
 
 	cluster.FaultTolerance.Value = string(clusterResp.Data.Spec.ClusterInfo.FaultTolerance)
 	cluster.NumFaultsToTolerate.Value = int64(*clusterResp.Data.Spec.ClusterInfo.NumFaultsToTolerate.Get())
-	cluster.NodeConfig.NumCores.Value = int64(clusterResp.Data.Spec.ClusterInfo.NodeInfo.NumCores)
-	cluster.NodeConfig.DiskSizeGb.Value = int64(clusterResp.Data.Spec.ClusterInfo.NodeInfo.DiskSizeGb)
-	iopsPtr := clusterResp.Data.Spec.ClusterInfo.NodeInfo.DiskIops.Get()
-	if iopsPtr != nil {
-		cluster.NodeConfig.DiskIops.Value = int64(*iopsPtr)
+	nodeInfo := clusterResp.Data.Spec.ClusterInfo.NodeInfo.Get()
+	if nodeInfo != nil {
+		cluster.NodeConfig.NumCores.Value = int64((*nodeInfo).NumCores)
+		cluster.NodeConfig.DiskSizeGb.Value = int64((*nodeInfo).DiskSizeGb)
+		iopsPtr := (*nodeInfo).DiskIops.Get()
+		if iopsPtr != nil {
+			cluster.NodeConfig.DiskIops.Value = int64(*iopsPtr)
+		}
 	}
 
 	cluster.ClusterInfo.State.Value = string(clusterResp.Data.Info.GetState())

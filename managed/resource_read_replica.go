@@ -148,7 +148,7 @@ func createReadReplicasSpec(ctx context.Context, apiClient *openapiclient.APICli
 		if !memoryOK {
 			return nil, false, message
 		}
-		clusterNodeInfo := *openapiclient.NewClusterNodeInfo(
+		clusterNodeInfo := *openapiclient.NewOptionalClusterNodeInfo(
 			numCores,
 			memoryMb,
 			int32(readReplica.NodeConfig.DiskSizeGb.Value),
@@ -179,7 +179,10 @@ func createReadReplicasSpec(ctx context.Context, apiClient *openapiclient.APICli
 		}
 		placementInfo.SetMultiZone(multiZone)
 
-		readReplicasSpec = append(readReplicasSpec, *openapiclient.NewReadReplicaSpec(clusterNodeInfo, placementInfo))
+		currSpecEntry := *openapiclient.NewReadReplicaSpec(placementInfo)
+		currSpecEntry.SetRegionNodeInfo(clusterNodeInfo)
+
+		readReplicasSpec = append(readReplicasSpec, currSpecEntry)
 
 	}
 	return readReplicasSpec, true, ""
@@ -388,12 +391,25 @@ func resourceReadReplicasRead(ctx context.Context, accountId string, projectId s
 			return readReplicas, false, err.Error()
 		}
 		readReplicaInfo.VPCName.Value = vpcData.Spec.Name
-		readReplicaInfo.NodeConfig.NumCores.Value = int64(readReplicaSpec.NodeInfo.NumCores)
-		readReplicaInfo.NodeConfig.DiskSizeGb.Value = int64(readReplicaSpec.NodeInfo.DiskSizeGb)
 		readReplicaInfo.MultiZone.Value = readReplicaSpec.PlacementInfo.GetMultiZone()
-		if readReplicaSpec.NodeInfo.DiskIops.Get() != nil {
-			readReplicaInfo.NodeConfig.DiskIops.Value = int64(*readReplicaSpec.NodeInfo.DiskIops.Get())
+
+		// Use RegionNodeInfo (if nil, fall back to to-be-deprecated NodeInfo)
+		regionNodeInfo := readReplicaSpec.RegionNodeInfo.Get()
+		nodeInfo := readReplicaSpec.NodeInfo.Get()
+		if regionNodeInfo != nil {
+			readReplicaInfo.NodeConfig.NumCores.Value = int64((*regionNodeInfo).NumCores)
+			readReplicaInfo.NodeConfig.DiskSizeGb.Value = int64((*regionNodeInfo).DiskSizeGb)
+			if (*regionNodeInfo).DiskIops.Get() != nil {
+				readReplicaInfo.NodeConfig.DiskIops.Value = int64(*(*regionNodeInfo).DiskIops.Get())
+			}
+		} else if nodeInfo != nil {
+			readReplicaInfo.NodeConfig.NumCores.Value = int64((*nodeInfo).NumCores)
+			readReplicaInfo.NodeConfig.DiskSizeGb.Value = int64((*nodeInfo).DiskSizeGb)
+			if (*nodeInfo).DiskIops.Get() != nil {
+				readReplicaInfo.NodeConfig.DiskIops.Value = int64(*(*nodeInfo).DiskIops.Get())
+			}
 		}
+
 		if getEndpointsOk {
 			readReplicaInfo.Endpoint.Value = endpoints[localIndex].GetHost()
 		}
