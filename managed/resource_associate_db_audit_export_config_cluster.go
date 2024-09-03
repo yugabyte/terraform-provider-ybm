@@ -131,11 +131,11 @@ func getClusterDbAuditLogConfigPlan(ctx context.Context, plan tfsdk.Plan, dbAudi
 }
 
 func GetDbAuditYsqlLogSettings(plan DbAuditExporterConfig) (*openapiclient.DbAuditYsqlLogSettings, error) {
-	if plan.YsqlConfig == nil || plan.YsqlConfig.LogSettings == nil {
-		return nil, nil
-	}
-
 	dbAuditLogSettings := openapiclient.NewDbAuditYsqlLogSettings()
+
+	if plan.YsqlConfig == nil || plan.YsqlConfig.LogSettings == nil {
+		return dbAuditLogSettings, nil
+	}
 
 	// Set values from plan.YsqlConfig.LogSettings
 	if !plan.YsqlConfig.LogSettings.LogCatalog.IsNull() && !plan.YsqlConfig.LogSettings.LogCatalog.IsUnknown() {
@@ -186,10 +186,7 @@ func getDbAuditExporterConfigSpec(plan DbAuditExporterConfig) (*openapiclient.Db
 		return nil, fmt.Errorf("error in obtaining LogSettings for cluster %s: %s", plan.ClusterID.Value, err)
 	}
 
-	dbAuditYsqlExportConfig := openapiclient.NewDbAuditYsqlExportConfig(statementClasses)
-	if dbAuditLogSettings != nil {
-		dbAuditYsqlExportConfig.SetLogSettings(*dbAuditLogSettings)
-	}
+	dbAuditYsqlExportConfig := openapiclient.NewDbAuditYsqlExportConfig(statementClasses, *dbAuditLogSettings)
 
 	dbAuditExporterConfigSpec := openapiclient.NewDbAuditExporterConfigSpec(*dbAuditYsqlExportConfig, plan.ExporterID.Value)
 
