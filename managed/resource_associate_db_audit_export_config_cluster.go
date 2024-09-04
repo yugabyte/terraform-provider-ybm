@@ -228,16 +228,16 @@ func (r resourceAssociateDbAuditExportConfigCluster) Create(ctx context.Context,
 
 	exporterId := plan.ExporterID.Value
 
-	_, err := GetConfigByNameorID(accountId, projectId, exporterId, "", apiClient)
+	_, err := GetTelemetryProviderByID(accountId, projectId, exporterId, apiClient)
 	if err != nil {
-		resp.Diagnostics.AddError("Unable to associate db audit log configuration to cluster", GetApiErrorDetails(err))
+		resp.Diagnostics.AddError("Unable to associate DB Audit Log configuration to cluster", GetApiErrorDetails(err))
 		return
 	}
 
 	clusterId := plan.ClusterID.Value
 	_, err = GetClusterByNameorID(accountId, projectId, clusterId, "", apiClient)
 	if err != nil {
-		resp.Diagnostics.AddError("Unable to associate db audit log configuration to cluster", GetApiErrorDetails(err))
+		resp.Diagnostics.AddError("Unable to associate DB Audit Log configuration to cluster", GetApiErrorDetails(err))
 		return
 	}
 
@@ -249,7 +249,7 @@ func (r resourceAssociateDbAuditExportConfigCluster) Create(ctx context.Context,
 
 	response, _, err := apiClient.ClusterApi.AssociateDbAuditExporterConfig(ctx, accountId, projectId, clusterId).DbAuditExporterConfigSpec(*dbAuditExporterConfigSpec).Execute()
 	if err != nil {
-		resp.Diagnostics.AddError("Unable to associate db audit log configuration to cluster", GetApiErrorDetails(err))
+		resp.Diagnostics.AddError("Unable to associate DB Audit Log configuration to cluster", GetApiErrorDetails(err))
 		return
 	}
 
@@ -262,17 +262,17 @@ func (r resourceAssociateDbAuditExportConfigCluster) Create(ctx context.Context,
 				return nil
 			}
 			if asState == string(openapiclient.TASKACTIONSTATEENUM_FAILED) {
-				return fmt.Errorf("unable to associate cluster with db audit log configuration, operation failed")
+				return fmt.Errorf("unable to associate cluster with DB Audit Log configuration, operation failed")
 			}
 		} else {
-			return retry.RetryableError(errors.New("unable to get check db audit log configuration cluster association: " + message))
+			return retry.RetryableError(errors.New("unable to check DB Audit Log configuration cluster association: " + message))
 		}
-		return retry.RetryableError(errors.New("db audit log config is being associated to the cluster"))
+		return retry.RetryableError(errors.New("DB Audit Log configuration is being associated to the cluster"))
 	})
 
 	if err != nil {
-		errorSummary := fmt.Sprintf("Unable to associate db audit log config to cluster: %s", clusterId)
-		resp.Diagnostics.AddError(errorSummary, "The operation timed out waiting for db audit log config cluster association.")
+		errorSummary := fmt.Sprintf("Unable to associate DB Audit Log configuration to cluster: %s", clusterId)
+		resp.Diagnostics.AddError(errorSummary, "The operation timed out waiting for DB Audit Log configuration cluster association.")
 		return
 	}
 
@@ -332,7 +332,7 @@ func resourceAssociateDbAuditExporterConfigClusterRead(ctx context.Context, acco
 			return dbAuditExporterConfig, true, ""
 		}
 	}
-	return dbAuditExporterConfig, false, fmt.Sprintf("unable to find db audit log cluster association with id %s for cluster %s", configId, clusterId)
+	return dbAuditExporterConfig, false, fmt.Sprintf("unable to find DB Audit Log configuration cluster association with id %s for cluster %s", configId, clusterId)
 }
 
 func getIDsFromAssocDbAuditExporterConfigClusterState(ctx context.Context, state tfsdk.State, dbe *DbAuditExporterConfig) {
@@ -405,17 +405,17 @@ func (r resourceAssociateDbAuditExportConfigCluster) Update(ctx context.Context,
 				return nil
 			}
 			if asState == string(openapiclient.TASKACTIONSTATEENUM_FAILED) {
-				return fmt.Errorf("unable to update db audit log configuration, operation failed")
+				return fmt.Errorf("unable to update DB Audit Log configuration, operation failed")
 			}
 		} else {
-			return retry.RetryableError(errors.New("unable to get check db audit log configuration update status: " + message))
+			return retry.RetryableError(errors.New("unable to check DB Audit Log configuration update status: " + message))
 		}
-		return retry.RetryableError(errors.New("db audit log config is being updated"))
+		return retry.RetryableError(errors.New("DB Audit Log configuration is being updated"))
 	})
 
 	if err != nil {
-		errorSummary := fmt.Sprintf("Unable to update DB Audit log config with id: %s to cluster: %s", configId, clusterId)
-		resp.Diagnostics.AddError(errorSummary, "The operation timed out waiting for db audit log config update operation.")
+		errorSummary := fmt.Sprintf("Unable to update DB Audit Log configuration with id: %s to cluster: %s", configId, clusterId)
+		resp.Diagnostics.AddError(errorSummary, "The operation timed out waiting for DB Audit Log configuration update operation.")
 		return
 	}
 
@@ -468,7 +468,7 @@ func (r resourceAssociateDbAuditExportConfigCluster) Delete(ctx context.Context,
 	})
 
 	if err != nil {
-		resp.Diagnostics.AddError("Unable to de-associated metrics exporter from the cluster ", "The operation timed out waiting for metrics exporter cluster de-association.")
+		resp.Diagnostics.AddError("Unable to remove Db Audit log export config from the cluster ", "The operation timed out waiting for DB Audit Log configuration removal to complete.")
 		return
 	}
 
@@ -479,4 +479,20 @@ func (r resourceAssociateDbAuditExportConfigCluster) Delete(ctx context.Context,
 // Import
 func (r resourceAssociateDbAuditExportConfigCluster) ImportState(ctx context.Context, req tfsdk.ImportResourceStateRequest, resp *tfsdk.ImportResourceStateResponse) {
 	resp.Diagnostics.AddError("Import is not currently supported", "")
+}
+
+func GetTelemetryProviderByID(accountId string, projectId string, telemetryProviderId string, apiClient *openapiclient.APIClient) (*openapiclient.TelemetryProviderData, error) {
+	resp, _, err := apiClient.TelemetryProviderApi.ListTelemetryProviders(context.Background(), accountId, projectId).Execute()
+
+	if err != nil {
+		return nil, err
+	}
+
+	for _, tpData := range resp.Data {
+		if tpData.GetInfo().Id == telemetryProviderId {
+			return &tpData, nil
+		}
+	}
+
+	return nil, fmt.Errorf("could not find telemetry provider with id: %s", telemetryProviderId)
 }
