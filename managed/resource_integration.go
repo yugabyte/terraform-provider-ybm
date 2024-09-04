@@ -21,6 +21,19 @@ import (
 
 type resourceIntegrationType struct{}
 
+func onlyContainsPath(requiredPath string) []tfsdk.AttributeValidator {
+	allPaths := []string{"datadog_spec", "grafana_spec", "sumologic_spec"}
+	var validators []tfsdk.AttributeValidator
+
+	for _, specPath := range allPaths {
+		if specPath != requiredPath {
+			validators = append(validators, schemavalidator.ConflictsWith(path.MatchRoot(specPath)))
+		}
+	}
+
+	return validators
+}
+
 func (r resourceIntegrationType) GetSchema(_ context.Context) (tfsdk.Schema, diag.Diagnostics) {
 	return tfsdk.Schema{
 		Description: `The resource to create an integration in YugabyteDB Aeon.`,
@@ -49,7 +62,7 @@ func (r resourceIntegrationType) GetSchema(_ context.Context) (tfsdk.Schema, dia
 				Description: "Defines different exporter destination types. ",
 				Type:        types.StringType,
 				Required:    true,
-				Validators:  []tfsdk.AttributeValidator{stringvalidator.OneOf("DATADOG", "GRAFANA", "SUMOLOGIC")},
+				Validators:  []tfsdk.AttributeValidator{stringvalidator.OneOf("DATADOG", "GRAFANA", "SUMOLOGIC", "GOOGLECLOUD")},
 			},
 			"is_valid": {
 				Description: "Signifies whether the integration configuration is valid or not ",
@@ -59,10 +72,7 @@ func (r resourceIntegrationType) GetSchema(_ context.Context) (tfsdk.Schema, dia
 			"datadog_spec": {
 				Description: "The specifications of a Datadog integration.",
 				Optional:    true,
-				Validators: []tfsdk.AttributeValidator{
-					schemavalidator.ConflictsWith(path.MatchRoot("grafana_spec")),
-					schemavalidator.ConflictsWith(path.MatchRoot("sumologic_spec")),
-				},
+				Validators:  onlyContainsPath("datadog_spec"),
 				Attributes: tfsdk.SingleNestedAttributes(map[string]tfsdk.Attribute{
 					"api_key": {
 						Description: "Datadog Api Key",
@@ -80,10 +90,7 @@ func (r resourceIntegrationType) GetSchema(_ context.Context) (tfsdk.Schema, dia
 			"grafana_spec": {
 				Description: "The specifications of a Grafana integration.",
 				Optional:    true,
-				Validators: []tfsdk.AttributeValidator{
-					schemavalidator.ConflictsWith(path.MatchRoot("datadog_spec")),
-					schemavalidator.ConflictsWith(path.MatchRoot("sumologic_spec")),
-				},
+				Validators:  onlyContainsPath("grafana_spec"),
 				Attributes: tfsdk.SingleNestedAttributes(map[string]tfsdk.Attribute{
 					"access_policy_token": {
 						Description: "Grafana Access Policy Token",
@@ -111,10 +118,7 @@ func (r resourceIntegrationType) GetSchema(_ context.Context) (tfsdk.Schema, dia
 			"sumologic_spec": {
 				Description: "The specifications of a Sumo Logic integration.",
 				Optional:    true,
-				Validators: []tfsdk.AttributeValidator{
-					schemavalidator.ConflictsWith(path.MatchRoot("datadog_spec")),
-					schemavalidator.ConflictsWith(path.MatchRoot("grafana_spec")),
-				},
+				Validators:  onlyContainsPath("sumologic_spec"),
 				Attributes: tfsdk.SingleNestedAttributes(map[string]tfsdk.Attribute{
 					"access_id": {
 						Description: "Sumo Logic Access Key ID",
@@ -133,6 +137,69 @@ func (r resourceIntegrationType) GetSchema(_ context.Context) (tfsdk.Schema, dia
 						Type:        types.StringType,
 						Required:    true,
 						Sensitive:   true,
+					},
+				}),
+			},
+			"googlecloud_spec": {
+				Description: "The specifications of a Google Cloud integration.",
+				Optional:    true,
+				Validators:  onlyContainsPath("googlecloud_spec"),
+				Attributes: tfsdk.SingleNestedAttributes(map[string]tfsdk.Attribute{
+					"type": {
+						Description: "Service Account Type",
+						Type:        types.StringType,
+						Required:    true,
+					},
+					"project_id": {
+						Description: "GCP Project ID",
+						Type:        types.StringType,
+						Required:    true,
+					},
+					"private_key": {
+						Description: "Private Key",
+						Type:        types.StringType,
+						Required:    true,
+						Sensitive:   true,
+					},
+					"private_key_id": {
+						Description: "Private Key ID",
+						Type:        types.StringType,
+						Required:    true,
+					},
+					"client_email": {
+						Description: "Client Email",
+						Type:        types.StringType,
+						Required:    true,
+					},
+					"client_id": {
+						Description: "Client ID",
+						Type:        types.StringType,
+						Required:    true,
+					},
+					"auth_uri": {
+						Description: "Auth URI",
+						Type:        types.StringType,
+						Required:    true,
+					},
+					"token_uri": {
+						Description: "Token URI",
+						Type:        types.StringType,
+						Required:    true,
+					},
+					"auth_provider_x509_cert_url": {
+						Description: "Auth Provider X509 Cert URL",
+						Type:        types.StringType,
+						Required:    true,
+					},
+					"client_x509_cert_url": {
+						Description: "Client X509 Cert URL",
+						Type:        types.StringType,
+						Required:    true,
+					},
+					"universe_domain": {
+						Description: "Google Universe Domain",
+						Type:        types.StringType,
+						Optional:    true,
 					},
 				}),
 			},
@@ -157,6 +224,7 @@ func getIntegrationPlan(ctx context.Context, plan tfsdk.Plan, tp *TelemetryProvi
 	diags.Append(plan.GetAttribute(ctx, path.Root("datadog_spec"), &tp.DataDogSpec)...)
 	diags.Append(plan.GetAttribute(ctx, path.Root("grafana_spec"), &tp.GrafanaSpec)...)
 	diags.Append(plan.GetAttribute(ctx, path.Root("sumologic_spec"), &tp.SumoLogicSpec)...)
+	diags.Append(plan.GetAttribute(ctx, path.Root("googlecloud_spec"), &tp.GoogleCloudSpec)...)
 	return diags
 }
 
@@ -172,6 +240,8 @@ func getIDsFromIntegrationState(ctx context.Context, state tfsdk.State, tp *Tele
 		state.GetAttribute(ctx, path.Root("grafana_spec"), &tp.GrafanaSpec)
 	case string(openapiclient.TELEMETRYPROVIDERTYPEENUM_SUMOLOGIC):
 		state.GetAttribute(ctx, path.Root("sumologic_spec"), &tp.SumoLogicSpec)
+	case string(openapiclient.TELEMETRYPROVIDERTYPEENUM_GOOGLECLOUD):
+		state.GetAttribute(ctx, path.Root("googlecloud_spec"), &tp.GoogleCloudSpec)
 	}
 }
 
@@ -226,8 +296,7 @@ func (r resourceIntegration) Create(ctx context.Context, req tfsdk.CreateResourc
 	}
 
 	telemetryProviderSpec := openapiclient.NewTelemetryProviderSpec(configName, *telemetrySinkTypeEnum)
-	var apiKey string
-	var sumoSpec *SumoLogicSpec
+
 	switch *telemetrySinkTypeEnum {
 	case openapiclient.TELEMETRYPROVIDERTYPEENUM_DATADOG:
 		if plan.DataDogSpec == nil {
@@ -238,7 +307,6 @@ func (r resourceIntegration) Create(ctx context.Context, req tfsdk.CreateResourc
 			return
 		}
 		telemetryProviderSpec.SetDatadogSpec(*openapiclient.NewDatadogTelemetryProviderSpec(plan.DataDogSpec.ApiKey.Value, plan.DataDogSpec.Site.Value))
-		apiKey = plan.DataDogSpec.ApiKey.Value
 	case openapiclient.TELEMETRYPROVIDERTYPEENUM_GRAFANA:
 		if plan.GrafanaSpec == nil {
 			resp.Diagnostics.AddError(
@@ -248,7 +316,7 @@ func (r resourceIntegration) Create(ctx context.Context, req tfsdk.CreateResourc
 			return
 		}
 		telemetryProviderSpec.SetGrafanaSpec(*openapiclient.NewGrafanaTelemetryProviderSpec(plan.GrafanaSpec.AccessTokenPolicy.Value, plan.GrafanaSpec.Zone.Value, plan.GrafanaSpec.InstanceId.Value, plan.GrafanaSpec.OrgSlug.Value))
-		apiKey = plan.GrafanaSpec.AccessTokenPolicy.Value
+
 	case openapiclient.TELEMETRYPROVIDERTYPEENUM_SUMOLOGIC:
 		if plan.SumoLogicSpec == nil {
 			resp.Diagnostics.AddError(
@@ -258,11 +326,25 @@ func (r resourceIntegration) Create(ctx context.Context, req tfsdk.CreateResourc
 			return
 		}
 		telemetryProviderSpec.SetSumologicSpec(*openapiclient.NewSumologicTelemetryProviderSpec(plan.SumoLogicSpec.InstallationToken.Value, plan.SumoLogicSpec.AccessId.Value, plan.SumoLogicSpec.AccessKey.Value))
-		sumoSpec = plan.SumoLogicSpec
+
+	case openapiclient.TELEMETRYPROVIDERTYPEENUM_GOOGLECLOUD:
+		if plan.GoogleCloudSpec == nil {
+			resp.Diagnostics.AddError(
+				"googlecloud_spec is required for type GOOGLECLOUD",
+				"googlecloud_spec is required when telemetry sink is GOOGLECLOUD. Please include this field in the resource",
+			)
+			return
+		}
+		gcpServiceAccountPlan := plan.GoogleCloudSpec
+		googleCloudSpec := *openapiclient.NewGCPServiceAccount(gcpServiceAccountPlan.Type.Value, gcpServiceAccountPlan.ProjectId.Value, gcpServiceAccountPlan.PrivateKey.Value, gcpServiceAccountPlan.PrivateKeyId.Value, gcpServiceAccountPlan.ClientEmail.Value, gcpServiceAccountPlan.ClientId.Value, gcpServiceAccountPlan.AuthUri.Value, gcpServiceAccountPlan.TokenUri.Value, gcpServiceAccountPlan.AuthProviderX509CertUrl.Value, gcpServiceAccountPlan.ClientX509CertUrl.Value)
+		if !gcpServiceAccountPlan.UniverseDomain.Null && !gcpServiceAccountPlan.UniverseDomain.Unknown && gcpServiceAccountPlan.UniverseDomain.Value != "" {
+			googleCloudSpec.SetUniverseDomain(gcpServiceAccountPlan.UniverseDomain.Value)
+		}
+		telemetryProviderSpec.SetGooglecloudSpec(googleCloudSpec)
 	default:
 		//We should never go there normally
 		resp.Diagnostics.AddError(
-			"Only DATADOG,GRAFANA,SUMOLOGIC are currently supported as a third party sink",
+			"Only DATADOG, GRAFANA, SUMOLOGIC and GOOGLECLOUD are currently supported as a integrations",
 			"",
 		)
 		return
@@ -274,9 +356,7 @@ func (r resourceIntegration) Create(ctx context.Context, req tfsdk.CreateResourc
 		return
 	}
 
-	telemetryProviderId := CreateResp.GetData().Info.Id
-
-	telemetryProvider, readOK, message := resourceTelemetryProviderRead(accountId, projectId, telemetryProviderId, "", apiKey, apiClient, sumoSpec)
+	telemetryProvider, readOK, message := resourceTelemetryProviderRead(accountId, projectId, CreateResp.GetData().Info.Id, apiClient, plan)
 	if !readOK {
 		resp.Diagnostics.AddError("Unable to read the state of the integration", message)
 		return
@@ -294,19 +374,6 @@ func (r resourceIntegration) Read(ctx context.Context, req tfsdk.ReadResourceReq
 
 	getIDsFromIntegrationState(ctx, req.State, &state)
 	configID := state.ConfigID.Value
-	var apiKey string
-	var sumoSpec *SumoLogicSpec
-
-	// We cannot use the api return as the apikey returned by the api is masked.
-	// We need to use the one provided by the user which should be in the state
-	switch state.Type.Value {
-	case string(openapiclient.TELEMETRYPROVIDERTYPEENUM_DATADOG):
-		apiKey = state.DataDogSpec.ApiKey.Value
-	case string(openapiclient.TELEMETRYPROVIDERTYPEENUM_GRAFANA):
-		apiKey = state.GrafanaSpec.AccessTokenPolicy.Value
-	case string(openapiclient.TELEMETRYPROVIDERTYPEENUM_SUMOLOGIC):
-		sumoSpec = state.SumoLogicSpec
-	}
 
 	apiClient := r.p.client
 
@@ -322,33 +389,10 @@ func (r resourceIntegration) Read(ctx context.Context, req tfsdk.ReadResourceReq
 		return
 	}
 
-	config, readOK, message := resourceTelemetryProviderRead(accountId, projectId, configID, "", apiKey, apiClient, sumoSpec)
+	config, readOK, message := resourceTelemetryProviderRead(accountId, projectId, configID, apiClient, state)
 	if !readOK {
 		resp.Diagnostics.AddError("Unable to read the state of the integration", message)
 		return
-	}
-	// If value returned by API is the same as the encrypted version of our KEY
-	// then we use the api key in the state
-	switch state.Type.Value {
-	case string(openapiclient.TELEMETRYPROVIDERTYPEENUM_DATADOG):
-		if config.DataDogSpec.ApiKey.Value == state.DataDogSpec.EncryptedKey() {
-			config.DataDogSpec.ApiKey.Value = apiKey
-
-		}
-	case string(openapiclient.TELEMETRYPROVIDERTYPEENUM_GRAFANA):
-		if config.GrafanaSpec.AccessTokenPolicy.Value == state.GrafanaSpec.EncryptedKey() {
-			config.GrafanaSpec.AccessTokenPolicy.Value = apiKey
-		}
-	case string(openapiclient.TELEMETRYPROVIDERTYPEENUM_SUMOLOGIC):
-		if config.SumoLogicSpec.AccessKey.Value == state.SumoLogicSpec.EncryptedKey("access_key") {
-			config.SumoLogicSpec.AccessKey.Value = sumoSpec.AccessKey.Value
-		}
-		if config.SumoLogicSpec.AccessId.Value == state.SumoLogicSpec.EncryptedKey("access_id") {
-			config.SumoLogicSpec.AccessId.Value = sumoSpec.AccessId.Value
-		}
-		if config.SumoLogicSpec.InstallationToken.Value == state.SumoLogicSpec.EncryptedKey("installation_token") {
-			config.SumoLogicSpec.InstallationToken.Value = sumoSpec.InstallationToken.Value
-		}
 	}
 
 	diags := resp.State.Set(ctx, &config)
@@ -358,150 +402,68 @@ func (r resourceIntegration) Read(ctx context.Context, req tfsdk.ReadResourceReq
 	}
 }
 func (r resourceIntegration) Update(ctx context.Context, req tfsdk.UpdateResourceRequest, resp *tfsdk.UpdateResourceResponse) {
-	var plan TelemetryProvider
-	resp.Diagnostics.Append(getIntegrationPlan(ctx, req.Plan, &plan)...)
-	if resp.Diagnostics.HasError() {
-		tflog.Debug(ctx, "Error while getting the plan for the integration")
-		return
-	}
-
-	apiClient := r.p.client
-	var state TelemetryProvider
-	getIDsFromIntegrationState(ctx, req.State, &state)
-	accountId := state.AccountID.Value
-	projectId := state.ProjectID.Value
-	configId := state.ConfigID.Value
-	providerType := plan.Type.Value
-	configName := plan.ConfigName.Value
-
-	telemetryProviderTypeEnum, err := openapiclient.NewTelemetryProviderTypeEnumFromValue(strings.ToUpper(providerType))
-	if err != nil {
-		resp.Diagnostics.AddError(GetApiErrorDetails(err), "")
-		return
-	}
-
-	telemetryProviderSpec := openapiclient.NewTelemetryProviderSpec(configName, *telemetryProviderTypeEnum)
-	var apiKey string
-	var sumoSpec *SumoLogicSpec
-	switch *telemetryProviderTypeEnum {
-	case openapiclient.TELEMETRYPROVIDERTYPEENUM_DATADOG:
-		if plan.DataDogSpec == nil {
-			resp.Diagnostics.AddError(
-				"datadog_spec is required for type DATADOG",
-				"datadog_spec is required when third party sink is DATADOG. Please include this field in the resource",
-			)
-			return
-		}
-		datadogSpec := openapiclient.NewDatadogTelemetryProviderSpec(plan.DataDogSpec.ApiKey.Value, plan.DataDogSpec.Site.Value)
-		telemetryProviderSpec.SetDatadogSpec(*datadogSpec)
-		apiKey = plan.DataDogSpec.ApiKey.Value
-	case openapiclient.TELEMETRYPROVIDERTYPEENUM_GRAFANA:
-		if plan.GrafanaSpec == nil {
-			resp.Diagnostics.AddError(
-				"grafana_spec is required for type GRAFANA",
-				"grafana_spec is required when third party sink is GRAFANA. Please include this field in the resource",
-			)
-			return
-		}
-		grafanaSpec := openapiclient.NewGrafanaTelemetryProviderSpec(plan.GrafanaSpec.AccessTokenPolicy.Value, plan.GrafanaSpec.Zone.Value, plan.GrafanaSpec.InstanceId.Value, plan.GrafanaSpec.OrgSlug.Value)
-		telemetryProviderSpec.SetGrafanaSpec(*grafanaSpec)
-		apiKey = plan.GrafanaSpec.AccessTokenPolicy.Value
-	case openapiclient.TELEMETRYPROVIDERTYPEENUM_SUMOLOGIC:
-		if plan.SumoLogicSpec == nil {
-			resp.Diagnostics.AddError(
-				"sumologic_spec is required for type SUMOLOGIC",
-				"sumologic_spec is required when third party sink is SUMOLOGIC. Please include this field in the resource",
-			)
-			return
-		}
-		sumoLogicSpec := openapiclient.NewSumologicTelemetryProviderSpec(plan.SumoLogicSpec.InstallationToken.Value, plan.SumoLogicSpec.AccessId.Value, plan.SumoLogicSpec.AccessKey.Value)
-		telemetryProviderSpec.SetSumologicSpec(*sumoLogicSpec)
-		sumoSpec = plan.SumoLogicSpec
-	default:
-		//We should never go there normally
-		resp.Diagnostics.AddError(
-			"Only DATADOG, GRAFANA and SUMOLOGIC are currently supported as a third party sink",
-			"",
-		)
-		return
-	}
-
-	updateResp, _, err := apiClient.TelemetryProviderApi.UpdateTelemetryProvider(ctx, accountId, projectId, configId).TelemetryProviderSpec(*telemetryProviderSpec).Execute()
-	if err != nil {
-		resp.Diagnostics.AddError("Unable to update integration", GetApiErrorDetails(err))
-		return
-	}
-
-	telemetryProviderId := updateResp.GetData().Info.Id
-
-	config, readOK, message := resourceTelemetryProviderRead(accountId, projectId, telemetryProviderId, "", apiKey, apiClient, sumoSpec)
-	if !readOK {
-		resp.Diagnostics.AddError("Unable to read the state of the integration", message)
-		return
-	}
-
-	// If value returned by API is the same as the encrypted version of our KEY
-	// then we use the api key in the plan
-	switch plan.Type.Value {
-	case string(openapiclient.TELEMETRYPROVIDERTYPEENUM_DATADOG):
-		if config.DataDogSpec.ApiKey.Value == plan.DataDogSpec.EncryptedKey() {
-			config.DataDogSpec.ApiKey.Value = apiKey
-		}
-	case string(openapiclient.TELEMETRYPROVIDERTYPEENUM_GRAFANA):
-		if config.GrafanaSpec.AccessTokenPolicy.Value == plan.GrafanaSpec.EncryptedKey() {
-			config.GrafanaSpec.AccessTokenPolicy.Value = apiKey
-		}
-	case string(openapiclient.TELEMETRYPROVIDERTYPEENUM_SUMOLOGIC):
-		if config.SumoLogicSpec.AccessKey.Value == plan.SumoLogicSpec.EncryptedKey("access_key") {
-			config.SumoLogicSpec.AccessKey.Value = sumoSpec.AccessKey.Value
-		}
-		if config.SumoLogicSpec.AccessId.Value == plan.SumoLogicSpec.EncryptedKey("access_id") {
-			config.SumoLogicSpec.AccessId.Value = sumoSpec.AccessId.Value
-		}
-		if config.SumoLogicSpec.InstallationToken.Value == plan.SumoLogicSpec.EncryptedKey("installation_token") {
-			config.SumoLogicSpec.InstallationToken.Value = sumoSpec.InstallationToken.Value
-		}
-	}
-	diags := resp.State.Set(ctx, &config)
-	resp.Diagnostics.Append(diags...)
-	if resp.Diagnostics.HasError() {
-		return
-	}
-
+	resp.Diagnostics.AddError(
+		"Unsupported Operation",
+		"This resource does not support updates. Please destroy and recreate the resource if changes are needed.",
+	)
 }
 
-func resourceTelemetryProviderRead(accountId string, projectId string, configID string, configName string, apiKey string, apiClient *openapiclient.APIClient, sumoSpec *SumoLogicSpec) (tp TelemetryProvider, readOK bool, errorMessage string) {
+func resourceTelemetryProviderRead(accountId string, projectId string, configID string, apiClient *openapiclient.APIClient, userProvidedTpDetails TelemetryProvider) (tp TelemetryProvider, readOK bool, errorMessage string) {
+	// userProvidedTpDetails: Telemetry provider details from the state or plan used to set the credentials which are masked when obtained from the API
 
-	config, err := GetTelemetryProviderById(accountId, projectId, configID, apiClient)
+	configData, err := GetTelemetryProviderById(accountId, projectId, configID, apiClient)
 	if err != nil {
 		return tp, false, GetApiErrorDetails(err)
 	}
 
+	configSpec := configData.GetSpec()
+	configInfo := configData.GetInfo()
+
 	tp.AccountID.Value = accountId
 	tp.ProjectID.Value = projectId
-	tp.ConfigName.Value = config.GetSpec().Name
-	tp.ConfigID.Value = config.GetInfo().Id
-	tp.Type.Value = string(config.GetSpec().Type)
-	tp.IsValid.Value = *config.GetInfo().IsValid.Get()
-	switch config.GetSpec().Type {
+	tp.ConfigName.Value = configSpec.Name
+	tp.ConfigID.Value = configInfo.Id
+	tp.Type.Value = string(configSpec.Type)
+	tp.IsValid.Value = *configInfo.IsValid.Get()
+
+	// API returns masked credentials. We use the credential details provided by the user in the plan or the existing state
+	switch configData.GetSpec().Type {
 	case openapiclient.TELEMETRYPROVIDERTYPEENUM_DATADOG:
-		// We cannot use the api return as the apikey return by the api is masked.
-		// We need to use the one provided by the user
 		tp.DataDogSpec = &DataDogSpec{
-			ApiKey: types.String{Value: apiKey},
-			Site:   types.String{Value: config.GetSpec().DatadogSpec.Get().Site},
+			ApiKey: userProvidedTpDetails.DataDogSpec.ApiKey,
+			Site:   types.String{Value: configSpec.DatadogSpec.Get().Site},
 		}
 	case openapiclient.TELEMETRYPROVIDERTYPEENUM_GRAFANA:
-		// We cannot use the api return as the apikey return by the api is masked.
-		// We need to use the one provided by the user
+		grafanaSpec := configSpec.GetGrafanaSpec()
 		tp.GrafanaSpec = &GrafanaSpec{
-			AccessTokenPolicy: types.String{Value: string(apiKey)},
-			Zone:              types.String{Value: string(config.GetSpec().GrafanaSpec.Get().Zone)},
-			InstanceId:        types.String{Value: string(config.GetSpec().GrafanaSpec.Get().InstanceId)},
-			OrgSlug:           types.String{Value: string(config.GetSpec().GrafanaSpec.Get().OrgSlug)},
+			AccessTokenPolicy: userProvidedTpDetails.GrafanaSpec.AccessTokenPolicy,
+			Zone:              types.String{Value: grafanaSpec.Zone},
+			InstanceId:        types.String{Value: grafanaSpec.InstanceId},
+			OrgSlug:           types.String{Value: grafanaSpec.OrgSlug},
 		}
 	case openapiclient.TELEMETRYPROVIDERTYPEENUM_SUMOLOGIC:
-		tp.SumoLogicSpec = sumoSpec
+		tp.SumoLogicSpec = &SumoLogicSpec{
+			AccessKey:         userProvidedTpDetails.SumoLogicSpec.AccessKey,
+			AccessId:          userProvidedTpDetails.SumoLogicSpec.AccessId,
+			InstallationToken: userProvidedTpDetails.SumoLogicSpec.InstallationToken,
+		}
+	case openapiclient.TELEMETRYPROVIDERTYPEENUM_GOOGLECLOUD:
+		googlecloudSpec := configSpec.GetGooglecloudSpec()
+		tp.GoogleCloudSpec = &GCPServiceAccount{
+			Type:                    types.String{Value: googlecloudSpec.Type},
+			ProjectId:               types.String{Value: googlecloudSpec.ProjectId},
+			PrivateKeyId:            types.String{Value: googlecloudSpec.PrivateKeyId},
+			PrivateKey:              userProvidedTpDetails.GoogleCloudSpec.PrivateKey,
+			ClientEmail:             types.String{Value: googlecloudSpec.ClientEmail},
+			ClientId:                types.String{Value: googlecloudSpec.ClientId},
+			AuthUri:                 types.String{Value: googlecloudSpec.AuthUri},
+			TokenUri:                types.String{Value: googlecloudSpec.TokenUri},
+			AuthProviderX509CertUrl: types.String{Value: googlecloudSpec.AuthProviderX509CertUrl},
+			ClientX509CertUrl:       types.String{Value: googlecloudSpec.ClientX509CertUrl},
+		}
+		if googlecloudSpec.HasUniverseDomain() {
+			tp.GoogleCloudSpec.UniverseDomain = types.String{Value: *googlecloudSpec.UniverseDomain}
+		}
 	}
 
 	return tp, true, ""

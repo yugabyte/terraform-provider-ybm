@@ -345,13 +345,14 @@ type LogSettings struct {
 }
 
 type TelemetryProvider struct {
-	AccountID     types.String   `tfsdk:"account_id"`
-	ProjectID     types.String   `tfsdk:"project_id"`
-	ConfigID      types.String   `tfsdk:"config_id"`
-	ConfigName    types.String   `tfsdk:"config_name"`
-	Type          types.String   `tfsdk:"type"`
-	DataDogSpec   *DataDogSpec   `tfsdk:"datadog_spec"`
-	GrafanaSpec   *GrafanaSpec   `tfsdk:"grafana_spec"`
-	SumoLogicSpec *SumoLogicSpec `tfsdk:"sumologic_spec"`
-	IsValid       types.Bool     `tfsdk:"is_valid"`
+	AccountID       types.String       `tfsdk:"account_id"`
+	ProjectID       types.String       `tfsdk:"project_id"`
+	ConfigID        types.String       `tfsdk:"config_id"`
+	ConfigName      types.String       `tfsdk:"config_name"`
+	Type            types.String       `tfsdk:"type"`
+	DataDogSpec     *DataDogSpec       `tfsdk:"datadog_spec"`
+	GrafanaSpec     *GrafanaSpec       `tfsdk:"grafana_spec"`
+	SumoLogicSpec   *SumoLogicSpec     `tfsdk:"sumologic_spec"`
+	GoogleCloudSpec *GCPServiceAccount `tfsdk:"googlecloud_spec"`
+	IsValid         types.Bool         `tfsdk:"is_valid"`
 }
