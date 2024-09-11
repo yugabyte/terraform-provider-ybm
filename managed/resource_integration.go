@@ -16,13 +16,231 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
+	"github.com/yugabyte/terraform-provider-ybm/managed/fflags"
 	openapiclient "github.com/yugabyte/yugabytedb-managed-go-client-internal"
 )
 
 type resourceIntegrationType struct{}
 
+func (r resourceIntegrationType) GetSchema(_ context.Context) (tfsdk.Schema, diag.Diagnostics) {
+	return tfsdk.Schema{
+		Description: "The resource to create an integration in YugabyteDB Aeon.",
+		Attributes:  r.getSchemaAttributes(),
+	}, nil
+}
+
+func (r resourceIntegrationType) getSchemaAttributes() map[string]tfsdk.Attribute {
+	attributes := r.createBaseAttributes()
+	r.addFeatureFlaggedIntegrations(attributes)
+	r.addPathValidators(attributes)
+
+	return attributes
+}
+
+func (r resourceIntegrationType) createBaseAttributes() map[string]tfsdk.Attribute {
+	return map[string]tfsdk.Attribute{
+		"account_id": {
+			Description: "The ID of the account this integration belongs to.",
+			Type:        types.StringType,
+			Computed:    true,
+		},
+		"project_id": {
+			Description: "The ID of the project this integration belongs to.",
+			Type:        types.StringType,
+			Computed:    true,
+		},
+		"config_id": {
+			Description: "The ID of the integration.",
+			Type:        types.StringType,
+			Computed:    true,
+		},
+		"config_name": {
+			Description: "The name of the integration",
+			Type:        types.StringType,
+			Required:    true,
+		},
+		"type": r.getTypeAttribute(),
+		"is_valid": {
+			Description: "Signifies whether the integration configuration is valid or not",
+			Type:        types.BoolType,
+			Computed:    true,
+		},
+		"datadog_spec": {
+			Description: "The specifications of a Datadog integration.",
+			Optional:    true,
+			Attributes: tfsdk.SingleNestedAttributes(map[string]tfsdk.Attribute{
+				"api_key": {
+					Description: "Datadog Api Key",
+					Type:        types.StringType,
+					Required:    true,
+					Sensitive:   true,
+				},
+				"site": {
+					Description: "Datadog site.",
+					Type:        types.StringType,
+					Required:    true,
+				},
+			}),
+		},
+		"grafana_spec": {
+			Description: "The specifications of a Grafana integration.",
+			Optional:    true,
+			Attributes: tfsdk.SingleNestedAttributes(map[string]tfsdk.Attribute{
+				"access_policy_token": {
+					Description: "Grafana Access Policy Token",
+					Type:        types.StringType,
+					Required:    true,
+					Sensitive:   true,
+				},
+				"zone": {
+					Description: "Grafana Zone.",
+					Type:        types.StringType,
+					Required:    true,
+				},
+				"instance_id": {
+					Description: "Grafana InstanceID.",
+					Type:        types.StringType,
+					Required:    true,
+				},
+				"org_slug": {
+					Description: "Grafana OrgSlug.",
+					Type:        types.StringType,
+					Required:    true,
+				},
+			}),
+		},
+		"sumologic_spec": {
+			Description: "The specifications of a Sumo Logic integration.",
+			Optional:    true,
+			Attributes: tfsdk.SingleNestedAttributes(map[string]tfsdk.Attribute{
+				"access_id": {
+					Description: "Sumo Logic Access Key ID",
+					Type:        types.StringType,
+					Required:    true,
+					Sensitive:   true,
+				},
+				"access_key": {
+					Description: "Sumo Logic Access Key",
+					Type:        types.StringType,
+					Required:    true,
+					Sensitive:   true,
+				},
+				"installation_token": {
+					Description: "A Sumo Logic installation token to export telemetry to Grafana with",
+					Type:        types.StringType,
+					Required:    true,
+					Sensitive:   true,
+				},
+			}),
+		},
+	}
+}
+
+func (r resourceIntegrationType) addFeatureFlaggedIntegrations(attributes map[string]tfsdk.Attribute) {
+	if fflags.IsFeatureFlagEnabled(fflags.GOOGLECLOUD_INTEGRATION_ENABLED) {
+		attributes["googlecloud_spec"] = tfsdk.Attribute{
+			Description: "The specifications of a Google Cloud integration.",
+			Optional:    true,
+			Attributes: tfsdk.SingleNestedAttributes(map[string]tfsdk.Attribute{
+				"type": {
+					Description: "Service Account Type",
+					Type:        types.StringType,
+					Required:    true,
+				},
+				"project_id": {
+					Description: "GCP Project ID",
+					Type:        types.StringType,
+					Required:    true,
+				},
+				"private_key": {
+					Description: "Private Key",
+					Type:        types.StringType,
+					Required:    true,
+					Sensitive:   true,
+				},
+				"private_key_id": {
+					Description: "Private Key ID",
+					Type:        types.StringType,
+					Required:    true,
+				},
+				"client_email": {
+					Description: "Client Email",
+					Type:        types.StringType,
+					Required:    true,
+				},
+				"client_id": {
+					Description: "Client ID",
+					Type:        types.StringType,
+					Required:    true,
+				},
+				"auth_uri": {
+					Description: "Auth URI",
+					Type:        types.StringType,
+					Required:    true,
+				},
+				"token_uri": {
+					Description: "Token URI",
+					Type:        types.StringType,
+					Required:    true,
+				},
+				"auth_provider_x509_cert_url": {
+					Description: "Auth Provider X509 Cert URL",
+					Type:        types.StringType,
+					Required:    true,
+				},
+				"client_x509_cert_url": {
+					Description: "Client X509 Cert URL",
+					Type:        types.StringType,
+					Required:    true,
+				},
+				"universe_domain": {
+					Description: "Google Universe Domain",
+					Type:        types.StringType,
+					Optional:    true,
+				},
+			}),
+		}
+	}
+
+	// Add more feature-flagged integrations here in the future
+}
+
+func (r resourceIntegrationType) addPathValidators(attributes map[string]tfsdk.Attribute) {
+	specPaths := []string{"datadog_spec", "grafana_spec", "sumologic_spec"}
+	if fflags.IsFeatureFlagEnabled(fflags.GOOGLECLOUD_INTEGRATION_ENABLED) {
+		specPaths = append(specPaths, "googlecloud_spec")
+	}
+
+	// Add more feature-flagged spec paths here in the future
+
+	for _, path := range specPaths {
+		if attr, exists := attributes[path]; exists {
+			attr.Validators = append(attr.Validators, onlyContainsPath(path)...)
+			attributes[path] = attr
+		}
+	}
+}
+
+func (r resourceIntegrationType) getTypeAttribute() tfsdk.Attribute {
+	validTypes := []string{"DATADOG", "GRAFANA", "SUMOLOGIC"}
+	if fflags.IsFeatureFlagEnabled(fflags.GOOGLECLOUD_INTEGRATION_ENABLED) {
+		validTypes = append(validTypes, "GOOGLECLOUD")
+	}
+
+	// Add more feature-flagged integration types here in the future
+
+	return tfsdk.Attribute{
+		Description: "Defines different exporter destination types.",
+		Type:        types.StringType,
+		Required:    true,
+		Validators: []tfsdk.AttributeValidator{
+			stringvalidator.OneOf(validTypes...),
+		},
+	}
+}
+
 func onlyContainsPath(requiredPath string) []tfsdk.AttributeValidator {
-	allPaths := []string{"datadog_spec", "grafana_spec", "sumologic_spec"}
+	allPaths := []string{"datadog_spec", "grafana_spec", "sumologic_spec", "googlecloud_spec"}
 	var validators []tfsdk.AttributeValidator
 
 	for _, specPath := range allPaths {
@@ -32,179 +250,6 @@ func onlyContainsPath(requiredPath string) []tfsdk.AttributeValidator {
 	}
 
 	return validators
-}
-
-func (r resourceIntegrationType) GetSchema(_ context.Context) (tfsdk.Schema, diag.Diagnostics) {
-	return tfsdk.Schema{
-		Description: `The resource to create an integration in YugabyteDB Aeon.`,
-		Attributes: map[string]tfsdk.Attribute{
-			"account_id": {
-				Description: "The ID of the account this integration belongs to.",
-				Type:        types.StringType,
-				Computed:    true,
-			},
-			"project_id": {
-				Description: "The ID of the project this integration belongs to.",
-				Type:        types.StringType,
-				Computed:    true,
-			},
-			"config_id": {
-				Description: "The ID of the integration.",
-				Type:        types.StringType,
-				Computed:    true,
-			},
-			"config_name": {
-				Description: "The name of the integration",
-				Type:        types.StringType,
-				Required:    true,
-			},
-			"type": {
-				Description: "Defines different exporter destination types. ",
-				Type:        types.StringType,
-				Required:    true,
-				Validators:  []tfsdk.AttributeValidator{stringvalidator.OneOf("DATADOG", "GRAFANA", "SUMOLOGIC", "GOOGLECLOUD")},
-			},
-			"is_valid": {
-				Description: "Signifies whether the integration configuration is valid or not ",
-				Type:        types.BoolType,
-				Computed:    true,
-			},
-			"datadog_spec": {
-				Description: "The specifications of a Datadog integration.",
-				Optional:    true,
-				Validators:  onlyContainsPath("datadog_spec"),
-				Attributes: tfsdk.SingleNestedAttributes(map[string]tfsdk.Attribute{
-					"api_key": {
-						Description: "Datadog Api Key",
-						Type:        types.StringType,
-						Required:    true,
-						Sensitive:   true,
-					},
-					"site": {
-						Description: "Datadog site.",
-						Type:        types.StringType,
-						Required:    true,
-					},
-				}),
-			},
-			"grafana_spec": {
-				Description: "The specifications of a Grafana integration.",
-				Optional:    true,
-				Validators:  onlyContainsPath("grafana_spec"),
-				Attributes: tfsdk.SingleNestedAttributes(map[string]tfsdk.Attribute{
-					"access_policy_token": {
-						Description: "Grafana Access Policy Token",
-						Type:        types.StringType,
-						Required:    true,
-						Sensitive:   true,
-					},
-					"zone": {
-						Description: "Grafana Zone.",
-						Type:        types.StringType,
-						Required:    true,
-					},
-					"instance_id": {
-						Description: "Grafana InstanceID.",
-						Type:        types.StringType,
-						Required:    true,
-					},
-					"org_slug": {
-						Description: "Grafana OrgSlug.",
-						Type:        types.StringType,
-						Required:    true,
-					},
-				}),
-			},
-			"sumologic_spec": {
-				Description: "The specifications of a Sumo Logic integration.",
-				Optional:    true,
-				Validators:  onlyContainsPath("sumologic_spec"),
-				Attributes: tfsdk.SingleNestedAttributes(map[string]tfsdk.Attribute{
-					"access_id": {
-						Description: "Sumo Logic Access Key ID",
-						Type:        types.StringType,
-						Required:    true,
-						Sensitive:   true,
-					},
-					"access_key": {
-						Description: "Sumo Logic Access Key",
-						Type:        types.StringType,
-						Required:    true,
-						Sensitive:   true,
-					},
-					"installation_token": {
-						Description: "A Sumo Logic installation token to export telemetry to Grafana with",
-						Type:        types.StringType,
-						Required:    true,
-						Sensitive:   true,
-					},
-				}),
-			},
-			"googlecloud_spec": {
-				Description: "The specifications of a Google Cloud integration.",
-				Optional:    true,
-				Validators:  onlyContainsPath("googlecloud_spec"),
-				Attributes: tfsdk.SingleNestedAttributes(map[string]tfsdk.Attribute{
-					"type": {
-						Description: "Service Account Type",
-						Type:        types.StringType,
-						Required:    true,
-					},
-					"project_id": {
-						Description: "GCP Project ID",
-						Type:        types.StringType,
-						Required:    true,
-					},
-					"private_key": {
-						Description: "Private Key",
-						Type:        types.StringType,
-						Required:    true,
-						Sensitive:   true,
-					},
-					"private_key_id": {
-						Description: "Private Key ID",
-						Type:        types.StringType,
-						Required:    true,
-					},
-					"client_email": {
-						Description: "Client Email",
-						Type:        types.StringType,
-						Required:    true,
-					},
-					"client_id": {
-						Description: "Client ID",
-						Type:        types.StringType,
-						Required:    true,
-					},
-					"auth_uri": {
-						Description: "Auth URI",
-						Type:        types.StringType,
-						Required:    true,
-					},
-					"token_uri": {
-						Description: "Token URI",
-						Type:        types.StringType,
-						Required:    true,
-					},
-					"auth_provider_x509_cert_url": {
-						Description: "Auth Provider X509 Cert URL",
-						Type:        types.StringType,
-						Required:    true,
-					},
-					"client_x509_cert_url": {
-						Description: "Client X509 Cert URL",
-						Type:        types.StringType,
-						Required:    true,
-					},
-					"universe_domain": {
-						Description: "Google Universe Domain",
-						Type:        types.StringType,
-						Optional:    true,
-					},
-				}),
-			},
-		},
-	}, nil
 }
 
 func (r resourceIntegrationType) NewResource(_ context.Context, p tfsdk.Provider) (tfsdk.Resource, diag.Diagnostics) {
