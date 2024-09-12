@@ -12,7 +12,13 @@ import (
 
 type FeatureFlag string
 
-var flagEnabled = map[FeatureFlag]bool{}
+const (
+	GOOGLECLOUD_INTEGRATION_ENABLED FeatureFlag = "GOOGLECLOUD_INTEGRATION_ENABLED"
+)
+
+var flagEnabled = map[FeatureFlag]bool{
+	GOOGLECLOUD_INTEGRATION_ENABLED: false,
+}
 
 func (f FeatureFlag) String() string {
 	return string(f)
