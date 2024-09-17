@@ -21,6 +21,7 @@ type Cluster struct {
 	ClusterRegionInfo   []RegionInfo         `tfsdk:"cluster_region_info"`
 	DatabaseTrack       types.String         `tfsdk:"database_track"`
 	DesiredState        types.String         `tfsdk:"desired_state"`
+	DesiredConnectionPoolingState	types.String	`tfsdk:"desired_connection_pooling_state"`
 	ClusterTier         types.String         `tfsdk:"cluster_tier"`
 	ClusterAllowListIDs []types.String       `tfsdk:"cluster_allow_list_ids"`
 	RestoreBackupID     types.String         `tfsdk:"restore_backup_id"`
