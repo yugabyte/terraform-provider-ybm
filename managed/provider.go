@@ -162,9 +162,10 @@ func (p *provider) GetResources(_ context.Context) (map[string]tfsdk.ResourceTyp
 
 func (p *provider) GetDataSources(_ context.Context) (map[string]tfsdk.DataSourceType, diag.Diagnostics) {
 	return map[string]tfsdk.DataSourceType{
-		"ybm_backup":     dataSourceBackupType{},
-		"ybm_cluster":    dataClusterNameType{},
-		"ybm_vpc":        dataSourceVPCType{},
-		"ybm_allow_list": dataSourceAllowListType{},
+		"ybm_backup":      dataSourceBackupType{},
+		"ybm_cluster":     dataClusterNameType{},
+		"ybm_vpc":         dataSourceVPCType{},
+		"ybm_allow_list":  dataSourceAllowListType{},
+		"ybm_integration": dataSourceIntegrationType{},
 	}, nil
 }
