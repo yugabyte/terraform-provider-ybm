@@ -167,5 +167,6 @@ func (p *provider) GetDataSources(_ context.Context) (map[string]tfsdk.DataSourc
 		"ybm_vpc":         dataSourceVPCType{},
 		"ybm_allow_list":  dataSourceAllowListType{},
 		"ybm_integration": dataSourceIntegrationType{},
+		"ybm_associate_db_audit_export_config_cluster": dataSourceAssociateDbAuditExportConfigClusterType{},
 	}, nil
 }
