@@ -780,6 +780,7 @@ func getPlan(ctx context.Context, plan tfsdk.Plan, cluster *Cluster) diag.Diagno
 	diags.Append(plan.GetAttribute(ctx, path.Root("restore_backup_id"), &cluster.RestoreBackupID)...)
 	diags.Append(plan.GetAttribute(ctx, path.Root("database_track"), &cluster.DatabaseTrack)...)
 	diags.Append(plan.GetAttribute(ctx, path.Root("desired_state"), &cluster.DesiredState)...)
+	diags.Append(plan.GetAttribute(ctx, path.Root("desired_connection_pooling_state"), &cluster.DesiredConnectionPoolingState)...)
 	diags.Append(plan.GetAttribute(ctx, path.Root("node_config"), &cluster.NodeConfig)...)
 	diags.Append(plan.GetAttribute(ctx, path.Root("credentials"), &cluster.Credentials)...)
 	diags.Append(plan.GetAttribute(ctx, path.Root("backup_schedules"), &cluster.BackupSchedules)...)
@@ -794,6 +795,7 @@ func getIDsFromState(ctx context.Context, state tfsdk.State, cluster *Cluster) {
 	state.GetAttribute(ctx, path.Root("project_id"), &cluster.ProjectID)
 	state.GetAttribute(ctx, path.Root("cluster_id"), &cluster.ClusterID)
 	state.GetAttribute(ctx, path.Root("desired_state"), &cluster.DesiredState)
+	state.GetAttribute(ctx, path.Root("desired_connection_pooling_state"), &cluster.DesiredConnectionPoolingState)
 	state.GetAttribute(ctx, path.Root("cluster_allow_list_ids"), &cluster.ClusterAllowListIDs)
 	state.GetAttribute(ctx, path.Root("cluster_region_info"), &cluster.ClusterRegionInfo)
 	state.GetAttribute(ctx, path.Root("backup_schedules"), &cluster.BackupSchedules)
@@ -1203,15 +1205,18 @@ func (r resourceCluster) Create(ctx context.Context, req tfsdk.CreateResourceReq
 		}
 	}
 
+	connectionPoolingChanged := false
+
 	// Enable connection pooling if the desired state is set to 'Enabled'
 	if !plan.DesiredConnectionPoolingState.Unknown && strings.EqualFold(plan.DesiredConnectionPoolingState.Value, "Enabled") {
 		err := enableConnectionPooling(ctx, apiClient, accountId, projectId, clusterId)
+		connectionPoolingChanged = true
 		if err != nil {
 			resp.Diagnostics.AddError("Enabling connection pooling Failed: ", err.Error())
 		}
 	}
 
-	cluster, readOK, message := resourceClusterRead(ctx, accountId, projectId, clusterId, backUpSchedules, regions, allowListProvided, allowListIDs, false, apiClient)
+	cluster, readOK, message := resourceClusterRead(ctx, accountId, projectId, clusterId, backUpSchedules, regions, allowListProvided, allowListIDs, false, apiClient, connectionPoolingChanged)
 
 	// Update the State file with the unmasked creds for AWS (secret key,access) and GCP (client id,private key)
 	if plan.CMKSpec != nil {
@@ -1268,6 +1273,10 @@ func (r resourceCluster) Create(ctx context.Context, req tfsdk.CreateResourceReq
 	// support backward compatibility during pause and resume flows
 	if strings.EqualFold(plan.DesiredState.Value, "Active") || strings.EqualFold(plan.DesiredState.Value, "Paused") {
 		cluster.DesiredState.Value = plan.DesiredState.Value
+	}
+
+	if strings.EqualFold(plan.DesiredConnectionPoolingState.Value, "Enabled") || strings.EqualFold(plan.DesiredConnectionPoolingState.Value, "Disabled") {
+		cluster.DesiredConnectionPoolingState.Value = plan.DesiredConnectionPoolingState.Value
 	}
 
 	diags := resp.State.Set(ctx, &cluster)
@@ -1522,7 +1531,7 @@ func (r resourceCluster) Read(ctx context.Context, req tfsdk.ReadResourceRequest
 		backUpSchedules = append(backUpSchedules, state.BackupSchedules[0])
 	}
 
-	cluster, readOK, message := resourceClusterRead(ctx, state.AccountID.Value, state.ProjectID.Value, state.ClusterID.Value, backUpSchedules, regions, allowListProvided, allowListIDs, false, r.p.client)
+	cluster, readOK, message := resourceClusterRead(ctx, state.AccountID.Value, state.ProjectID.Value, state.ClusterID.Value, backUpSchedules, regions, allowListProvided, allowListIDs, false, r.p.client, false)
 
 	// Fetch the cmkSpec information from State (to get unmasked creds)
 	var cmkSpec CMKSpec
@@ -1601,7 +1610,7 @@ func readBackupScheduleInfoV2(ctx context.Context, apiClient *openapiclient.APIC
 	return backupScheduleInfo, nil, nil
 }
 
-func resourceClusterRead(ctx context.Context, accountId string, projectId string, clusterId string, backUpSchedules []BackupScheduleInfo, regions []string, allowListProvided bool, inputAllowListIDs []string, readOnly bool, apiClient *openapiclient.APIClient) (cluster Cluster, readOK bool, errorMessage string) {
+func resourceClusterRead(ctx context.Context, accountId string, projectId string, clusterId string, backUpSchedules []BackupScheduleInfo, regions []string, allowListProvided bool, inputAllowListIDs []string, readOnly bool, apiClient *openapiclient.APIClient, connectionPoolingChanged bool) (cluster Cluster, readOK bool, errorMessage string) {
 	clusterResp, response, err := apiClient.ClusterApi.GetCluster(context.Background(), accountId, projectId, clusterId).Execute()
 	if err != nil {
 		errMsg := getErrorMessage(response, err)
@@ -1704,6 +1713,19 @@ func resourceClusterRead(ctx context.Context, accountId string, projectId string
 	cluster.ClusterID.Value = clusterId
 	cluster.ClusterName.Value = clusterResp.Data.Spec.Name
 	cluster.DesiredState.Value = string(clusterResp.Data.Info.GetState())
+	if connectionPoolingChanged {
+		if clusterResp.Data.Info.GetIsConnectionPoolingEnabled(){
+			cluster.DesiredConnectionPoolingState.Value = "Disabled"
+		}else{
+			cluster.DesiredConnectionPoolingState.Value = "Enabled"
+		}
+	} else {
+		if clusterResp.Data.Info.GetIsConnectionPoolingEnabled(){
+			cluster.DesiredConnectionPoolingState.Value = "Enabled"
+		}else{
+			cluster.DesiredConnectionPoolingState.Value = "Disabled"
+		}
+	}
 	cluster.ClusterType.Value = string(*clusterResp.Data.Spec.ClusterInfo.ClusterType)
 	cluster.ClusterTier.Value = string(clusterResp.Data.Spec.ClusterInfo.ClusterTier)
 	cluster.ClusterVersion.Value = strconv.Itoa(int(clusterResp.Data.Spec.ClusterInfo.GetVersion()))
@@ -1943,10 +1965,13 @@ func (r resourceCluster) Update(ctx context.Context, req tfsdk.UpdateResourceReq
 		}
 	}
 
+	connectionPoolingChanged := false
+
 	// Disable Connection Pooling if the desired state is set to 'Disabled and it is enabeld currently
 	if strings.EqualFold(plan.DesiredConnectionPoolingState.Value, "Enabled") && (plan.DesiredConnectionPoolingState.Unknown || strings.EqualFold(plan.DesiredConnectionPoolingState.Value, "Disabled")) {
 		// Disable Connection Pooling
 		err := disableConnectionPooling(ctx, apiClient, accountId, projectId, clusterId)
+		connectionPoolingChanged = true
 		if err != nil {
 			resp.Diagnostics.AddError("Disable connection pooling failed: ", err.Error())
 			return
@@ -2191,6 +2216,7 @@ func (r resourceCluster) Update(ctx context.Context, req tfsdk.UpdateResourceReq
 	// Enable connection pooling if the desired state is set to 'Enabled'
 	if !plan.DesiredConnectionPoolingState.Unknown && (!plan.DesiredConnectionPoolingState.Unknown && strings.EqualFold(plan.DesiredConnectionPoolingState.Value, "Enabled")) {
 		err := enableConnectionPooling(ctx, apiClient, accountId, projectId, clusterId)
+		connectionPoolingChanged = true
 		if err != nil {
 			resp.Diagnostics.AddError("Enabling connection pooling Failed: ", err.Error())
 		}
@@ -2201,7 +2227,7 @@ func (r resourceCluster) Update(ctx context.Context, req tfsdk.UpdateResourceReq
 		regions = append(regions, regionInfo.Region.Value)
 	}
 
-	cluster, readOK, message := resourceClusterRead(ctx, accountId, projectId, clusterId, backUpSchedules, regions, allowListProvided, allowListIDs, false, apiClient)
+	cluster, readOK, message := resourceClusterRead(ctx, accountId, projectId, clusterId, backUpSchedules, regions, allowListProvided, allowListIDs, false, apiClient, connectionPoolingChanged)
 	if !readOK {
 		resp.Diagnostics.AddError("Unable to read the state of the cluster ", message)
 		return
@@ -2236,6 +2262,10 @@ func (r resourceCluster) Update(ctx context.Context, req tfsdk.UpdateResourceReq
 	// support backward compatibility during pause and resume flows
 	if strings.EqualFold(plan.DesiredState.Value, "Active") || strings.EqualFold(plan.DesiredState.Value, "Paused") {
 		cluster.DesiredState.Value = plan.DesiredState.Value
+	}
+
+	if strings.EqualFold(plan.DesiredConnectionPoolingState.Value, "Enabled") || strings.EqualFold(plan.DesiredConnectionPoolingState.Value, "Enabled") {
+		cluster.DesiredConnectionPoolingState.Value = plan.DesiredConnectionPoolingState.Value
 	}
 
 	diags := resp.State.Set(ctx, &cluster)
