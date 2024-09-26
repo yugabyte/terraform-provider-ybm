@@ -41,6 +41,7 @@ the operational overhead of managing a database.
 The YugabyteDB Aeon Provider can be used to interact with the resources provided by YugabyteDB Aeon like the YugabyteDB Clusters, Allow lists, VPCs,
 VPC Peerings, Read Replicas and so on. The provider needs to be configured with appropriate credentials before it can base used. The navigation bar on the left
 hand side provides the details about all the resources supported by the provider and the guides to use the provider.
+
 **Note**: Please don't use the ` + "`-pre`" + ` releases for production.`,
 		Attributes: map[string]tfsdk.Attribute{
 			"auth_token": {
