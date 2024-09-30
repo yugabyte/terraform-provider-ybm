@@ -279,7 +279,7 @@ func (r resourceAssociateDbAuditExportConfigCluster) Create(ctx context.Context,
 	configId := response.Data.Info.Id
 	plan.ConfigID.Value = configId
 
-	dae, readOK, readErrMsg := resourceAssociateDbAuditExporterConfigClusterRead(ctx, accountId, projectId, clusterId, configId, apiClient)
+	dae, readOK, readErrMsg := resourceAssociateDbAuditExporterConfigClusterRead(ctx, accountId, projectId, clusterId, apiClient)
 	if !readOK {
 		resp.Diagnostics.AddError("Unable to read the state of Db Audit log config cluster association ", readErrMsg)
 		return
@@ -292,47 +292,50 @@ func (r resourceAssociateDbAuditExportConfigCluster) Create(ctx context.Context,
 	}
 }
 
-func resourceAssociateDbAuditExporterConfigClusterRead(ctx context.Context, accountId string, projectId string, clusterId string, configId string, apiClient *openapiclient.APIClient) (dbAuditExporterConfig DbAuditExporterConfig, readOK bool, errMsg string) {
+func resourceAssociateDbAuditExporterConfigClusterRead(ctx context.Context, accountId string, projectId string, clusterId string, apiClient *openapiclient.APIClient) (dbAuditExporterConfig DbAuditExporterConfig, readOK bool, errMsg string) {
 	listDbAuditExporterConfigResp, _, err := apiClient.ClusterApi.ListDbAuditExporterConfig(ctx, accountId, projectId, clusterId).Execute()
 	if err != nil {
 		return dbAuditExporterConfig, false, GetApiErrorDetails(err)
 	}
 
+	if len(listDbAuditExporterConfigResp.GetData()) == 0 {
+		return dbAuditExporterConfig, false, fmt.Sprintf("Unable to find DB Audit Log configuration cluster association with for cluster %s", clusterId)
+	}
+
 	dbAuditExporterConfig.AccountID.Value = accountId
 	dbAuditExporterConfig.ProjectID.Value = projectId
 
-	for _, data := range listDbAuditExporterConfigResp.GetData() {
-		info := data.GetInfo()
-		spec := data.GetSpec()
-		if info.Id == configId {
-			dbAuditExporterConfig.ConfigID.Value = info.Id
-			dbAuditExporterConfig.ClusterID.Value = info.ClusterId
-			dbAuditExporterConfig.State.Value = string(info.State)
-			dbAuditExporterConfig.ExporterID.Value = spec.ExporterId
+	// Each cluster will have only one DB Audit Log config. We do not have a GET API for this feature
+	data := listDbAuditExporterConfigResp.GetData()[0]
 
-			var logSettings LogSettings
-			logSettings.LogCatalog.Value = *spec.YsqlConfig.LogSettings.LogCatalog
-			logSettings.LogClient.Value = *spec.YsqlConfig.LogSettings.LogClient
-			logSettings.LogStatementOnce.Value = *spec.YsqlConfig.LogSettings.LogStatementOnce
-			logSettings.LogRelation.Value = *spec.YsqlConfig.LogSettings.LogRelation
-			logSettings.LogParameter.Value = *spec.YsqlConfig.LogSettings.LogParameter
-			logSettings.LogLevel.Value = string(*spec.YsqlConfig.LogSettings.LogLevel)
+	info := data.GetInfo()
+	spec := data.GetSpec()
 
-			var statementClasses []types.String
-			for _, statementClass := range spec.GetYsqlConfig().StatementClasses {
-				statementClasses = append(statementClasses, types.String{Value: string(statementClass)})
-			}
+	dbAuditExporterConfig.ConfigID.Value = info.Id
+	dbAuditExporterConfig.ClusterID.Value = info.ClusterId
+	dbAuditExporterConfig.State.Value = string(info.State)
+	dbAuditExporterConfig.ExporterID.Value = spec.ExporterId
 
-			var ysqlConfig YsqlConfig
-			ysqlConfig.StatementClasses = statementClasses
-			ysqlConfig.LogSettings = &logSettings
+	var logSettings LogSettings
+	logSettings.LogCatalog.Value = *spec.YsqlConfig.LogSettings.LogCatalog
+	logSettings.LogClient.Value = *spec.YsqlConfig.LogSettings.LogClient
+	logSettings.LogStatementOnce.Value = *spec.YsqlConfig.LogSettings.LogStatementOnce
+	logSettings.LogRelation.Value = *spec.YsqlConfig.LogSettings.LogRelation
+	logSettings.LogParameter.Value = *spec.YsqlConfig.LogSettings.LogParameter
+	logSettings.LogLevel.Value = string(*spec.YsqlConfig.LogSettings.LogLevel)
 
-			dbAuditExporterConfig.YsqlConfig = &ysqlConfig
-
-			return dbAuditExporterConfig, true, ""
-		}
+	var statementClasses []types.String
+	for _, statementClass := range spec.GetYsqlConfig().StatementClasses {
+		statementClasses = append(statementClasses, types.String{Value: string(statementClass)})
 	}
-	return dbAuditExporterConfig, false, fmt.Sprintf("unable to find DB Audit Log configuration cluster association with id %s for cluster %s", configId, clusterId)
+
+	var ysqlConfig YsqlConfig
+	ysqlConfig.StatementClasses = statementClasses
+	ysqlConfig.LogSettings = &logSettings
+
+	dbAuditExporterConfig.YsqlConfig = &ysqlConfig
+
+	return dbAuditExporterConfig, true, ""
 }
 
 func getIDsFromAssocDbAuditExporterConfigClusterState(ctx context.Context, state tfsdk.State, dbe *DbAuditExporterConfig) {
@@ -351,10 +354,9 @@ func (r resourceAssociateDbAuditExportConfigCluster) Read(ctx context.Context, r
 	apiClient := r.p.client
 	accountId := state.AccountID.Value
 	projectId := state.ProjectID.Value
-	configId := state.ConfigID.Value
 	clusterId := state.ClusterID.Value
 
-	dbe, readOK, message := resourceAssociateDbAuditExporterConfigClusterRead(ctx, accountId, projectId, clusterId, configId, apiClient)
+	dbe, readOK, message := resourceAssociateDbAuditExporterConfigClusterRead(ctx, accountId, projectId, clusterId, apiClient)
 	if !readOK {
 		resp.Diagnostics.AddError("Unable to read the state of Db Audit log configuration associated with the cluster", message)
 		return
@@ -421,7 +423,7 @@ func (r resourceAssociateDbAuditExportConfigCluster) Update(ctx context.Context,
 
 	plan.ConfigID.Value = configId
 
-	dae, readOK, readErrMsg := resourceAssociateDbAuditExporterConfigClusterRead(ctx, accountId, projectId, clusterId, configId, apiClient)
+	dae, readOK, readErrMsg := resourceAssociateDbAuditExporterConfigClusterRead(ctx, accountId, projectId, clusterId, apiClient)
 	if !readOK {
 		resp.Diagnostics.AddError("Unable to read the state of Db Audit log config cluster association ", readErrMsg)
 		return
