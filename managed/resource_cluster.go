@@ -1702,9 +1702,9 @@ func resourceClusterRead(ctx context.Context, accountId string, projectId string
 	cluster.ClusterID.Value = clusterId
 	cluster.ClusterName.Value = clusterResp.Data.Spec.Name
 	cluster.DesiredState.Value = string(clusterResp.Data.Info.GetState())
-	if clusterResp.Data.Info.GetIsConnectionPoolingEnabled(){
+	if clusterResp.Data.Info.GetIsConnectionPoolingEnabled() {
 		cluster.DesiredConnectionPoolingState.Value = "Enabled"
-	}else{
+	} else {
 		cluster.DesiredConnectionPoolingState.Value = "Disabled"
 	}
 	cluster.ClusterType.Value = string(*clusterResp.Data.Spec.ClusterInfo.ClusterType)
