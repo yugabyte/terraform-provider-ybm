@@ -10,29 +10,30 @@ import (
 )
 
 type Cluster struct {
-	AccountID           types.String         `tfsdk:"account_id"`
-	ProjectID           types.String         `tfsdk:"project_id"`
-	ClusterID           types.String         `tfsdk:"cluster_id"`
-	ClusterName         types.String         `tfsdk:"cluster_name"`
-	CloudType           types.String         `tfsdk:"cloud_type"`
-	ClusterType         types.String         `tfsdk:"cluster_type"`
-	FaultTolerance      types.String         `tfsdk:"fault_tolerance"`
-	NumFaultsToTolerate types.Int64          `tfsdk:"num_faults_to_tolerate"`
-	ClusterRegionInfo   []RegionInfo         `tfsdk:"cluster_region_info"`
-	DatabaseTrack       types.String         `tfsdk:"database_track"`
-	DesiredState        types.String         `tfsdk:"desired_state"`
-	ClusterTier         types.String         `tfsdk:"cluster_tier"`
-	ClusterAllowListIDs []types.String       `tfsdk:"cluster_allow_list_ids"`
-	RestoreBackupID     types.String         `tfsdk:"restore_backup_id"`
-	NodeConfig          NodeConfig           `tfsdk:"node_config"`
-	Credentials         Credentials          `tfsdk:"credentials"`
-	ClusterInfo         ClusterInfo          `tfsdk:"cluster_info"`
-	ClusterVersion      types.String         `tfsdk:"cluster_version"`
-	BackupSchedules     []BackupScheduleInfo `tfsdk:"backup_schedules"`
-	ClusterEndpoints    types.Map            `tfsdk:"cluster_endpoints"`
-	ClusterEndpointsV2  []ClusterEndpoint    `tfsdk:"endpoints"`
-	ClusterCertificate  types.String         `tfsdk:"cluster_certificate"`
-	CMKSpec             *CMKSpec             `tfsdk:"cmk_spec"`
+	AccountID                     types.String         `tfsdk:"account_id"`
+	ProjectID                     types.String         `tfsdk:"project_id"`
+	ClusterID                     types.String         `tfsdk:"cluster_id"`
+	ClusterName                   types.String         `tfsdk:"cluster_name"`
+	CloudType                     types.String         `tfsdk:"cloud_type"`
+	ClusterType                   types.String         `tfsdk:"cluster_type"`
+	FaultTolerance                types.String         `tfsdk:"fault_tolerance"`
+	NumFaultsToTolerate           types.Int64          `tfsdk:"num_faults_to_tolerate"`
+	ClusterRegionInfo             []RegionInfo         `tfsdk:"cluster_region_info"`
+	DatabaseTrack                 types.String         `tfsdk:"database_track"`
+	DesiredState                  types.String         `tfsdk:"desired_state"`
+	DesiredConnectionPoolingState types.String         `tfsdk:"desired_connection_pooling_state"`
+	ClusterTier                   types.String         `tfsdk:"cluster_tier"`
+	ClusterAllowListIDs           []types.String       `tfsdk:"cluster_allow_list_ids"`
+	RestoreBackupID               types.String         `tfsdk:"restore_backup_id"`
+	NodeConfig                    NodeConfig           `tfsdk:"node_config"`
+	Credentials                   Credentials          `tfsdk:"credentials"`
+	ClusterInfo                   ClusterInfo          `tfsdk:"cluster_info"`
+	ClusterVersion                types.String         `tfsdk:"cluster_version"`
+	BackupSchedules               []BackupScheduleInfo `tfsdk:"backup_schedules"`
+	ClusterEndpoints              types.Map            `tfsdk:"cluster_endpoints"`
+	ClusterEndpointsV2            []ClusterEndpoint    `tfsdk:"endpoints"`
+	ClusterCertificate            types.String         `tfsdk:"cluster_certificate"`
+	CMKSpec                       *CMKSpec             `tfsdk:"cmk_spec"`
 }
 
 type ClusterEndpoint struct {
