@@ -1352,7 +1352,7 @@ func enableConnectionPooling(ctx context.Context, apiClient *openapiclient.APICl
 		}
 		return retry.RetryableError(errors.New("Connection Pooling is being enabled"))
 	})
-	
+
 	if err != nil {
 		return errors.New("Unable to enable connection pooling " + "The operation timed out waiting to enable connection pooling")
 	}
@@ -1388,7 +1388,7 @@ func disableConnectionPooling(ctx context.Context, apiClient *openapiclient.APIC
 		}
 		return retry.RetryableError(errors.New("Connection Pooling is being disabled"))
 	})
-	
+
 	if err != nil {
 		return errors.New("Unable to disable connection pooling " + "The operation timed out waiting to disable connection pooling")
 	}
@@ -1945,7 +1945,6 @@ func (r resourceCluster) Update(ctx context.Context, req tfsdk.UpdateResourceReq
 			return
 		}
 	}
-
 
 	// Disable Connection Pooling if the desired state is set to 'Disabled and it is enabeld currently
 	if plan.DesiredConnectionPoolingState.Unknown || strings.EqualFold(plan.DesiredConnectionPoolingState.Value, "Disabled") {
