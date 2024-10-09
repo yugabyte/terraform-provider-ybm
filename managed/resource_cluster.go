@@ -2192,7 +2192,7 @@ func (r resourceCluster) Update(ctx context.Context, req tfsdk.UpdateResourceReq
 	}
 
 	// Enable connection pooling if the desired state is set to 'Enabled'
-	if !plan.DesiredConnectionPoolingState.Unknown && (!plan.DesiredConnectionPoolingState.Unknown && strings.EqualFold(plan.DesiredConnectionPoolingState.Value, "Enabled")) {
+	if !plan.DesiredConnectionPoolingState.Unknown && strings.EqualFold(plan.DesiredConnectionPoolingState.Value, "Enabled") {
 		err := enableConnectionPooling(ctx, apiClient, accountId, projectId, clusterId)
 		if err != nil {
 			resp.Diagnostics.AddError("Enabling connection pooling Failed: ", err.Error())
