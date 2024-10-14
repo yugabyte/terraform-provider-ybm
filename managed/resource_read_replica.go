@@ -541,7 +541,7 @@ func (r resourceReadReplicas) Delete(ctx context.Context, req tfsdk.DeleteResour
 	response, err := apiClient.ReadReplicaApi.DeleteReadReplica(ctx, accountId, projectId, clusterId).Execute()
 	if err != nil {
 		errMsg := getErrorMessage(response, err)
-		resp.Diagnostics.AddError("Unable to list the read replicas", errMsg)
+		resp.Diagnostics.AddError("Unable to delete the read replicas", errMsg)
 		return
 	}
 
