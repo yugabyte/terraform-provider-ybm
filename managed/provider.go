@@ -11,6 +11,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
 	"github.com/hashicorp/terraform-plugin-framework/types"
+	"github.com/yugabyte/terraform-provider-ybm/managed/fflags"
 	openapiclient "github.com/yugabyte/yugabytedb-managed-go-client-internal"
 )
 
@@ -142,7 +143,7 @@ func (p *provider) Configure(ctx context.Context, req tfsdk.ConfigureProviderReq
 }
 
 func (p *provider) GetResources(_ context.Context) (map[string]tfsdk.ResourceType, diag.Diagnostics) {
-	return map[string]tfsdk.ResourceType{
+	resources := map[string]tfsdk.ResourceType{
 		"ybm_cluster":                            resourceClusterType{},
 		"ybm_allow_list":                         resourceAllowListType{},
 		"ybm_backup":                             resourceBackupType{},
@@ -155,18 +156,30 @@ func (p *provider) GetResources(_ context.Context) (map[string]tfsdk.ResourceTyp
 		"ybm_api_key":                            resourceApiKeyType{},
 		"ybm_metrics_exporter":                   resourceMetricsExporterType{},
 		"ybm_associate_metrics_exporter_cluster": resourceAssociateMetricsExporterClusterType{},
-		"ybm_associate_db_audit_export_config_cluster": resourceAssociateDbAuditExportConfigClusterType{},
-		"ybm_integration": resourceIntegrationType{},
-	}, nil
+		"ybm_integration":                        resourceIntegrationType{},
+	}
+
+	// Add DB Audit logging resource only if the feature flag is enabled
+	if fflags.IsFeatureFlagEnabled(fflags.DB_AUDIT_LOGGING) {
+		resources["ybm_associate_db_audit_export_config_cluster"] = resourceAssociateDbAuditExportConfigClusterType{}
+	}
+
+	return resources, nil
 }
 
 func (p *provider) GetDataSources(_ context.Context) (map[string]tfsdk.DataSourceType, diag.Diagnostics) {
-	return map[string]tfsdk.DataSourceType{
+	dataSources := map[string]tfsdk.DataSourceType{
 		"ybm_backup":      dataSourceBackupType{},
 		"ybm_cluster":     dataClusterNameType{},
 		"ybm_vpc":         dataSourceVPCType{},
 		"ybm_allow_list":  dataSourceAllowListType{},
 		"ybm_integration": dataSourceIntegrationType{},
-		"ybm_associate_db_audit_export_config_cluster": dataSourceAssociateDbAuditExportConfigClusterType{},
-	}, nil
+	}
+
+	// Add DB Audit logging data source only if the feature flag is enabled
+	if fflags.IsFeatureFlagEnabled(fflags.DB_AUDIT_LOGGING) {
+		dataSources["ybm_associate_db_audit_export_config_cluster"] = dataSourceAssociateDbAuditExportConfigClusterType{}
+	}
+
+	return dataSources, nil
 }
