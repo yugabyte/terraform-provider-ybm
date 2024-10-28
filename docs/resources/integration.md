@@ -64,6 +64,7 @@ resource "ybm_integration" "sumologic" {
 ### Optional
 
 - `datadog_spec` (Attributes) The specifications of a Datadog integration. (see [below for nested schema](#nestedatt--datadog_spec))
+- `googlecloud_spec` (Attributes) The specifications of a Google Cloud integration. (see [below for nested schema](#nestedatt--googlecloud_spec))
 - `grafana_spec` (Attributes) The specifications of a Grafana integration. (see [below for nested schema](#nestedatt--grafana_spec))
 - `sumologic_spec` (Attributes) The specifications of a Sumo Logic integration. (see [below for nested schema](#nestedatt--sumologic_spec))
 
@@ -81,6 +82,27 @@ Required:
 
 - `api_key` (String, Sensitive) Datadog Api Key
 - `site` (String) Datadog site.
+
+
+<a id="nestedatt--googlecloud_spec"></a>
+### Nested Schema for `googlecloud_spec`
+
+Required:
+
+- `auth_provider_x509_cert_url` (String) Auth Provider X509 Cert URL
+- `auth_uri` (String) Auth URI
+- `client_email` (String) Client Email
+- `client_id` (String) Client ID
+- `client_x509_cert_url` (String) Client X509 Cert URL
+- `private_key` (String, Sensitive) Private Key
+- `private_key_id` (String) Private Key ID
+- `project_id` (String) GCP Project ID
+- `token_uri` (String) Token URI
+- `type` (String) Service Account Type
+
+Optional:
+
+- `universe_domain` (String) Google Universe Domain
 
 
 <a id="nestedatt--grafana_spec"></a>
