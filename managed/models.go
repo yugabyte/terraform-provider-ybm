@@ -357,3 +357,26 @@ type TelemetryProvider struct {
 	GoogleCloudSpec *GCPServiceAccount `tfsdk:"googlecloud_spec"`
 	IsValid         types.Bool         `tfsdk:"is_valid"`
 }
+
+type LogConfig struct {
+	LogMinDurationStatement types.Int64  `tfsdk:"log_min_duration_statement"`
+	DebugPrintPlan          types.Bool   `tfsdk:"debug_print_plan"`
+	LogConnections          types.Bool   `tfsdk:"log_connections"`
+	LogDisconnections       types.Bool   `tfsdk:"log_disconnections"`
+	LogDuration             types.Bool   `tfsdk:"log_duration"`
+	LogErrorVerbosity       types.String `tfsdk:"log_error_verbosity"`
+	LogStatement            types.String `tfsdk:"log_statement"`
+	LogMinErrorStatement    types.String `tfsdk:"log_min_error_statement"`
+	LogLinePrefix           types.String `tfsdk:"log_line_prefix"`
+}
+
+type DbQueryLoggingConfig struct {
+	AccountID       types.String `tfsdk:"account_id"`
+	ProjectID       types.String `tfsdk:"project_id"`
+	ClusterID       types.String `tfsdk:"cluster_id"`
+	ClusterName     types.String `tfsdk:"cluster_name"`
+	IntegrationName types.String `tfsdk:"integration_name"`
+	State           types.String `tfsdk:"state"`
+	ConfigID        types.String `tfsdk:"config_id"`
+	LogConfig       *LogConfig   `tfsdk:"log_config"`
+}

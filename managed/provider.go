@@ -157,6 +157,7 @@ func (p *provider) GetResources(_ context.Context) (map[string]tfsdk.ResourceTyp
 		"ybm_metrics_exporter":                   resourceMetricsExporterType{},
 		"ybm_associate_metrics_exporter_cluster": resourceAssociateMetricsExporterClusterType{},
 		"ybm_integration":                        resourceIntegrationType{},
+		"ybm_database_query_logging":             resourceDbQueryLoggingType{},
 	}
 
 	// Add DB Audit logging resource only if the feature flag is enabled
