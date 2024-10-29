@@ -206,16 +206,16 @@ func buildDbQueryLoggingSpec(config DbQueryLoggingConfig, integrationId string) 
 // Read latest state/config of a resource from Backend and convert it to model
 func resourceRead(ctx context.Context, accountId string, projectId string, clusterId string,
 	clusterName string, integrationName string,
-	apiClient *openapiclient.APIClient) (dbAuditExporterConfig DbQueryLoggingConfig, readOK bool, errMsg string) {
+	apiClient *openapiclient.APIClient) (dbQueryLoggingConfig DbQueryLoggingConfig, readOK bool, errMsg string) {
 
 	// fetch log config from backend
 	specList, _, err := apiClient.ClusterApi.ListPgLogExporterConfigs(ctx, accountId, projectId, clusterId).Execute()
 	if err != nil {
-		return dbAuditExporterConfig, false, GetApiErrorDetails(err)
+		return dbQueryLoggingConfig, false, GetApiErrorDetails(err)
 	}
 
 	if len(specList.GetData()) == 0 {
-		return dbAuditExporterConfig, false, fmt.Sprintf("No DB query logging config found for cluster %s", clusterName)
+		return dbQueryLoggingConfig, false, fmt.Sprintf("No DB query logging config found for cluster %s", clusterName)
 	}
 
 	spec := specList.Data[0]
@@ -234,7 +234,7 @@ func resourceRead(ctx context.Context, accountId string, projectId string, clust
 		LogLinePrefix:           types.String{Value: exportConfig.LogLinePrefix},
 	}
 
-	dbAuditExporterConfig = DbQueryLoggingConfig{
+	dbQueryLoggingConfig = DbQueryLoggingConfig{
 		AccountID:       types.String{Value: accountId},
 		ProjectID:       types.String{Value: projectId},
 		ClusterID:       types.String{Value: clusterId},
@@ -245,7 +245,7 @@ func resourceRead(ctx context.Context, accountId string, projectId string, clust
 		LogConfig:       &logConfig,
 	}
 
-	return dbAuditExporterConfig, true, ""
+	return dbQueryLoggingConfig, true, ""
 }
 
 func getConfigFromState(ctx context.Context, state tfsdk.State, config *DbQueryLoggingConfig) {
@@ -268,13 +268,13 @@ func (r resourceDbQueryLogging) Read(ctx context.Context, req tfsdk.ReadResource
 	clusterName := state.ClusterName.Value
 	integrationName := state.IntegrationName.Value
 
-	dbe, readOK, message := resourceRead(ctx, accountId, projectId, clusterId, clusterName, integrationName, apiClient)
+	dbqlConfig, readOK, message := resourceRead(ctx, accountId, projectId, clusterId, clusterName, integrationName, apiClient)
 	if !readOK {
 		resp.Diagnostics.AddError("Unable to read the state of Db Query log configuration associated with the cluster", message)
 		return
 	}
 
-	diags := resp.State.Set(ctx, &dbe)
+	diags := resp.State.Set(ctx, &dbqlConfig)
 	resp.Diagnostics.Append(diags...)
 	if resp.Diagnostics.HasError() {
 		return
@@ -338,7 +338,7 @@ func (r resourceDbQueryLogging) Create(ctx context.Context, req tfsdk.CreateReso
 	integrationName := config.IntegrationName.Value
 	clusterData, err := GetClusterByNameorID(accountId, projectId, "", clusterName, apiClient)
 	if err != nil {
-		resp.Diagnostics.AddError("Unable to get cluster id for cluster: "+clusterName, GetApiErrorDetails(err))
+		resp.Diagnostics.AddError("Unable to fetch cluster details for cluster: "+clusterName, GetApiErrorDetails(err))
 		return
 	}
 	clusterId = clusterData.Info.Id
@@ -349,7 +349,7 @@ func (r resourceDbQueryLogging) Create(ctx context.Context, req tfsdk.CreateReso
 		Execute()
 
 	if err != nil {
-		resp.Diagnostics.AddError("Unable to get integration ID for integration: "+integrationName, GetApiErrorDetails(err))
+		resp.Diagnostics.AddError("Unable to fetch integration details for integration: "+integrationName, GetApiErrorDetails(err))
 		return
 	}
 
@@ -362,7 +362,8 @@ func (r resourceDbQueryLogging) Create(ctx context.Context, req tfsdk.CreateReso
 
 	dbQueryLoggingConfigSpec, err := buildDbQueryLoggingSpec(config, integrationId)
 	if err != nil {
-		resp.Diagnostics.AddError("Unable to build DB query logging config spec", GetApiErrorDetails(err))
+		resp.Diagnostics.AddWarning("Unable to build DB query logging config spec", GetApiErrorDetails(err))
+		resp.Diagnostics.AddError("Encountered error while enabling DB Query Logging", GetApiErrorDetails(err))
 		return
 	}
 
