@@ -16,9 +16,9 @@ import (
 	openapiclient "github.com/yugabyte/yugabytedb-managed-go-client-internal"
 )
 
-type resourceAssociateDbAuditExportConfigClusterType struct{}
+type resourceDbAuditLoggingType struct{}
 
-func (r resourceAssociateDbAuditExportConfigClusterType) GetSchema(ctx context.Context) (tfsdk.Schema, diag.Diagnostics) {
+func (r resourceDbAuditLoggingType) GetSchema(ctx context.Context) (tfsdk.Schema, diag.Diagnostics) {
 	return tfsdk.Schema{
 		Description: `The resource to manage DB Audit log configuration for a cluster in YugabyteDB Aeon.`,
 		Attributes: map[string]tfsdk.Attribute{
@@ -32,23 +32,33 @@ func (r resourceAssociateDbAuditExportConfigClusterType) GetSchema(ctx context.C
 				Type:        types.StringType,
 				Computed:    true,
 			},
-			"cluster_id": {
-				Description: "ID of the cluster with which this DB Audit log config will be associated ",
+			"cluster_name": {
+				Description: "Name of the cluster from which DB Audit Logs will be exported",
 				Type:        types.StringType,
 				Required:    true,
 			},
-			"exporter_id": {
-				Description: "ID of the exporter to which the DB Audit logs will be exported",
+			"cluster_id": {
+				Description: "ID of the cluster from which DB Audit Logs will be exported",
+				Type:        types.StringType,
+				Computed:    true,
+			},
+			"integration_name": {
+				Description: "Name of the integration to which the DB Audit Logs will be exported",
 				Type:        types.StringType,
 				Required:    true,
+			},
+			"integration_id": {
+				Description: "ID of the integration to which the DB Audit Logs will be exported",
+				Type:        types.StringType,
+				Computed:    true,
 			},
 			"config_id": {
-				Description: "ID of the DB Audit log configuration",
+				Description: "ID of the DB Audit logging configuration",
 				Type:        types.StringType,
 				Computed:    true,
 			},
 			"state": {
-				Description: "The stutus of association of cluster with DB Audit log config",
+				Description: "The status of DB Audit Logging on the cluster",
 				Type:        types.StringType,
 				Computed:    true,
 			},
@@ -110,27 +120,25 @@ func (r resourceAssociateDbAuditExportConfigClusterType) GetSchema(ctx context.C
 	}, nil
 }
 
-func (r resourceAssociateDbAuditExportConfigClusterType) NewResource(_ context.Context, p tfsdk.Provider) (tfsdk.Resource, diag.Diagnostics) {
-	return resourceAssociateDbAuditExportConfigCluster{
+func (r resourceDbAuditLoggingType) NewResource(_ context.Context, p tfsdk.Provider) (tfsdk.Resource, diag.Diagnostics) {
+	return resourceDbAuditLogging{
 		p: *(p.(*provider)),
 	}, nil
 }
 
-type resourceAssociateDbAuditExportConfigCluster struct {
+type resourceDbAuditLogging struct {
 	p provider
 }
 
-func getClusterDbAuditLogConfigPlan(ctx context.Context, plan tfsdk.Plan, dbAuditExporterConfig *DbAuditExporterConfig) diag.Diagnostics {
+func getClusterDbAuditLogConfigPlan(ctx context.Context, plan tfsdk.Plan, dbAuditLoggingConfig *DbAuditLoggingConfig) diag.Diagnostics {
 	var diags diag.Diagnostics
-	diags.Append(plan.GetAttribute(ctx, path.Root("ysql_config"), &dbAuditExporterConfig.YsqlConfig)...)
-	diags.Append(plan.GetAttribute(ctx, path.Root("exporter_id"), &dbAuditExporterConfig.ExporterID)...)
-	diags.Append(plan.GetAttribute(ctx, path.Root("cluster_id"), &dbAuditExporterConfig.ClusterID)...)
-	diags.Append(plan.GetAttribute(ctx, path.Root("config_id"), &dbAuditExporterConfig.ConfigID)...)
-	diags.Append(plan.GetAttribute(ctx, path.Root("state"), &dbAuditExporterConfig.State)...)
+	diags.Append(plan.GetAttribute(ctx, path.Root("ysql_config"), &dbAuditLoggingConfig.YsqlConfig)...)
+	diags.Append(plan.GetAttribute(ctx, path.Root("cluster_name"), &dbAuditLoggingConfig.ClusterName)...)
+	diags.Append(plan.GetAttribute(ctx, path.Root("integration_name"), &dbAuditLoggingConfig.IntegrationName)...)
 	return diags
 }
 
-func GetDbAuditYsqlLogSettings(plan DbAuditExporterConfig) (*openapiclient.DbAuditYsqlLogSettings, error) {
+func GetDbAuditYsqlLogSettings(plan DbAuditLoggingConfig) (*openapiclient.DbAuditYsqlLogSettings, error) {
 	dbAuditLogSettings := openapiclient.NewDbAuditYsqlLogSettings()
 
 	if plan.YsqlConfig == nil || plan.YsqlConfig.LogSettings == nil {
@@ -175,26 +183,22 @@ func convertToDbAuditYsqlStatmentClassesEnum(statementClasses []types.String) ([
 	return result, nil
 }
 
-func getDbAuditExporterConfigSpec(plan DbAuditExporterConfig) (*openapiclient.DbAuditExporterConfigSpec, error) {
+func getDbAuditLoggingConfigSpec(plan DbAuditLoggingConfig) (*openapiclient.DbAuditExporterConfigSpec, error) {
 	statementClasses, err := convertToDbAuditYsqlStatmentClassesEnum(plan.YsqlConfig.StatementClasses)
 	if err != nil {
-		return nil, fmt.Errorf("error in converting statement classes string to DbAuditYsqlStatmentClassesEnum for cluster %s: %s", plan.ClusterID.Value, err)
+		return nil, fmt.Errorf("Statement classes provided are not supported: %v", err)
 	}
 
 	dbAuditLogSettings, err := GetDbAuditYsqlLogSettings(plan)
 	if err != nil {
-		return nil, fmt.Errorf("error in obtaining LogSettings for cluster %s: %s", plan.ClusterID.Value, err)
+		return nil, fmt.Errorf("Log settings provided are not supported: %v", err)
 	}
 
-	dbAuditYsqlExportConfig := openapiclient.NewDbAuditYsqlExportConfig(statementClasses, *dbAuditLogSettings)
-
-	dbAuditExporterConfigSpec := openapiclient.NewDbAuditExporterConfigSpec(*dbAuditYsqlExportConfig, plan.ExporterID.Value)
-
-	return dbAuditExporterConfigSpec, nil
+	return openapiclient.NewDbAuditExporterConfigSpec(*openapiclient.NewDbAuditYsqlExportConfig(statementClasses, *dbAuditLogSettings), plan.IntegrationId.Value), nil
 }
 
 // Create a new Db Audit Log Configuration for a Cluster
-func (r resourceAssociateDbAuditExportConfigCluster) Create(ctx context.Context, req tfsdk.CreateResourceRequest, resp *tfsdk.CreateResourceResponse) {
+func (r resourceDbAuditLogging) Create(ctx context.Context, req tfsdk.CreateResourceRequest, resp *tfsdk.CreateResourceResponse) {
 	if !r.p.configured {
 		resp.Diagnostics.AddError(
 			"Provider not configured",
@@ -203,7 +207,7 @@ func (r resourceAssociateDbAuditExportConfigCluster) Create(ctx context.Context,
 		return
 	}
 
-	var plan DbAuditExporterConfig
+	var plan DbAuditLoggingConfig
 	var accountId, message string
 	var getAccountOK bool
 
@@ -226,30 +230,32 @@ func (r resourceAssociateDbAuditExportConfigCluster) Create(ctx context.Context,
 		return
 	}
 
-	exporterId := plan.ExporterID.Value
-
-	_, err := GetTelemetryProviderByID(accountId, projectId, exporterId, apiClient)
+	integrationData, err := GetIntegrationDataByName(ctx, apiClient, accountId, projectId, plan.IntegrationName.Value)
 	if err != nil {
-		resp.Diagnostics.AddError("Unable to associate DB Audit Log configuration to cluster", GetApiErrorDetails(err))
+		resp.Diagnostics.AddError("Unable to fetch integration details", err.Error())
+		return
+	}
+	plan.IntegrationId.Value = integrationData.GetInfo().Id
+
+	errMsg := fmt.Sprintf("Failed to enable DB Audit Logging on cluster %s", plan.ClusterName)
+
+	clusterName := plan.ClusterName.Value
+	clusterData, err := GetClusterByNameorID(accountId, projectId, "", clusterName, apiClient)
+	if err != nil {
+		resp.Diagnostics.AddError(errMsg, GetApiErrorDetails(err))
+		return
+	}
+	clusterId := clusterData.GetInfo().Id
+
+	dbAuditLoggingConfigSpec, err := getDbAuditLoggingConfigSpec(plan)
+	if err != nil {
+		resp.Diagnostics.AddError(errMsg, err.Error())
 		return
 	}
 
-	clusterId := plan.ClusterID.Value
-	_, err = GetClusterByNameorID(accountId, projectId, clusterId, "", apiClient)
+	_, _, err = apiClient.ClusterApi.AssociateDbAuditExporterConfig(ctx, accountId, projectId, clusterId).DbAuditExporterConfigSpec(*dbAuditLoggingConfigSpec).Execute()
 	if err != nil {
-		resp.Diagnostics.AddError("Unable to associate DB Audit Log configuration to cluster", GetApiErrorDetails(err))
-		return
-	}
-
-	dbAuditExporterConfigSpec, err := getDbAuditExporterConfigSpec(plan)
-	if err != nil {
-		resp.Diagnostics.AddError("Unable to obtain DbAuditExporterConfigSpec", GetApiErrorDetails(err))
-		return
-	}
-
-	response, _, err := apiClient.ClusterApi.AssociateDbAuditExporterConfig(ctx, accountId, projectId, clusterId).DbAuditExporterConfigSpec(*dbAuditExporterConfigSpec).Execute()
-	if err != nil {
-		resp.Diagnostics.AddError("Unable to associate DB Audit Log configuration to cluster", GetApiErrorDetails(err))
+		resp.Diagnostics.AddError(errMsg, GetApiErrorDetails(err))
 		return
 	}
 
@@ -262,26 +268,25 @@ func (r resourceAssociateDbAuditExportConfigCluster) Create(ctx context.Context,
 				return nil
 			}
 			if asState == string(openapiclient.TASKACTIONSTATEENUM_FAILED) {
-				return fmt.Errorf("unable to associate cluster with DB Audit Log configuration, operation failed")
+				return fmt.Errorf(errMsg)
 			}
 		} else {
-			return retry.RetryableError(errors.New("unable to check DB Audit Log configuration cluster association: " + message))
+			return retry.RetryableError(errors.New("Unable to check the status of DB Audit Logging configuration: " + message))
 		}
-		return retry.RetryableError(errors.New("DB Audit Log configuration is being associated to the cluster"))
+		return retry.RetryableError(errors.New("Enabling DB Audit Logging on the cluster " + clusterName))
 	})
 
 	if err != nil {
-		errorSummary := fmt.Sprintf("Unable to associate DB Audit Log configuration to cluster: %s", clusterId)
-		resp.Diagnostics.AddError(errorSummary, "The operation timed out waiting for DB Audit Log configuration cluster association.")
+		resp.Diagnostics.AddError(errMsg, "The operation timed out waiting for while enabling DB Audit Logging")
 		return
 	}
 
-	configId := response.Data.Info.Id
-	plan.ConfigID.Value = configId
+	// configId := response.Data.Info.Id
+	// plan.ConfigID.Value = configId
 
-	dae, readOK, readErrMsg := resourceAssociateDbAuditExporterConfigClusterRead(ctx, accountId, projectId, clusterId, apiClient)
+	dae, readOK, readErrMsg := resourceDbAuditLoggingRead(ctx, accountId, projectId, clusterId, apiClient)
 	if !readOK {
-		resp.Diagnostics.AddError("Unable to read the state of Db Audit log config cluster association ", readErrMsg)
+		resp.Diagnostics.AddError(fmt.Sprintf("Unable to read the state of Db Audit logging on cluster %s ", clusterName), readErrMsg)
 		return
 	}
 
@@ -292,29 +297,35 @@ func (r resourceAssociateDbAuditExportConfigCluster) Create(ctx context.Context,
 	}
 }
 
-func resourceAssociateDbAuditExporterConfigClusterRead(ctx context.Context, accountId string, projectId string, clusterId string, apiClient *openapiclient.APIClient) (dbAuditExporterConfig DbAuditExporterConfig, readOK bool, errMsg string) {
-	listDbAuditExporterConfigResp, _, err := apiClient.ClusterApi.ListDbAuditExporterConfig(ctx, accountId, projectId, clusterId).Execute()
+func resourceDbAuditLoggingRead(ctx context.Context, accountId string, projectId string, clusterId string, apiClient *openapiclient.APIClient) (dbAuditLoggingConfig DbAuditLoggingConfig, readOK bool, errMsg string) {
+	listDbAuditLoggingConfigResp, _, err := apiClient.ClusterApi.ListDbAuditExporterConfig(ctx, accountId, projectId, clusterId).Execute()
 	if err != nil {
-		return dbAuditExporterConfig, false, GetApiErrorDetails(err)
+		return dbAuditLoggingConfig, false, GetApiErrorDetails(err)
 	}
 
-	if len(listDbAuditExporterConfigResp.GetData()) == 0 {
-		return dbAuditExporterConfig, false, fmt.Sprintf("Unable to find DB Audit Log configuration cluster association with for cluster %s", clusterId)
+	if len(listDbAuditLoggingConfigResp.GetData()) < 1 {
+		return dbAuditLoggingConfig, false, fmt.Sprintf("Unable to find DB Audit Logging configuration for cluster with ID %s", clusterId)
 	}
 
-	dbAuditExporterConfig.AccountID.Value = accountId
-	dbAuditExporterConfig.ProjectID.Value = projectId
+	dbAuditLoggingConfig.AccountID.Value = accountId
+	dbAuditLoggingConfig.ProjectID.Value = projectId
 
 	// Each cluster will have only one DB Audit Log config. We do not have a GET API for this feature
-	data := listDbAuditExporterConfigResp.GetData()[0]
+	data := listDbAuditLoggingConfigResp.GetData()[0]
 
 	info := data.GetInfo()
 	spec := data.GetSpec()
 
-	dbAuditExporterConfig.ConfigID.Value = info.Id
-	dbAuditExporterConfig.ClusterID.Value = info.ClusterId
-	dbAuditExporterConfig.State.Value = string(info.State)
-	dbAuditExporterConfig.ExporterID.Value = spec.ExporterId
+	dbAuditLoggingConfig.ConfigID.Value = info.Id
+	dbAuditLoggingConfig.ClusterID.Value = info.ClusterId
+	dbAuditLoggingConfig.State.Value = string(info.State)
+	dbAuditLoggingConfig.IntegrationId.Value = spec.ExporterId
+
+	integrationData, err := GetIntegrationByID(accountId, projectId, spec.ExporterId, apiClient)
+	if err != nil {
+		return dbAuditLoggingConfig, false, fmt.Sprintf("Failed to read DB Audit Logging configuration for cluster with ID %s", clusterId)
+	}
+	dbAuditLoggingConfig.IntegrationName.Value = integrationData.GetInfo().Id
 
 	var logSettings LogSettings
 	logSettings.LogCatalog.Value = *spec.YsqlConfig.LogSettings.LogCatalog
@@ -333,36 +344,36 @@ func resourceAssociateDbAuditExporterConfigClusterRead(ctx context.Context, acco
 	ysqlConfig.StatementClasses = statementClasses
 	ysqlConfig.LogSettings = &logSettings
 
-	dbAuditExporterConfig.YsqlConfig = &ysqlConfig
+	dbAuditLoggingConfig.YsqlConfig = &ysqlConfig
 
-	return dbAuditExporterConfig, true, ""
+	return dbAuditLoggingConfig, true, ""
 }
 
-func getIDsFromAssocDbAuditExporterConfigClusterState(ctx context.Context, state tfsdk.State, dbe *DbAuditExporterConfig) {
-	state.GetAttribute(ctx, path.Root("account_id"), &dbe.AccountID)
-	state.GetAttribute(ctx, path.Root("project_id"), &dbe.ProjectID)
-	state.GetAttribute(ctx, path.Root("exporter_id"), &dbe.ConfigID)
-	state.GetAttribute(ctx, path.Root("cluster_id"), &dbe.ClusterID)
-	state.GetAttribute(ctx, path.Root("config_id"), &dbe.ConfigID)
+func getIDsFromDbAuditLoggingState(ctx context.Context, state tfsdk.State, dbAuditLoggingConfig *DbAuditLoggingConfig) {
+	state.GetAttribute(ctx, path.Root("account_id"), &dbAuditLoggingConfig.AccountID)
+	state.GetAttribute(ctx, path.Root("project_id"), &dbAuditLoggingConfig.ProjectID)
+	state.GetAttribute(ctx, path.Root("exporter_id"), &dbAuditLoggingConfig.IntegrationId)
+	state.GetAttribute(ctx, path.Root("cluster_id"), &dbAuditLoggingConfig.ClusterID)
+	state.GetAttribute(ctx, path.Root("config_id"), &dbAuditLoggingConfig.ConfigID)
 }
 
 // Read Db Audit log configuration for a cluster
-func (r resourceAssociateDbAuditExportConfigCluster) Read(ctx context.Context, req tfsdk.ReadResourceRequest, resp *tfsdk.ReadResourceResponse) {
-	var state DbAuditExporterConfig
+func (r resourceDbAuditLogging) Read(ctx context.Context, req tfsdk.ReadResourceRequest, resp *tfsdk.ReadResourceResponse) {
+	var state DbAuditLoggingConfig
 
-	getIDsFromAssocDbAuditExporterConfigClusterState(ctx, req.State, &state)
+	getIDsFromDbAuditLoggingState(ctx, req.State, &state)
 	apiClient := r.p.client
 	accountId := state.AccountID.Value
 	projectId := state.ProjectID.Value
 	clusterId := state.ClusterID.Value
 
-	dbe, readOK, message := resourceAssociateDbAuditExporterConfigClusterRead(ctx, accountId, projectId, clusterId, apiClient)
+	dbalConfig, readOK, message := resourceDbAuditLoggingRead(ctx, accountId, projectId, clusterId, apiClient)
 	if !readOK {
-		resp.Diagnostics.AddError("Unable to read the state of Db Audit log configuration associated with the cluster", message)
+		resp.Diagnostics.AddError(fmt.Sprintf("Unable to read the state of Db Audit logging on the cluster %s", state.ClusterName.Value), message)
 		return
 	}
 
-	diags := resp.State.Set(ctx, &dbe)
+	diags := resp.State.Set(ctx, &dbalConfig)
 	resp.Diagnostics.Append(diags...)
 	if resp.Diagnostics.HasError() {
 		return
@@ -370,31 +381,34 @@ func (r resourceAssociateDbAuditExportConfigCluster) Read(ctx context.Context, r
 }
 
 // Update Db Audit log configuration for a cluster
-func (r resourceAssociateDbAuditExportConfigCluster) Update(ctx context.Context, req tfsdk.UpdateResourceRequest, resp *tfsdk.UpdateResourceResponse) {
-	var plan DbAuditExporterConfig
+func (r resourceDbAuditLogging) Update(ctx context.Context, req tfsdk.UpdateResourceRequest, resp *tfsdk.UpdateResourceResponse) {
+	var plan DbAuditLoggingConfig
 	resp.Diagnostics.Append(getClusterDbAuditLogConfigPlan(ctx, req.Plan, &plan)...)
 	if resp.Diagnostics.HasError() {
-		tflog.Debug(ctx, "Error while getting the plan for the Db audit exporter config")
+		tflog.Debug(ctx, "Error while getting the plan for the Db audit logging configuration")
 		return
 	}
 
 	apiClient := r.p.client
-	var state DbAuditExporterConfig
-	getIDsFromAssocDbAuditExporterConfigClusterState(ctx, req.State, &state)
+	var state DbAuditLoggingConfig
+	getIDsFromDbAuditLoggingState(ctx, req.State, &state)
 	accountId := state.AccountID.Value
 	projectId := state.ProjectID.Value
 	clusterId := state.ClusterID.Value
 	configId := state.ConfigID.Value
+	clusterName := state.ClusterName.Value
 
-	dbAuditExporterConfigSpec, err := getDbAuditExporterConfigSpec(plan)
+	errMsg := fmt.Sprintf("Failed to update the DB Audit Logging configuration on cluster %s", clusterName)
+
+	dbAuditLoggingConfigSpec, err := getDbAuditLoggingConfigSpec(plan)
 	if err != nil {
-		resp.Diagnostics.AddError("Unable to obtain DbAuditExporterConfigSpec", GetApiErrorDetails(err))
+		resp.Diagnostics.AddError(errMsg, err.Error())
 		return
 	}
 
-	_, _, err = apiClient.ClusterApi.UpdateDbAuditExporterConfig(ctx, accountId, projectId, clusterId, configId).DbAuditExporterConfigSpec(*dbAuditExporterConfigSpec).Execute()
+	_, _, err = apiClient.ClusterApi.UpdateDbAuditExporterConfig(ctx, accountId, projectId, clusterId, configId).DbAuditExporterConfigSpec(*dbAuditLoggingConfigSpec).Execute()
 	if err != nil {
-		resp.Diagnostics.AddError(fmt.Sprintf("Unable to update DB Audit Log Configuration with id: %s for cluster: %s", configId, clusterId), GetApiErrorDetails(err))
+		resp.Diagnostics.AddError(errMsg, GetApiErrorDetails(err))
 		return
 	}
 
@@ -407,25 +421,24 @@ func (r resourceAssociateDbAuditExportConfigCluster) Update(ctx context.Context,
 				return nil
 			}
 			if asState == string(openapiclient.TASKACTIONSTATEENUM_FAILED) {
-				return fmt.Errorf("unable to update DB Audit Log configuration, operation failed")
+				return fmt.Errorf(errMsg)
 			}
 		} else {
-			return retry.RetryableError(errors.New("unable to check DB Audit Log configuration update status: " + message))
+			return retry.RetryableError(errors.New("Unable to check DB Audit Logging configuration update status: " + message))
 		}
-		return retry.RetryableError(errors.New("DB Audit Log configuration is being updated"))
+		return retry.RetryableError(errors.New("Updating the DB Audit Logging configuration on the cluster: " + clusterName))
 	})
 
 	if err != nil {
-		errorSummary := fmt.Sprintf("Unable to update DB Audit Log configuration with id: %s to cluster: %s", configId, clusterId)
-		resp.Diagnostics.AddError(errorSummary, "The operation timed out waiting for DB Audit Log configuration update operation.")
+		resp.Diagnostics.AddError(errMsg, "The operation timed out waiting for DB Audit Log configuration update operation.")
 		return
 	}
 
-	plan.ConfigID.Value = configId
+	// plan.ConfigID.Value = configId
 
-	dae, readOK, readErrMsg := resourceAssociateDbAuditExporterConfigClusterRead(ctx, accountId, projectId, clusterId, apiClient)
+	dae, readOK, readErrMsg := resourceDbAuditLoggingRead(ctx, accountId, projectId, clusterId, apiClient)
 	if !readOK {
-		resp.Diagnostics.AddError("Unable to read the state of Db Audit log config cluster association ", readErrMsg)
+		resp.Diagnostics.AddError(fmt.Sprintf("Unable to read the state of Db Audit logging on cluster %s ", clusterName), readErrMsg)
 		return
 	}
 
@@ -437,18 +450,21 @@ func (r resourceAssociateDbAuditExportConfigCluster) Update(ctx context.Context,
 }
 
 // Delete Db Audit Export Config for a cluster
-func (r resourceAssociateDbAuditExportConfigCluster) Delete(ctx context.Context, req tfsdk.DeleteResourceRequest, resp *tfsdk.DeleteResourceResponse) {
+func (r resourceDbAuditLogging) Delete(ctx context.Context, req tfsdk.DeleteResourceRequest, resp *tfsdk.DeleteResourceResponse) {
 	apiClient := r.p.client
-	var state DbAuditExporterConfig
-	getIDsFromAssocDbAuditExporterConfigClusterState(ctx, req.State, &state)
+	var state DbAuditLoggingConfig
+	getIDsFromDbAuditLoggingState(ctx, req.State, &state)
 	accountId := state.AccountID.Value
 	projectId := state.ProjectID.Value
 	clusterId := state.ClusterID.Value
 	configId := state.ConfigID.Value
+	clusterName := state.ClusterName.Value
+
+	errMsg := fmt.Sprintf("Failed to disable DB Audit Logging on cluster %s", clusterName)
 
 	_, _, err := apiClient.ClusterApi.RemoveDbAuditLogExporterConfig(ctx, accountId, projectId, clusterId, configId).Execute()
 	if err != nil {
-		resp.Diagnostics.AddError(fmt.Sprintf("Unable to remove DB audit log exporter config with id: %s for cluster: %s", configId, clusterId), GetApiErrorDetails(err))
+		resp.Diagnostics.AddError(errMsg, GetApiErrorDetails(err))
 		return
 	}
 
@@ -464,26 +480,25 @@ func (r resourceAssociateDbAuditExportConfigCluster) Delete(ctx context.Context,
 				return ErrFailedTask
 			}
 		} else {
-			return retry.RetryableError(errors.New("Unable to check DB audit log config removal: " + message))
+			return retry.RetryableError(errors.New("Unable to check the status of DB audit logging: " + message))
 		}
-		return retry.RetryableError(errors.New("DB Audit log configuration is being removed from the cluster"))
+		return retry.RetryableError(errors.New("Disabling DB Audit Logging on the cluster " + clusterName))
 	})
 
 	if err != nil {
-		resp.Diagnostics.AddError("Unable to remove Db Audit log export config from the cluster ", "The operation timed out waiting for DB Audit Log configuration removal to complete.")
+		resp.Diagnostics.AddError(errMsg, "The operation timed out waiting for DB Audit Log configuration removal to complete.")
 		return
 	}
 
 	resp.State.RemoveResource(ctx)
-
 }
 
 // Import
-func (r resourceAssociateDbAuditExportConfigCluster) ImportState(ctx context.Context, req tfsdk.ImportResourceStateRequest, resp *tfsdk.ImportResourceStateResponse) {
+func (r resourceDbAuditLogging) ImportState(ctx context.Context, req tfsdk.ImportResourceStateRequest, resp *tfsdk.ImportResourceStateResponse) {
 	resp.Diagnostics.AddError("Import is not currently supported", "")
 }
 
-func GetTelemetryProviderByID(accountId string, projectId string, telemetryProviderId string, apiClient *openapiclient.APIClient) (*openapiclient.TelemetryProviderData, error) {
+func GetIntegrationByID(accountId string, projectId string, integrationId string, apiClient *openapiclient.APIClient) (*openapiclient.TelemetryProviderData, error) {
 	resp, _, err := apiClient.TelemetryProviderApi.ListTelemetryProviders(context.Background(), accountId, projectId).Execute()
 
 	if err != nil {
@@ -491,10 +506,10 @@ func GetTelemetryProviderByID(accountId string, projectId string, telemetryProvi
 	}
 
 	for _, tpData := range resp.Data {
-		if tpData.GetInfo().Id == telemetryProviderId {
+		if tpData.GetInfo().Id == integrationId {
 			return &tpData, nil
 		}
 	}
 
-	return nil, fmt.Errorf("could not find telemetry provider with id: %s", telemetryProviderId)
+	return nil, fmt.Errorf("Could not find integration with id: %s", integrationId)
 }

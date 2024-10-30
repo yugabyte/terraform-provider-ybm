@@ -163,3 +163,29 @@ func getAPIError(b []byte) *openapiclient.ApiError {
 	}
 	return apiError
 }
+
+func GetIntegrationDataByName(ctx context.Context, apiClient *openapiclient.APIClient, accountId string, projectId string, integrationName string) (*openapiclient.TelemetryProviderData, error) {
+	integrationConfig, _, err := apiClient.TelemetryProviderApi.
+		ListTelemetryProviders(ctx, accountId, projectId).
+		Name(integrationName).
+		Execute()
+
+	// Convert to JSON and print
+	// tflog.Info(ctx, fmt.Sprintf("Integration Name %s", integrationName))
+	// jsonBytes, err := json.MarshalIndent(integrationConfig, "", "    ")
+	// if err != nil {
+	// 	tflog.Error(ctx, fmt.Sprintf("Failed to convert config to JSON: %v", err))
+	// } else {
+	// 	tflog.Info(ctx, fmt.Sprintf("Integration Config JSON:\n%s", string(jsonBytes)))
+	// }
+
+	if err != nil {
+		return nil, fmt.Errorf(GetApiErrorDetails(err))
+	}
+
+	if len(integrationConfig.GetData()) < 1 {
+		return nil, fmt.Errorf("Integration %s not found", integrationName)
+	}
+
+	return &integrationConfig.GetData()[0], nil
+}

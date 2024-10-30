@@ -321,14 +321,16 @@ type AssociateMetricsExporterCluster struct {
 	ClusterName types.String `tfsdk:"cluster_name"`
 }
 
-type DbAuditExporterConfig struct {
-	AccountID  types.String `tfsdk:"account_id"`
-	ProjectID  types.String `tfsdk:"project_id"`
-	ClusterID  types.String `tfsdk:"cluster_id"`
-	ExporterID types.String `tfsdk:"exporter_id"`
-	YsqlConfig *YsqlConfig  `tfsdk:"ysql_config"`
-	State      types.String `tfsdk:"state"`
-	ConfigID   types.String `tfsdk:"config_id"`
+type DbAuditLoggingConfig struct {
+	AccountID       types.String `tfsdk:"account_id"`
+	ProjectID       types.String `tfsdk:"project_id"`
+	ClusterID       types.String `tfsdk:"cluster_id"`
+	ClusterName     types.String `tfsdk:"cluster_name"`
+	IntegrationId   types.String `tfsdk:"exporter_id"`
+	IntegrationName types.String `tfsdk:"integration_name"`
+	YsqlConfig      *YsqlConfig  `tfsdk:"ysql_config"`
+	State           types.String `tfsdk:"state"`
+	ConfigID        types.String `tfsdk:"config_id"`
 }
 
 type YsqlConfig struct {

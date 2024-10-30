@@ -1,5 +1,5 @@
 # Cluster associated with a db audit log configuration
-resource "ybm_associate_db_audit_export_config_cluster" "sample-db-audit-log-config" {
+resource "ybm_db_audit_logging" "sample-db-audit-log-config" {
   cluster_id  = "<Your-Cluster-Id>"
   exporter_id = "<Your-Exported-Id>"
   ysql_config = {
