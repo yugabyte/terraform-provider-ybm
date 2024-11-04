@@ -374,7 +374,6 @@ type DbQueryLoggingConfig struct {
 	AccountID       types.String `tfsdk:"account_id"`
 	ProjectID       types.String `tfsdk:"project_id"`
 	ClusterID       types.String `tfsdk:"cluster_id"`
-	ClusterName     types.String `tfsdk:"cluster_name"`
 	IntegrationName types.String `tfsdk:"integration_name"`
 	State           types.String `tfsdk:"state"`
 	ConfigID        types.String `tfsdk:"config_id"`
