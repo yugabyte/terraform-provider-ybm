@@ -23,11 +23,6 @@ func (r resourceDbQueryLoggingType) GetSchema(ctx context.Context) (tfsdk.Schema
 	return tfsdk.Schema{
 		Description: `The resource to manage DB query logging configuration for a cluster in YugabyteDB Aeon.`,
 		Attributes: map[string]tfsdk.Attribute{
-			"cluster_name": {
-				Description: "Name of the cluster with which this DB query logging config will be associated.",
-				Type:        types.StringType,
-				Required:    true,
-			},
 			"integration_name": {
 				Description: "Name of the integration for this DB query logging configuration.",
 				Type:        types.StringType,
@@ -46,10 +41,10 @@ func (r resourceDbQueryLoggingType) GetSchema(ctx context.Context) (tfsdk.Schema
 			"cluster_id": {
 				Description: "ID of the cluster with which this DB query logging config will be associated.",
 				Type:        types.StringType,
-				Computed:    true,
+				Required:    true,
 			},
 			"config_id": {
-				Description: "ID of the DB query logging configuration.",
+				Description: "ID of the DB query logging configuration. Created automatically when enabling DB query logs.",
 				Type:        types.StringType,
 				Computed:    true,
 			},
@@ -137,7 +132,7 @@ type resourceDbQueryLogging struct {
 
 func getConfigFromPlan(ctx context.Context, plan tfsdk.Plan, config *DbQueryLoggingConfig) diag.Diagnostics {
 	var diags diag.Diagnostics
-	diags.Append(plan.GetAttribute(ctx, path.Root("cluster_name"), &config.ClusterName)...)
+	diags.Append(plan.GetAttribute(ctx, path.Root("cluster_id"), &config.ClusterID)...)
 	diags.Append(plan.GetAttribute(ctx, path.Root("integration_name"), &config.IntegrationName)...)
 	diags.Append(plan.GetAttribute(ctx, path.Root("log_config"), &config.LogConfig)...)
 	return diags
@@ -146,7 +141,6 @@ func getConfigFromPlan(ctx context.Context, plan tfsdk.Plan, config *DbQueryLogg
 func getConfigFromState(ctx context.Context, state tfsdk.State, config *DbQueryLoggingConfig) {
 	state.GetAttribute(ctx, path.Root("account_id"), &config.AccountID)
 	state.GetAttribute(ctx, path.Root("project_id"), &config.ProjectID)
-	state.GetAttribute(ctx, path.Root("cluster_name"), &config.ClusterName)
 	state.GetAttribute(ctx, path.Root("cluster_id"), &config.ClusterID)
 	state.GetAttribute(ctx, path.Root("integration_name"), &config.IntegrationName)
 	state.GetAttribute(ctx, path.Root("config_id"), &config.ConfigID)
@@ -245,7 +239,7 @@ func getIntegrationId(ctx context.Context, accountId string, projectId string, i
 
 // Read latest state/config of a resource from Backend and convert it to model
 func resourceRead(ctx context.Context, accountId string, projectId string, clusterId string,
-	clusterName string, integrationName string,
+	integrationName string,
 	apiClient *openapiclient.APIClient) (dbQueryLoggingConfig DbQueryLoggingConfig, readOK bool, errMsg string) {
 
 	spec, ok, errMsg := getPgLogExporterConfig(ctx, accountId, projectId, clusterId, apiClient)
@@ -271,7 +265,6 @@ func resourceRead(ctx context.Context, accountId string, projectId string, clust
 		AccountID:       types.String{Value: accountId},
 		ProjectID:       types.String{Value: projectId},
 		ClusterID:       types.String{Value: clusterId},
-		ClusterName:     types.String{Value: clusterName},
 		IntegrationName: types.String{Value: integrationName},
 		State:           types.String{Value: string(spec.Info.State)},
 		ConfigID:        types.String{Value: spec.Info.Id},
@@ -288,10 +281,9 @@ func (r resourceDbQueryLogging) Read(ctx context.Context, req tfsdk.ReadResource
 	accountId := state.AccountID.Value
 	projectId := state.ProjectID.Value
 	clusterId := state.ClusterID.Value
-	clusterName := state.ClusterName.Value
 	integrationName := state.IntegrationName.Value
 
-	dbqlConfig, readOK, message := resourceRead(ctx, accountId, projectId, clusterId, clusterName, integrationName, apiClient)
+	dbqlConfig, readOK, message := resourceRead(ctx, accountId, projectId, clusterId, integrationName, apiClient)
 	if !readOK {
 		resp.Diagnostics.AddError("Unable to read the state of Db Query log configuration associated with the cluster", message)
 		return
@@ -319,11 +311,10 @@ func (r resourceDbQueryLogging) Update(ctx context.Context, req tfsdk.UpdateReso
 	accountId := stateConfig.AccountID.Value
 	projectId := stateConfig.ProjectID.Value
 	clusterId := stateConfig.ClusterID.Value
-	clusterName := stateConfig.ClusterName.Value
 	configId := stateConfig.ConfigID.Value
 
-	if planConfig.ClusterName != stateConfig.ClusterName {
-		errMsg := "Field cluster_name cannot be changed after resource creation"
+	if planConfig.ClusterID != stateConfig.ClusterID {
+		errMsg := "Field cluster_id cannot be changed after resource creation"
 		resp.Diagnostics.AddError(errMsg, errMsg)
 		return
 	}
@@ -354,7 +345,7 @@ func (r resourceDbQueryLogging) Update(ctx context.Context, req tfsdk.UpdateReso
 
 	_, _, err = apiClient.ClusterApi.UpdatePgLogExporterConfig(ctx, accountId, projectId, clusterId, configId).PgLogExporterConfigSpec(*apiConfigSpec).Execute()
 	if err != nil {
-		resp.Diagnostics.AddError(fmt.Sprintf("Unable to update DB query logging config for cluster %s", clusterName), GetApiErrorDetails(err))
+		resp.Diagnostics.AddError(fmt.Sprintf("Unable to update DB query logging config for cluster %s", clusterId), GetApiErrorDetails(err))
 		return
 	}
 
@@ -383,8 +374,7 @@ func (r resourceDbQueryLogging) Update(ctx context.Context, req tfsdk.UpdateReso
 
 	planConfig.ConfigID.Value = configId
 
-	dbqlConfig, readOK, readErrMsg := resourceRead(ctx, accountId, projectId, clusterId,
-		clusterName, integrationName, apiClient)
+	dbqlConfig, readOK, readErrMsg := resourceRead(ctx, accountId, projectId, clusterId, integrationName, apiClient)
 	if !readOK {
 		resp.Diagnostics.AddError("Unable to read the state of Db Query log config ", readErrMsg)
 		return
@@ -405,11 +395,10 @@ func (r resourceDbQueryLogging) Delete(ctx context.Context, req tfsdk.DeleteReso
 	projectId := state.ProjectID.Value
 	clusterId := state.ClusterID.Value
 	configId := state.ConfigID.Value
-	clusterName := state.ClusterName.Value
 
 	_, err := apiClient.ClusterApi.RemovePgLogExporterConfig(ctx, accountId, projectId, clusterId, configId).Execute()
 	if err != nil {
-		resp.Diagnostics.AddError(fmt.Sprintf("Unable to remove DB query logging config for cluster: %s", clusterName), GetApiErrorDetails(err))
+		resp.Diagnostics.AddError(fmt.Sprintf("Unable to remove DB query logging config for cluster: %s", clusterId), GetApiErrorDetails(err))
 		return
 	}
 
@@ -474,17 +463,10 @@ func (r resourceDbQueryLogging) Create(ctx context.Context, req tfsdk.CreateReso
 		return
 	}
 
-	var clusterId string
+	var clusterId = config.ClusterID.Value
 	var integrationId string
 
-	clusterName := config.ClusterName.Value
 	integrationName := config.IntegrationName.Value
-	clusterData, err := GetClusterByNameorID(accountId, projectId, "", clusterName, apiClient)
-	if err != nil {
-		resp.Diagnostics.AddError("Unable to fetch cluster details for cluster: "+clusterName, GetApiErrorDetails(err))
-		return
-	}
-	clusterId = clusterData.Info.Id
 
 	integrationConfig, ok, errMsg := getIntegrationId(ctx, accountId, projectId, integrationName, apiClient)
 	if !ok {
@@ -534,7 +516,7 @@ func (r resourceDbQueryLogging) Create(ctx context.Context, req tfsdk.CreateReso
 	}
 
 	dbQueryLoggingConfig, readOK, readErrMsg := resourceRead(ctx, accountId, projectId,
-		clusterId, clusterName, integrationName, apiClient)
+		clusterId, integrationName, apiClient)
 	if !readOK {
 		resp.Diagnostics.AddError("Unable to read the state of Db Query log config for the cluster ", readErrMsg)
 		return
