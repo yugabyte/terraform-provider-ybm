@@ -18,6 +18,15 @@ import (
 
 type resourceDbAuditLoggingType struct{}
 
+var validStatementClasses = []string{
+	string(openapiclient.DBAUDITYSQLSTATMENTCLASSESENUM_READ),
+	string(openapiclient.DBAUDITYSQLSTATMENTCLASSESENUM_WRITE),
+	string(openapiclient.DBAUDITYSQLSTATMENTCLASSESENUM_ROLE),
+	string(openapiclient.DBAUDITYSQLSTATMENTCLASSESENUM_FUNCTION),
+	string(openapiclient.DBAUDITYSQLSTATMENTCLASSESENUM_DDL),
+	string(openapiclient.DBAUDITYSQLSTATMENTCLASSESENUM_MISC),
+}
+
 func (r resourceDbAuditLoggingType) GetSchema(ctx context.Context) (tfsdk.Schema, diag.Diagnostics) {
 	return tfsdk.Schema{
 		Description: `The resource to manage DB Audit log configuration for a cluster in YugabyteDB Aeon.`,
@@ -35,12 +44,12 @@ func (r resourceDbAuditLoggingType) GetSchema(ctx context.Context) (tfsdk.Schema
 			"cluster_name": {
 				Description: "Name of the cluster from which DB Audit Logs will be exported",
 				Type:        types.StringType,
-				Required:    true,
+				Computed:    true,
 			},
 			"cluster_id": {
 				Description: "ID of the cluster from which DB Audit Logs will be exported",
 				Type:        types.StringType,
-				Computed:    true,
+				Required:    true,
 			},
 			"integration_name": {
 				Description: "Name of the integration to which the DB Audit Logs will be exported",
@@ -73,41 +82,41 @@ func (r resourceDbAuditLoggingType) GetSchema(ctx context.Context) (tfsdk.Schema
 					},
 					"log_settings": {
 						Description: "Db Audit Ysql Log Settings",
-						Optional:    true,
-						Computed:    true,
+						Required:    true,
 						Attributes: tfsdk.SingleNestedAttributes(map[string]tfsdk.Attribute{
 							"log_catalog": {
-								Description: "These system catalog tables record system (as opposed to user) activity, such as metadata lookups and from third-party tools performing lookups",
+								Description: "These system catalog tables record system (as opposed to user) activity, such as metadata lookups and from third-party tools performing lookups. Defaults to 'true' if not specified.",
 								Type:        types.BoolType,
 								Optional:    true,
 								Computed:    true,
 							},
 							"log_client": {
-								Description: "Enable this option to echo log messages directly to clients such as ysqlsh and psql",
+								Description: "Enable this option to echo log messages directly to clients such as ysqlsh and psql. Defaults to 'true' if not specified",
 								Type:        types.BoolType,
 								Optional:    true,
 								Computed:    true,
 							},
 							"log_relation": {
-								Description: "Create separate log entries for each relation (TABLE, VIEW, and so on) referenced in a SELECT or DML statement",
+								Description: "Create separate log entries for each relation (TABLE, VIEW, and so on) referenced in a SELECT or DML statement. Defaults to 'false' if not specified",
 								Type:        types.BoolType,
 								Optional:    true,
 								Computed:    true,
 							},
 							"log_level": {
-								Description: "Sets the severity level of logs written to clients",
+								Description: "Sets the severity level of logs written to clients. Defaults to 'LOG' if not specified",
 								Type:        types.StringType,
 								Optional:    true,
+								Computed:    true,
 								Validators:  []tfsdk.AttributeValidator{stringvalidator.OneOf("NOTICE", "WARNING", "LOG")},
 							},
 							"log_statement_once": {
-								Description: "Enable this setting to only include statement text and parameters for the first entry for a statement or sub-statement combination",
+								Description: "Enable this setting to only include statement text and parameters for the first entry for a statement or sub-statement combination. Defaults to 'false' if not specified",
 								Type:        types.BoolType,
 								Optional:    true,
 								Computed:    true,
 							},
 							"log_parameter": {
-								Description: "Include the parameters that were passed with the statement in the logs",
+								Description: "Include the parameters that were passed with the statement in the logs. Defaults to 'false' if not specified",
 								Type:        types.BoolType,
 								Optional:    true,
 								Computed:    true,
@@ -133,7 +142,7 @@ type resourceDbAuditLogging struct {
 func getClusterDbAuditLogConfigPlan(ctx context.Context, plan tfsdk.Plan, dbAuditLoggingConfig *DbAuditLoggingConfig) diag.Diagnostics {
 	var diags diag.Diagnostics
 	diags.Append(plan.GetAttribute(ctx, path.Root("ysql_config"), &dbAuditLoggingConfig.YsqlConfig)...)
-	diags.Append(plan.GetAttribute(ctx, path.Root("cluster_name"), &dbAuditLoggingConfig.ClusterName)...)
+	diags.Append(plan.GetAttribute(ctx, path.Root("cluster_id"), &dbAuditLoggingConfig.ClusterID)...)
 	diags.Append(plan.GetAttribute(ctx, path.Root("integration_name"), &dbAuditLoggingConfig.IntegrationName)...)
 	return diags
 }
@@ -145,7 +154,6 @@ func GetDbAuditYsqlLogSettings(plan DbAuditLoggingConfig) (*openapiclient.DbAudi
 		return dbAuditLogSettings, nil
 	}
 
-	// Set values from plan.YsqlConfig.LogSettings
 	if !plan.YsqlConfig.LogSettings.LogCatalog.IsNull() && !plan.YsqlConfig.LogSettings.LogCatalog.IsUnknown() {
 		dbAuditLogSettings.SetLogCatalog(plan.YsqlConfig.LogSettings.LogCatalog.Value)
 	}
@@ -171,11 +179,14 @@ func GetDbAuditYsqlLogSettings(plan DbAuditLoggingConfig) (*openapiclient.DbAudi
 
 func convertToDbAuditYsqlStatmentClassesEnum(statementClasses []types.String) ([]openapiclient.DbAuditYsqlStatmentClassesEnum, error) {
 	var result []openapiclient.DbAuditYsqlStatmentClassesEnum
+	if len(statementClasses) < 1 {
+		return result, fmt.Errorf("At least one statement class must be provided")
+	}
 
 	for _, statement := range statementClasses {
 		statementClassEnum, err := openapiclient.NewDbAuditYsqlStatmentClassesEnumFromValue(statement.Value)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("Invalid statement class '%s'. Valid values are: %v", statement.Value, validStatementClasses)
 		}
 		result = append(result, *statementClassEnum)
 	}
@@ -213,7 +224,7 @@ func (r resourceDbAuditLogging) Create(ctx context.Context, req tfsdk.CreateReso
 
 	resp.Diagnostics.Append(getClusterDbAuditLogConfigPlan(ctx, req.Plan, &plan)...)
 	if resp.Diagnostics.HasError() {
-		tflog.Debug(ctx, "Error while getting the plan for the DB audit log configuration")
+		tflog.Error(ctx, "Error while getting the plan for the DB audit log configuration")
 		return
 	}
 
@@ -230,22 +241,21 @@ func (r resourceDbAuditLogging) Create(ctx context.Context, req tfsdk.CreateReso
 		return
 	}
 
+	clusterId := plan.ClusterID.Value
+	clusterData, err := GetClusterByNameorID(accountId, projectId, clusterId, "", apiClient)
+	if err != nil {
+		resp.Diagnostics.AddError(fmt.Sprintf("Unable to fetch details of cluster with id : %s", clusterId), GetApiErrorDetails(err))
+		return
+	}
+	clusterName := clusterData.Spec.Name
+	errMsg := fmt.Sprintf("Failed to enable DB Audit Logging on cluster %s", clusterName)
+
 	integrationData, err := GetIntegrationDataByName(ctx, apiClient, accountId, projectId, plan.IntegrationName.Value)
 	if err != nil {
 		resp.Diagnostics.AddError("Unable to fetch integration details", err.Error())
 		return
 	}
 	plan.IntegrationId.Value = integrationData.GetInfo().Id
-
-	errMsg := fmt.Sprintf("Failed to enable DB Audit Logging on cluster %s", plan.ClusterName)
-
-	clusterName := plan.ClusterName.Value
-	clusterData, err := GetClusterByNameorID(accountId, projectId, "", clusterName, apiClient)
-	if err != nil {
-		resp.Diagnostics.AddError(errMsg, GetApiErrorDetails(err))
-		return
-	}
-	clusterId := clusterData.GetInfo().Id
 
 	dbAuditLoggingConfigSpec, err := getDbAuditLoggingConfigSpec(plan)
 	if err != nil {
@@ -281,12 +291,9 @@ func (r resourceDbAuditLogging) Create(ctx context.Context, req tfsdk.CreateReso
 		return
 	}
 
-	// configId := response.Data.Info.Id
-	// plan.ConfigID.Value = configId
-
-	dae, readOK, readErrMsg := resourceDbAuditLoggingRead(ctx, accountId, projectId, clusterId, apiClient)
+	dae, readOK, err := resourceDbAuditLoggingRead(ctx, accountId, projectId, clusterId, apiClient)
 	if !readOK {
-		resp.Diagnostics.AddError(fmt.Sprintf("Unable to read the state of Db Audit logging on cluster %s ", clusterName), readErrMsg)
+		resp.Diagnostics.AddError(fmt.Sprintf("Unable to read the state of Db Audit logging on cluster %s ", clusterName), err.Error())
 		return
 	}
 
@@ -297,14 +304,20 @@ func (r resourceDbAuditLogging) Create(ctx context.Context, req tfsdk.CreateReso
 	}
 }
 
-func resourceDbAuditLoggingRead(ctx context.Context, accountId string, projectId string, clusterId string, apiClient *openapiclient.APIClient) (dbAuditLoggingConfig DbAuditLoggingConfig, readOK bool, errMsg string) {
+func resourceDbAuditLoggingRead(ctx context.Context, accountId string, projectId string, clusterId string, apiClient *openapiclient.APIClient) (dbAuditLoggingConfig DbAuditLoggingConfig, readOK bool, error error) {
+	clusterData, err := GetClusterByNameorID(accountId, projectId, clusterId, "", apiClient)
+	if err != nil {
+		return dbAuditLoggingConfig, false, fmt.Errorf(GetApiErrorDetails(err))
+	}
+	clusterName := clusterData.GetSpec().Name
+
 	listDbAuditLoggingConfigResp, _, err := apiClient.ClusterApi.ListDbAuditExporterConfig(ctx, accountId, projectId, clusterId).Execute()
 	if err != nil {
-		return dbAuditLoggingConfig, false, GetApiErrorDetails(err)
+		return dbAuditLoggingConfig, false, fmt.Errorf(GetApiErrorDetails(err))
 	}
 
 	if len(listDbAuditLoggingConfigResp.GetData()) < 1 {
-		return dbAuditLoggingConfig, false, fmt.Sprintf("Unable to find DB Audit Logging configuration for cluster with ID %s", clusterId)
+		return dbAuditLoggingConfig, false, fmt.Errorf("Unable to find DB Audit Logging configuration for cluster %s", clusterName)
 	}
 
 	dbAuditLoggingConfig.AccountID.Value = accountId
@@ -320,12 +333,13 @@ func resourceDbAuditLoggingRead(ctx context.Context, accountId string, projectId
 	dbAuditLoggingConfig.ClusterID.Value = info.ClusterId
 	dbAuditLoggingConfig.State.Value = string(info.State)
 	dbAuditLoggingConfig.IntegrationId.Value = spec.ExporterId
+	dbAuditLoggingConfig.ClusterName.Value = clusterName
 
 	integrationData, err := GetIntegrationByID(accountId, projectId, spec.ExporterId, apiClient)
 	if err != nil {
-		return dbAuditLoggingConfig, false, fmt.Sprintf("Failed to read DB Audit Logging configuration for cluster with ID %s", clusterId)
+		return dbAuditLoggingConfig, false, fmt.Errorf(GetApiErrorDetails(err))
 	}
-	dbAuditLoggingConfig.IntegrationName.Value = integrationData.GetInfo().Id
+	dbAuditLoggingConfig.IntegrationName.Value = integrationData.GetSpec().Name
 
 	var logSettings LogSettings
 	logSettings.LogCatalog.Value = *spec.YsqlConfig.LogSettings.LogCatalog
@@ -346,13 +360,13 @@ func resourceDbAuditLoggingRead(ctx context.Context, accountId string, projectId
 
 	dbAuditLoggingConfig.YsqlConfig = &ysqlConfig
 
-	return dbAuditLoggingConfig, true, ""
+	return dbAuditLoggingConfig, true, nil
 }
 
 func getIDsFromDbAuditLoggingState(ctx context.Context, state tfsdk.State, dbAuditLoggingConfig *DbAuditLoggingConfig) {
 	state.GetAttribute(ctx, path.Root("account_id"), &dbAuditLoggingConfig.AccountID)
 	state.GetAttribute(ctx, path.Root("project_id"), &dbAuditLoggingConfig.ProjectID)
-	state.GetAttribute(ctx, path.Root("exporter_id"), &dbAuditLoggingConfig.IntegrationId)
+	state.GetAttribute(ctx, path.Root("integration_id"), &dbAuditLoggingConfig.IntegrationId)
 	state.GetAttribute(ctx, path.Root("cluster_id"), &dbAuditLoggingConfig.ClusterID)
 	state.GetAttribute(ctx, path.Root("config_id"), &dbAuditLoggingConfig.ConfigID)
 }
@@ -367,9 +381,9 @@ func (r resourceDbAuditLogging) Read(ctx context.Context, req tfsdk.ReadResource
 	projectId := state.ProjectID.Value
 	clusterId := state.ClusterID.Value
 
-	dbalConfig, readOK, message := resourceDbAuditLoggingRead(ctx, accountId, projectId, clusterId, apiClient)
+	dbalConfig, readOK, err := resourceDbAuditLoggingRead(ctx, accountId, projectId, clusterId, apiClient)
 	if !readOK {
-		resp.Diagnostics.AddError(fmt.Sprintf("Unable to read the state of Db Audit logging on the cluster %s", state.ClusterName.Value), message)
+		resp.Diagnostics.AddError(fmt.Sprintf("Unable to read the state of Db Audit logging on the cluster %s", state.ClusterName.Value), err.Error())
 		return
 	}
 
@@ -385,7 +399,7 @@ func (r resourceDbAuditLogging) Update(ctx context.Context, req tfsdk.UpdateReso
 	var plan DbAuditLoggingConfig
 	resp.Diagnostics.Append(getClusterDbAuditLogConfigPlan(ctx, req.Plan, &plan)...)
 	if resp.Diagnostics.HasError() {
-		tflog.Debug(ctx, "Error while getting the plan for the Db audit logging configuration")
+		tflog.Error(ctx, "Error while getting the plan for the Db audit logging configuration")
 		return
 	}
 
@@ -397,6 +411,10 @@ func (r resourceDbAuditLogging) Update(ctx context.Context, req tfsdk.UpdateReso
 	clusterId := state.ClusterID.Value
 	configId := state.ConfigID.Value
 	clusterName := state.ClusterName.Value
+
+	if plan.ClusterID != state.ClusterID {
+		resp.Diagnostics.AddError("'cluster_id' cannot be updated", "'cluster_id' cannot be updated when updating DB Audit Log configuration")
+	}
 
 	errMsg := fmt.Sprintf("Failed to update the DB Audit Logging configuration on cluster %s", clusterName)
 
@@ -434,11 +452,9 @@ func (r resourceDbAuditLogging) Update(ctx context.Context, req tfsdk.UpdateReso
 		return
 	}
 
-	// plan.ConfigID.Value = configId
-
-	dae, readOK, readErrMsg := resourceDbAuditLoggingRead(ctx, accountId, projectId, clusterId, apiClient)
+	dae, readOK, err := resourceDbAuditLoggingRead(ctx, accountId, projectId, clusterId, apiClient)
 	if !readOK {
-		resp.Diagnostics.AddError(fmt.Sprintf("Unable to read the state of Db Audit logging on cluster %s ", clusterName), readErrMsg)
+		resp.Diagnostics.AddError(fmt.Sprintf("Unable to read the state of Db Audit logging on cluster %s ", clusterName), err.Error())
 		return
 	}
 
@@ -449,7 +465,7 @@ func (r resourceDbAuditLogging) Update(ctx context.Context, req tfsdk.UpdateReso
 	}
 }
 
-// Delete Db Audit Export Config for a cluster
+// Delete Db Audit Log Configuration for a cluster
 func (r resourceDbAuditLogging) Delete(ctx context.Context, req tfsdk.DeleteResourceRequest, resp *tfsdk.DeleteResourceResponse) {
 	apiClient := r.p.client
 	var state DbAuditLoggingConfig
@@ -496,20 +512,4 @@ func (r resourceDbAuditLogging) Delete(ctx context.Context, req tfsdk.DeleteReso
 // Import
 func (r resourceDbAuditLogging) ImportState(ctx context.Context, req tfsdk.ImportResourceStateRequest, resp *tfsdk.ImportResourceStateResponse) {
 	resp.Diagnostics.AddError("Import is not currently supported", "")
-}
-
-func GetIntegrationByID(accountId string, projectId string, integrationId string, apiClient *openapiclient.APIClient) (*openapiclient.TelemetryProviderData, error) {
-	resp, _, err := apiClient.TelemetryProviderApi.ListTelemetryProviders(context.Background(), accountId, projectId).Execute()
-
-	if err != nil {
-		return nil, err
-	}
-
-	for _, tpData := range resp.Data {
-		if tpData.GetInfo().Id == integrationId {
-			return &tpData, nil
-		}
-	}
-
-	return nil, fmt.Errorf("Could not find integration with id: %s", integrationId)
 }

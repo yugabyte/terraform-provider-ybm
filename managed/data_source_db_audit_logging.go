@@ -34,17 +34,17 @@ func (r dataSourceDbAuditLoggingType) GetSchema(_ context.Context) (tfsdk.Schema
 			"cluster_name": {
 				Description: "Name of the cluster from which DB Audit Logs will be exported",
 				Type:        types.StringType,
-				Required:    true,
+				Computed:    true,
 			},
 			"cluster_id": {
 				Description: "ID of the cluster from which DB Audit Logs will be exported",
 				Type:        types.StringType,
-				Computed:    true,
+				Required:    true,
 			},
 			"integration_name": {
 				Description: "Name of the integration to which the DB Audit Logs will be exported",
 				Type:        types.StringType,
-				Required:    true,
+				Computed:    true,
 			},
 			"integration_id": {
 				Description: "ID of the integration to which the DB Audit Logs will be exported",
@@ -155,20 +155,10 @@ func (r dataSourceDbAuditLogging) Read(ctx context.Context, req tfsdk.ReadDataSo
 		return
 	}
 
-	// clusterId := dbAuditLoggingConfig.ClusterID.Value
-	clusterName := dbAuditLoggingConfig.ClusterName.Value
-	errMsg := fmt.Sprintf("Unable to read the state of Db Audit logging on cluster %s ", clusterName)
-
-	clusterData, err := GetClusterByNameorID(accountId, projectId, "", clusterName, apiClient)
-	if err != nil {
-		resp.Diagnostics.AddError(errMsg, GetApiErrorDetails(err))
-		return
-	}
-	clusterId := clusterData.GetInfo().Id
-
-	dbAuditLoggingConfig, readOK, message := resourceDbAuditLoggingRead(ctx, accountId, projectId, clusterId, apiClient)
+	clusterId := dbAuditLoggingConfig.ClusterID.Value
+	dbAuditLoggingConfig, readOK, err := resourceDbAuditLoggingRead(ctx, accountId, projectId, clusterId, apiClient)
 	if !readOK {
-		resp.Diagnostics.AddError(errMsg, message)
+		resp.Diagnostics.AddError(fmt.Sprintf("Unable to read the state of Db Audit logging on cluster %s ", clusterId), err.Error())
 		return
 	}
 

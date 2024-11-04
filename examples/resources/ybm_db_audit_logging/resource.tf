@@ -1,7 +1,7 @@
-# Cluster associated with a db audit log configuration
+# DB audit log configuration for a cluster
 resource "ybm_db_audit_logging" "sample-db-audit-log-config" {
-  cluster_id  = "<Your-Cluster-Id>"
-  exporter_id = "<Your-Exported-Id>"
+  cluster_id       = "<Your-Cluster-Id>"
+  integration_name = "<Your-Integration-Name>"
   ysql_config = {
     log_settings = {
       log_catalog        = true

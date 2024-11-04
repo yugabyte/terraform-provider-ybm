@@ -326,7 +326,7 @@ type DbAuditLoggingConfig struct {
 	ProjectID       types.String `tfsdk:"project_id"`
 	ClusterID       types.String `tfsdk:"cluster_id"`
 	ClusterName     types.String `tfsdk:"cluster_name"`
-	IntegrationId   types.String `tfsdk:"exporter_id"`
+	IntegrationId   types.String `tfsdk:"integration_id"`
 	IntegrationName types.String `tfsdk:"integration_name"`
 	YsqlConfig      *YsqlConfig  `tfsdk:"ysql_config"`
 	State           types.String `tfsdk:"state"`
