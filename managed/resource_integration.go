@@ -30,14 +30,6 @@ func (r resourceIntegrationType) GetSchema(_ context.Context) (tfsdk.Schema, dia
 }
 
 func (r resourceIntegrationType) getSchemaAttributes() map[string]tfsdk.Attribute {
-	attributes := r.createBaseAttributes()
-	r.addFeatureFlaggedIntegrations(attributes)
-	r.addPathValidators(attributes)
-
-	return attributes
-}
-
-func (r resourceIntegrationType) createBaseAttributes() map[string]tfsdk.Attribute {
 	return map[string]tfsdk.Attribute{
 		"account_id": {
 			Description: "The ID of the account this integration belongs to.",
@@ -59,7 +51,12 @@ func (r resourceIntegrationType) createBaseAttributes() map[string]tfsdk.Attribu
 			Type:        types.StringType,
 			Required:    true,
 		},
-		"type": r.getTypeAttribute(),
+		"type": {
+			Description: "Defines different exporter destination types.",
+			Type:        types.StringType,
+			Required:    true,
+			Validators:  []tfsdk.AttributeValidator{stringvalidator.OneOf("DATADOG", "GRAFANA", "SUMOLOGIC", "GOOGLECLOUD")},
+		},
 		"is_valid": {
 			Description: "Signifies whether the integration configuration is valid or not",
 			Type:        types.BoolType,
@@ -68,6 +65,7 @@ func (r resourceIntegrationType) createBaseAttributes() map[string]tfsdk.Attribu
 		"datadog_spec": {
 			Description: "The specifications of a Datadog integration.",
 			Optional:    true,
+			Validators:  onlyContainsPath("datadog_spec"),
 			Attributes: tfsdk.SingleNestedAttributes(map[string]tfsdk.Attribute{
 				"api_key": {
 					Description: "Datadog Api Key",
@@ -85,6 +83,7 @@ func (r resourceIntegrationType) createBaseAttributes() map[string]tfsdk.Attribu
 		"grafana_spec": {
 			Description: "The specifications of a Grafana integration.",
 			Optional:    true,
+			Validators:  onlyContainsPath("grafana_spec"),
 			Attributes: tfsdk.SingleNestedAttributes(map[string]tfsdk.Attribute{
 				"access_policy_token": {
 					Description: "Grafana Access Policy Token",
@@ -112,6 +111,7 @@ func (r resourceIntegrationType) createBaseAttributes() map[string]tfsdk.Attribu
 		"sumologic_spec": {
 			Description: "The specifications of a Sumo Logic integration.",
 			Optional:    true,
+			Validators:  onlyContainsPath("sumologic_spec"),
 			Attributes: tfsdk.SingleNestedAttributes(map[string]tfsdk.Attribute{
 				"access_id": {
 					Description: "Sumo Logic Access Key ID",
@@ -133,14 +133,10 @@ func (r resourceIntegrationType) createBaseAttributes() map[string]tfsdk.Attribu
 				},
 			}),
 		},
-	}
-}
-
-func (r resourceIntegrationType) addFeatureFlaggedIntegrations(attributes map[string]tfsdk.Attribute) {
-	if fflags.IsFeatureFlagEnabled(fflags.GOOGLECLOUD_INTEGRATION_ENABLED) {
-		attributes["googlecloud_spec"] = tfsdk.Attribute{
+		"googlecloud_spec": {
 			Description: "The specifications of a Google Cloud integration.",
 			Optional:    true,
+			Validators:  onlyContainsPath("googlecloud_spec"),
 			Attributes: tfsdk.SingleNestedAttributes(map[string]tfsdk.Attribute{
 				"type": {
 					Description: "Service Account Type",
@@ -199,42 +195,6 @@ func (r resourceIntegrationType) addFeatureFlaggedIntegrations(attributes map[st
 					Optional:    true,
 				},
 			}),
-		}
-	}
-
-	// Add more feature-flagged integrations here in the future
-}
-
-func (r resourceIntegrationType) addPathValidators(attributes map[string]tfsdk.Attribute) {
-	specPaths := []string{"datadog_spec", "grafana_spec", "sumologic_spec"}
-	if fflags.IsFeatureFlagEnabled(fflags.GOOGLECLOUD_INTEGRATION_ENABLED) {
-		specPaths = append(specPaths, "googlecloud_spec")
-	}
-
-	// Add more feature-flagged spec paths here in the future
-
-	for _, path := range specPaths {
-		if attr, exists := attributes[path]; exists {
-			attr.Validators = append(attr.Validators, onlyContainsPath(path)...)
-			attributes[path] = attr
-		}
-	}
-}
-
-func (r resourceIntegrationType) getTypeAttribute() tfsdk.Attribute {
-	validTypes := []string{"DATADOG", "GRAFANA", "SUMOLOGIC"}
-	if fflags.IsFeatureFlagEnabled(fflags.GOOGLECLOUD_INTEGRATION_ENABLED) {
-		validTypes = append(validTypes, "GOOGLECLOUD")
-	}
-
-	// Add more feature-flagged integration types here in the future
-
-	return tfsdk.Attribute{
-		Description: "Defines different exporter destination types.",
-		Type:        types.StringType,
-		Required:    true,
-		Validators: []tfsdk.AttributeValidator{
-			stringvalidator.OneOf(validTypes...),
 		},
 	}
 }
@@ -301,25 +261,26 @@ func (r resourceIntegration) Create(ctx context.Context, req tfsdk.CreateResourc
 	}
 
 	var plan TelemetryProvider
-	var accountId, message string
-	var getAccountOK bool
 	resp.Diagnostics.Append(getIntegrationPlan(ctx, req.Plan, &plan)...)
 	if resp.Diagnostics.HasError() {
 		tflog.Debug(ctx, "Error while getting the plan for the integration")
 		return
 	}
 
-	if plan.ConfigID.Value != "" {
-		resp.Diagnostics.AddError(
-			"Config ID provided for new integration",
-			"The config_id was provided even though a new integration is being created. Please exclude this field in the provider when creating it.",
-		)
+	sinkType := plan.Type.Value
+	telemetrySinkTypeEnum, err := openapiclient.NewTelemetryProviderTypeEnumFromValue(strings.ToUpper(sinkType))
+	if err != nil {
+		resp.Diagnostics.AddError(GetApiErrorDetails(err), "")
+		return
+	}
+	if *telemetrySinkTypeEnum == openapiclient.TELEMETRYPROVIDERTYPEENUM_GOOGLECLOUD && !fflags.IsFeatureFlagEnabled(fflags.GOOGLECLOUD_INTEGRATION_ENABLED) {
+		resp.Diagnostics.AddError("Invalid integration type", "Integration of type GOOGLECLOUD is currently not supported")
 		return
 	}
 
 	apiClient := r.p.client
 
-	accountId, getAccountOK, message = getAccountId(ctx, apiClient)
+	accountId, getAccountOK, message := getAccountId(ctx, apiClient)
 	if !getAccountOK {
 		resp.Diagnostics.AddError("Unable to get account ID", message)
 		return
@@ -331,14 +292,7 @@ func (r resourceIntegration) Create(ctx context.Context, req tfsdk.CreateResourc
 		return
 	}
 
-	sinkType := plan.Type.Value
 	configName := plan.ConfigName.Value
-
-	telemetrySinkTypeEnum, err := openapiclient.NewTelemetryProviderTypeEnumFromValue(strings.ToUpper(sinkType))
-	if err != nil {
-		resp.Diagnostics.AddError(GetApiErrorDetails(err), "")
-		return
-	}
 
 	telemetryProviderSpec := openapiclient.NewTelemetryProviderSpec(configName, *telemetrySinkTypeEnum)
 
@@ -389,7 +343,7 @@ func (r resourceIntegration) Create(ctx context.Context, req tfsdk.CreateResourc
 	default:
 		//We should never go there normally
 		resp.Diagnostics.AddError(
-			"Only DATADOG, GRAFANA, SUMOLOGIC and GOOGLECLOUD are currently supported as a integrations",
+			"Only DATADOG, GRAFANA, SUMOLOGIC and GOOGLECLOUD are currently supported as an integrations",
 			"",
 		)
 		return
