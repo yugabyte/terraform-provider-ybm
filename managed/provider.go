@@ -164,6 +164,11 @@ func (p *provider) GetResources(_ context.Context) (map[string]tfsdk.ResourceTyp
 		resources["ybm_associate_db_audit_export_config_cluster"] = resourceAssociateDbAuditExportConfigClusterType{}
 	}
 
+	// Add DB Query logging resource only if the feature flag is enabled
+	if fflags.IsFeatureFlagEnabled(fflags.DB_QUERY_LOGGING) {
+		resources["ybm_database_query_logging"] = resourceDbQueryLoggingType{}
+	}
+
 	return resources, nil
 }
 
