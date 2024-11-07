@@ -161,7 +161,7 @@ func (p *provider) GetResources(_ context.Context) (map[string]tfsdk.ResourceTyp
 
 	// Add DB Audit logging resource only if the feature flag is enabled
 	if fflags.IsFeatureFlagEnabled(fflags.DB_AUDIT_LOGGING) {
-		resources["ybm_associate_db_audit_export_config_cluster"] = resourceAssociateDbAuditExportConfigClusterType{}
+		resources["ybm_db_audit_logging"] = resourceDbAuditLoggingType{}
 	}
 
 	// Add DB Query logging resource only if the feature flag is enabled
@@ -183,7 +183,7 @@ func (p *provider) GetDataSources(_ context.Context) (map[string]tfsdk.DataSourc
 
 	// Add DB Audit logging data source only if the feature flag is enabled
 	if fflags.IsFeatureFlagEnabled(fflags.DB_AUDIT_LOGGING) {
-		dataSources["ybm_associate_db_audit_export_config_cluster"] = dataSourceAssociateDbAuditExportConfigClusterType{}
+		dataSources["ybm_db_audit_logging"] = dataSourceDbAuditLoggingType{}
 	}
 
 	return dataSources, nil

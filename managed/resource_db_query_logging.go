@@ -221,22 +221,6 @@ func getPgLogExporterConfig(ctx context.Context, accountId string, projectId str
 	return &specList.Data[0], true, ""
 }
 
-func getIntegrationId(ctx context.Context, accountId string, projectId string, integrationName string, apiClient *openapiclient.APIClient) (data *openapiclient.TelemetryProviderData, ok bool, errMsg string) {
-	integrationConfig, _, err := apiClient.TelemetryProviderApi.
-		ListTelemetryProviders(ctx, accountId, projectId).
-		Name(integrationName).
-		Execute()
-	if err != nil {
-		return data, false, GetApiErrorDetails(err)
-	}
-
-	if len(integrationConfig.GetData()) < 1 {
-		errMsg := fmt.Sprintf("Integration %s not found", integrationName)
-		return nil, false, errMsg
-	}
-	return &integrationConfig.GetData()[0], true, ""
-}
-
 // Read latest state/config of a resource from Backend and convert it to model
 func resourceRead(ctx context.Context, accountId string, projectId string, clusterId string,
 	integrationName string,
@@ -327,9 +311,9 @@ func (r resourceDbQueryLogging) Update(ctx context.Context, req tfsdk.UpdateReso
 
 	integrationId := ""
 	if planConfig.IntegrationName != stateConfig.IntegrationName {
-		integrationConfig, ok, errMsg := getIntegrationId(ctx, accountId, projectId, integrationName, apiClient)
-		if !ok {
-			resp.Diagnostics.AddError("Unable to fetch integration details for: "+integrationName, errMsg)
+		integrationConfig, err := GetIntegrationDataByName(ctx, apiClient, accountId, projectId, integrationName)
+		if err != nil {
+			resp.Diagnostics.AddError("Unable to fetch integration details for: "+integrationName, err.Error())
 			return
 		}
 		integrationId = integrationConfig.Info.Id
@@ -468,9 +452,9 @@ func (r resourceDbQueryLogging) Create(ctx context.Context, req tfsdk.CreateReso
 
 	integrationName := config.IntegrationName.Value
 
-	integrationConfig, ok, errMsg := getIntegrationId(ctx, accountId, projectId, integrationName, apiClient)
-	if !ok {
-		resp.Diagnostics.AddError("Unable to fetch integration details for: "+integrationName, errMsg)
+	integrationConfig, err := GetIntegrationDataByName(ctx, apiClient, accountId, projectId, integrationName)
+	if err != nil {
+		resp.Diagnostics.AddError("Unable to fetch integration details for: "+integrationName, err.Error())
 		return
 	}
 	integrationId = integrationConfig.Info.Id
