@@ -163,3 +163,36 @@ func getAPIError(b []byte) *openapiclient.ApiError {
 	}
 	return apiError
 }
+
+func GetIntegrationDataByName(ctx context.Context, apiClient *openapiclient.APIClient, accountId string, projectId string, integrationName string) (*openapiclient.TelemetryProviderData, error) {
+	integrationConfig, _, err := apiClient.TelemetryProviderApi.
+		ListTelemetryProviders(ctx, accountId, projectId).
+		Name(integrationName).
+		Execute()
+
+	if err != nil {
+		return nil, fmt.Errorf(GetApiErrorDetails(err))
+	}
+
+	if len(integrationConfig.GetData()) < 1 {
+		return nil, fmt.Errorf("Integration %s not found", integrationName)
+	}
+
+	return &integrationConfig.GetData()[0], nil
+}
+
+func GetIntegrationByID(accountId string, projectId string, integrationId string, apiClient *openapiclient.APIClient) (*openapiclient.TelemetryProviderData, error) {
+	resp, _, err := apiClient.TelemetryProviderApi.ListTelemetryProviders(context.Background(), accountId, projectId).Limit(100).Execute()
+
+	if err != nil {
+		return nil, fmt.Errorf(GetApiErrorDetails(err))
+	}
+
+	for _, tpData := range resp.Data {
+		if tpData.GetInfo().Id == integrationId {
+			return &tpData, nil
+		}
+	}
+
+	return nil, fmt.Errorf("Could not find integration with id: %s", integrationId)
+}

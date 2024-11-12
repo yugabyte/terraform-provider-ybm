@@ -6,6 +6,7 @@ package managed
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
@@ -14,9 +15,9 @@ import (
 	//"github.com/hashicorp/terraform-plugin-log/tflog"
 )
 
-type dataSourceAssociateDbAuditExportConfigClusterType struct{}
+type dataSourceDbAuditLoggingType struct{}
 
-func (r dataSourceAssociateDbAuditExportConfigClusterType) GetSchema(_ context.Context) (tfsdk.Schema, diag.Diagnostics) {
+func (r dataSourceDbAuditLoggingType) GetSchema(_ context.Context) (tfsdk.Schema, diag.Diagnostics) {
 	return tfsdk.Schema{
 		Description: `The data source to fetch DB Audit log configuration for a cluster given cluster ID or configuration ID in YugabyteDB Aeon.`,
 		Attributes: map[string]tfsdk.Attribute{
@@ -30,13 +31,23 @@ func (r dataSourceAssociateDbAuditExportConfigClusterType) GetSchema(_ context.C
 				Type:        types.StringType,
 				Computed:    true,
 			},
+			"cluster_name": {
+				Description: "Name of the cluster from which DB Audit Logs will be exported",
+				Type:        types.StringType,
+				Computed:    true,
+			},
 			"cluster_id": {
-				Description: "ID of the cluster with which this DB Audit log config is associated ",
+				Description: "ID of the cluster from which DB Audit Logs will be exported",
 				Type:        types.StringType,
 				Required:    true,
 			},
-			"exporter_id": {
-				Description: "ID of the exporter to which the DB Audit logs will be exported",
+			"integration_name": {
+				Description: "Name of the integration to which the DB Audit Logs will be exported",
+				Type:        types.StringType,
+				Computed:    true,
+			},
+			"integration_id": {
+				Description: "ID of the integration to which the DB Audit Logs will be exported",
 				Type:        types.StringType,
 				Computed:    true,
 			},
@@ -46,7 +57,7 @@ func (r dataSourceAssociateDbAuditExportConfigClusterType) GetSchema(_ context.C
 				Computed:    true,
 			},
 			"state": {
-				Description: "The stutus of association of cluster with DB Audit log config",
+				Description: "The status of DB Audit Logging on the cluster",
 				Type:        types.StringType,
 				Computed:    true,
 			},
@@ -102,17 +113,17 @@ func (r dataSourceAssociateDbAuditExportConfigClusterType) GetSchema(_ context.C
 	}, nil
 }
 
-func (r dataSourceAssociateDbAuditExportConfigClusterType) NewDataSource(_ context.Context, p tfsdk.Provider) (tfsdk.DataSource, diag.Diagnostics) {
-	return dataSourceAssociateDbAuditExportConfigCluster{
+func (r dataSourceDbAuditLoggingType) NewDataSource(_ context.Context, p tfsdk.Provider) (tfsdk.DataSource, diag.Diagnostics) {
+	return dataSourceDbAuditLogging{
 		p: *(p.(*provider)),
 	}, nil
 }
 
-type dataSourceAssociateDbAuditExportConfigCluster struct {
+type dataSourceDbAuditLogging struct {
 	p provider
 }
 
-func (r dataSourceAssociateDbAuditExportConfigCluster) Read(ctx context.Context, req tfsdk.ReadDataSourceRequest, resp *tfsdk.ReadDataSourceResponse) {
+func (r dataSourceDbAuditLogging) Read(ctx context.Context, req tfsdk.ReadDataSourceRequest, resp *tfsdk.ReadDataSourceResponse) {
 
 	if !r.p.configured {
 		resp.Diagnostics.AddError(
@@ -122,9 +133,9 @@ func (r dataSourceAssociateDbAuditExportConfigCluster) Read(ctx context.Context,
 		return
 	}
 
-	var daeConfig DbAuditExporterConfig
+	var dbAuditLoggingConfig DbAuditLoggingConfig
 
-	diags := req.Config.Get(ctx, &daeConfig)
+	diags := req.Config.Get(ctx, &dbAuditLoggingConfig)
 	resp.Diagnostics.Append(diags...)
 	if resp.Diagnostics.HasError() {
 		return
@@ -144,20 +155,14 @@ func (r dataSourceAssociateDbAuditExportConfigCluster) Read(ctx context.Context,
 		return
 	}
 
-	clusterId := daeConfig.ClusterID.Value
-	_, err := GetClusterByNameorID(accountId, projectId, clusterId, "", apiClient)
-	if err != nil {
-		resp.Diagnostics.AddError("Unable to fetch DB Audit Log configuration data", GetApiErrorDetails(err))
-		return
-	}
-
-	daeConfig, readOK, message := resourceAssociateDbAuditExporterConfigClusterRead(ctx, accountId, projectId, clusterId, apiClient)
+	clusterId := dbAuditLoggingConfig.ClusterID.Value
+	dbAuditLoggingConfig, readOK, err := resourceDbAuditLoggingRead(ctx, accountId, projectId, clusterId, apiClient)
 	if !readOK {
-		resp.Diagnostics.AddError("Unable to read the DB Audit Log Configuration associated to the cluster", message)
+		resp.Diagnostics.AddError(fmt.Sprintf("Unable to read the state of Db Audit logging on cluster %s ", clusterId), err.Error())
 		return
 	}
 
-	diags = resp.State.Set(ctx, &daeConfig)
+	diags = resp.State.Set(ctx, &dbAuditLoggingConfig)
 	resp.Diagnostics.Append(diags...)
 	if resp.Diagnostics.HasError() {
 		return
