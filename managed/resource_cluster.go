@@ -6,6 +6,7 @@ package managed
 
 import (
 	"context"
+	"encoding/base64"
 	"errors"
 	"fmt"
 	"net/http"
@@ -29,6 +30,11 @@ import (
 )
 
 type resourceClusterType struct{}
+
+// Short function for Base64 encoding
+func b64(s string) string {
+	return base64.StdEncoding.EncodeToString([]byte(s))
+}
 
 func (r resourceClusterType) GetSchema(_ context.Context) (tfsdk.Schema, diag.Diagnostics) {
 	return tfsdk.Schema{
@@ -1018,16 +1024,17 @@ func (r resourceCluster) Create(ctx context.Context, req tfsdk.CreateResourceReq
 		return
 	}
 
-	credentials := openapiclient.NewCreateClusterRequestDbCredentialsWithDefaults()
-	if plan.Credentials.Username.IsNull() {
-		credentials.SetYsql(*openapiclient.NewDBCredentials(plan.Credentials.YSQLUsername.Value, plan.Credentials.YSQLPassword.Value))
-		credentials.SetYcql(*openapiclient.NewDBCredentials(plan.Credentials.YCQLUsername.Value, plan.Credentials.YCQLPassword.Value))
-	} else {
-		credentials.SetYsql(*openapiclient.NewDBCredentials(plan.Credentials.Username.Value, plan.Credentials.Password.Value))
-		credentials.SetYcql(*openapiclient.NewDBCredentials(plan.Credentials.Username.Value, plan.Credentials.Password.Value))
-	}
+	createClusterRequest := *openapiclient.NewCreateClusterRequest(*clusterSpec)
 
-	createClusterRequest := *openapiclient.NewCreateClusterRequest(*clusterSpec, *credentials)
+	encryptedCredentials := openapiclient.NewCreateClusterRequestEncryptedDbCredentialsWithDefaults()
+	if plan.Credentials.Username.IsNull() {
+		encryptedCredentials.SetYsql(*openapiclient.NewEncryptedDBCredentials(b64(plan.Credentials.YSQLUsername.Value), b64(plan.Credentials.YSQLPassword.Value)))
+		encryptedCredentials.SetYcql(*openapiclient.NewEncryptedDBCredentials(b64(plan.Credentials.YCQLUsername.Value), b64(plan.Credentials.YCQLPassword.Value)))
+	} else {
+		encryptedCredentials.SetYsql(*openapiclient.NewEncryptedDBCredentials(b64(plan.Credentials.Username.Value), b64(plan.Credentials.Password.Value)))
+		encryptedCredentials.SetYcql(*openapiclient.NewEncryptedDBCredentials(b64(plan.Credentials.Username.Value), b64(plan.Credentials.Password.Value)))
+	}
+	createClusterRequest.SetEncryptedDbCredentials(*encryptedCredentials)
 
 	var cmkSpec *openapiclient.CMKSpec
 
