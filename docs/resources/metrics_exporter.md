@@ -1,10 +1,13 @@
 ---
 page_title: "ybm_metrics_exporter Resource - YugabyteDB Aeon"
 description: |-
+  [DEPRECATED] Please use ybm_integration instead.
   The resource to create a metrics exporter config in YugabyteDB Aeon.
 ---
 
 # ybm_metrics_exporter (Resource)
+
+[DEPRECATED] Please use `ybm_integration` instead.
 
 The resource to create a metrics exporter config in YugabyteDB Aeon.
 
