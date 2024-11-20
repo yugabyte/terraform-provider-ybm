@@ -336,7 +336,7 @@ func (r resourceDbQueryLogging) Update(ctx context.Context, req tfsdk.UpdateReso
 	retryPolicy := retry.NewConstant(10 * time.Second)
 	retryPolicy = retry.WithMaxDuration(2400*time.Second, retryPolicy)
 	err = retry.Do(ctx, retryPolicy, func(ctx context.Context) error {
-		asState, readInfoOK, message := getTaskState(accountId, projectId, clusterId, openapiclient.ENTITYTYPEENUM_CLUSTER, openapiclient.TASKTYPEENUM_EDIT_DATABASE_QUERY_LOGGING, apiClient, ctx)
+		asState, readInfoOK, message := getTaskState(accountId, projectId, clusterId, openapiclient.ENTITYTYPEENUM_CLUSTER, openapiclient.TASKTYPEENUM_EDIT_DATABASE_QUERY_LOGGING, time.Time{}, apiClient, ctx)
 		if readInfoOK {
 			if asState == string(openapiclient.TASKACTIONSTATEENUM_SUCCEEDED) {
 				return nil
@@ -389,7 +389,7 @@ func (r resourceDbQueryLogging) Delete(ctx context.Context, req tfsdk.DeleteReso
 	retryPolicy := retry.NewConstant(10 * time.Second)
 	retryPolicy = retry.WithMaxDuration(2400*time.Second, retryPolicy)
 	err = retry.Do(ctx, retryPolicy, func(ctx context.Context) error {
-		asState, readInfoOK, message := getTaskState(accountId, projectId, clusterId, openapiclient.ENTITYTYPEENUM_CLUSTER, openapiclient.TASKTYPEENUM_DISABLE_DATABASE_QUERY_LOGGING, apiClient, ctx)
+		asState, readInfoOK, message := getTaskState(accountId, projectId, clusterId, openapiclient.ENTITYTYPEENUM_CLUSTER, openapiclient.TASKTYPEENUM_DISABLE_DATABASE_QUERY_LOGGING, time.Time{}, apiClient, ctx)
 		if readInfoOK {
 			if asState == string(openapiclient.TASKACTIONSTATEENUM_SUCCEEDED) {
 				return nil
@@ -479,7 +479,7 @@ func (r resourceDbQueryLogging) Create(ctx context.Context, req tfsdk.CreateReso
 	retryPolicy = retry.WithMaxDuration(2400*time.Second, retryPolicy)
 
 	err = retry.Do(ctx, retryPolicy, func(ctx context.Context) error {
-		asState, readInfoOK, message := getTaskState(accountId, projectId, clusterId, openapiclient.ENTITYTYPEENUM_CLUSTER, openapiclient.TASKTYPEENUM_ENABLE_DATABASE_QUERY_LOGGING, apiClient, ctx)
+		asState, readInfoOK, message := getTaskState(accountId, projectId, clusterId, openapiclient.ENTITYTYPEENUM_CLUSTER, openapiclient.TASKTYPEENUM_ENABLE_DATABASE_QUERY_LOGGING, time.Time{}, apiClient, ctx)
 		if readInfoOK {
 			if asState == string(openapiclient.TASKACTIONSTATEENUM_SUCCEEDED) {
 				return nil

@@ -332,13 +332,24 @@ func findNetworkAllowList(nals []openapiclient.NetworkAllowListData, name string
 }
 
 func getNetworkAllowListIdByName(ctx context.Context, accountId string, projectId string, networkAllowListName string, apiClient openapiclient.APIClient) (string, error) {
-	nalResp, resp, err := apiClient.NetworkApi.ListNetworkAllowLists(ctx, accountId, projectId).Execute()
-	if err != nil {
-		errMsg := getErrorMessage(resp, err)
-		return "", fmt.Errorf("Unable to read the Network allow list %s: %s", networkAllowListName, errMsg)
-	}
-	if nalData, ok := findNetworkAllowList(nalResp.Data, networkAllowListName); ok {
-		return nalData.Info.GetId(), nil
+	var continuationToken string
+	for {
+		request := apiClient.NetworkApi.ListNetworkAllowLists(ctx, accountId, projectId).Limit(100)
+		if continuationToken != "" {
+			request = request.ContinuationToken(continuationToken)
+		}
+		nalResp, resp, err := request.Execute()
+		if err != nil {
+			errMsg := getErrorMessage(resp, err)
+			return "", fmt.Errorf("Unable to read the Network allow list %s: %s", networkAllowListName, errMsg)
+		}
+		if nalData, ok := findNetworkAllowList(nalResp.Data, networkAllowListName); ok {
+			return nalData.Info.GetId(), nil
+		}
+		continuationToken = nalResp.Metadata.GetContinuationToken()
+		if continuationToken == "" {
+			break
+		}
 	}
 
 	return "", fmt.Errorf("NetworkAllowList %s not found", networkAllowListName)
@@ -389,7 +400,7 @@ func removeAllowListFromCluster(ctx context.Context, accountId string, projectId
 	retryPolicy := retry.NewConstant(10 * time.Second)
 	retryPolicy = retry.WithMaxDuration(2400*time.Second, retryPolicy)
 	err = retry.Do(ctx, retryPolicy, func(ctx context.Context) error {
-		asState, readInfoOK, message := getTaskState(accountId, projectId, clusterId, openapiclient.ENTITYTYPEENUM_CLUSTER, openapiclient.TASKTYPEENUM_EDIT_ALLOW_LIST, apiClient, ctx)
+		asState, readInfoOK, message := getTaskState(accountId, projectId, clusterId, openapiclient.ENTITYTYPEENUM_CLUSTER, openapiclient.TASKTYPEENUM_EDIT_ALLOW_LIST, time.Time{}, apiClient, ctx)
 		if readInfoOK {
 			if asState == string(openapiclient.TASKACTIONSTATEENUM_SUCCEEDED) {
 				return nil

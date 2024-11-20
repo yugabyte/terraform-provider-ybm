@@ -151,7 +151,7 @@ func (r resourceAssociateMetricsExporterCluster) Create(ctx context.Context, req
 	retryPolicy := retry.NewConstant(10 * time.Second)
 	retryPolicy = retry.WithMaxDuration(2400*time.Second, retryPolicy)
 	err = retry.Do(ctx, retryPolicy, func(ctx context.Context) error {
-		asState, readInfoOK, message := getTaskState(accountId, projectId, cluster.Info.Id, openapiclient.ENTITYTYPEENUM_CLUSTER, openapiclient.TASKTYPEENUM_CONFIGURE_METRICS_EXPORTER, apiClient, ctx)
+		asState, readInfoOK, message := getTaskState(accountId, projectId, cluster.Info.Id, openapiclient.ENTITYTYPEENUM_CLUSTER, openapiclient.TASKTYPEENUM_CONFIGURE_METRICS_EXPORTER, time.Time{}, apiClient, ctx)
 		if readInfoOK {
 			if asState == string(openapiclient.TASKACTIONSTATEENUM_SUCCEEDED) {
 				return nil
@@ -249,7 +249,7 @@ func (r resourceAssociateMetricsExporterCluster) Delete(ctx context.Context, req
 	retryPolicy := retry.NewConstant(10 * time.Second)
 	retryPolicy = retry.WithMaxDuration(2400*time.Second, retryPolicy)
 	err = retry.Do(ctx, retryPolicy, func(ctx context.Context) error {
-		asState, readInfoOK, message := getTaskState(accountId, projectId, clusterId, openapiclient.ENTITYTYPEENUM_CLUSTER, openapiclient.TASKTYPEENUM_REMOVE_METRICS_EXPORTER, apiClient, ctx)
+		asState, readInfoOK, message := getTaskState(accountId, projectId, clusterId, openapiclient.ENTITYTYPEENUM_CLUSTER, openapiclient.TASKTYPEENUM_REMOVE_METRICS_EXPORTER, time.Time{}, apiClient, ctx)
 		if readInfoOK {
 			if asState == string(openapiclient.TASKACTIONSTATEENUM_SUCCEEDED) {
 				return nil
@@ -281,7 +281,7 @@ func (r resourceAssociateMetricsExporterCluster) ImportState(ctx context.Context
 	resp.Diagnostics.AddError("Import is not currently supported", "")
 }
 
-func getTaskState(accountId string, projectId string, entityId string, entityType openapiclient.EntityTypeEnum, taskType openapiclient.TaskTypeEnum, apiclient *openapiclient.APIClient, ctx context.Context) (state string, readOK bool, errorMessage string) {
+func getTaskState(accountId string, projectId string, entityId string, entityType openapiclient.EntityTypeEnum, taskType openapiclient.TaskTypeEnum, thresholdTime time.Time, apiclient *openapiclient.APIClient, ctx context.Context) (state string, readOK bool, errorMessage string) {
 	currentStatus := "UNKNOWN"
 	apiRequest := apiclient.TaskApi.ListTasks(ctx, accountId).TaskType(taskType).ProjectId(projectId).EntityId(entityId).Limit(1)
 	if len(entityType) > 0 {
@@ -294,7 +294,6 @@ func getTaskState(accountId string, projectId string, entityId string, entityTyp
 
 	if v, ok := taskList.GetDataOk(); ok && v != nil {
 		c := taskList.GetData()
-
 		if len(c) == 0 {
 			tflog.Info(ctx, "No task found for this operation")
 			return "TASK_NOT_FOUND", true, ""
@@ -302,6 +301,19 @@ func getTaskState(accountId string, projectId string, entityId string, entityTyp
 
 		if len(c) > 0 {
 			if status, ok := c[0].GetInfoOk(); ok {
+				if !thresholdTime.IsZero() {
+					metadata := status.GetMetadata()
+					createdOnStr := metadata.GetCreatedOn()
+					createdOn, err := time.Parse("2006-01-02 15:04:05.000+00", createdOnStr)
+					if err != nil {
+						tflog.Info(ctx, "Error parsing task creation time")
+						return "", false, GetApiErrorDetails(err)
+					}
+					if thresholdTime.After(createdOn) {
+						tflog.Info(ctx, "No task found for this operation")
+						return "TASK_NOT_FOUND", true, ""
+					}
+				}
 				currentStatus = status.GetState()
 			}
 		}

@@ -1073,7 +1073,7 @@ func (r resourceCluster) Create(ctx context.Context, req tfsdk.CreateResourceReq
 	retryPolicy := retry.NewConstant(10 * time.Second)
 	retryPolicy = retry.WithMaxDuration(3600*time.Second, retryPolicy)
 	err = retry.Do(ctx, retryPolicy, func(ctx context.Context) error {
-		asState, readInfoOK, message := getTaskState(accountId, projectId, clusterId, openapiclient.ENTITYTYPEENUM_CLUSTER, openapiclient.TASKTYPEENUM_CREATE_CLUSTER, apiClient, ctx)
+		asState, readInfoOK, message := getTaskState(accountId, projectId, clusterId, openapiclient.ENTITYTYPEENUM_CLUSTER, openapiclient.TASKTYPEENUM_CREATE_CLUSTER, time.Time{}, apiClient, ctx)
 		if readInfoOK {
 			if asState == string(openapiclient.TASKACTIONSTATEENUM_SUCCEEDED) {
 				return nil
@@ -2013,7 +2013,7 @@ func (r resourceCluster) Update(ctx context.Context, req tfsdk.UpdateResourceReq
 		return
 	}
 	clusterSpec.ClusterInfo.SetVersion(int32(clusterVersion))
-
+	thresholdTime := time.Now().UTC()
 	_, response, err := apiClient.ClusterApi.EditCluster(context.Background(), accountId, projectId, clusterId).ClusterSpec(*clusterSpec).Execute()
 	if err != nil {
 		errMsg := getErrorMessage(response, err)
@@ -2044,7 +2044,7 @@ func (r resourceCluster) Update(ctx context.Context, req tfsdk.UpdateResourceReq
 	retryPolicy := retry.NewConstant(10 * time.Second)
 	retryPolicy = retry.WithMaxDuration(3600*time.Second, retryPolicy)
 	err = retry.Do(ctx, retryPolicy, func(ctx context.Context) error {
-		asState, readInfoOK, message := getTaskState(accountId, projectId, clusterId, openapiclient.ENTITYTYPEENUM_CLUSTER, openapiclient.TASKTYPEENUM_EDIT_CLUSTER, apiClient, ctx)
+		asState, readInfoOK, message := getTaskState(accountId, projectId, clusterId, openapiclient.ENTITYTYPEENUM_CLUSTER, openapiclient.TASKTYPEENUM_EDIT_CLUSTER, thresholdTime, apiClient, ctx)
 
 		tflog.Info(ctx, "Cluster edit operation in progress, state: "+asState)
 
@@ -2282,7 +2282,7 @@ func (r resourceCluster) Delete(ctx context.Context, req tfsdk.DeleteResourceReq
 	retryPolicy := retry.NewConstant(10 * time.Second)
 	retryPolicy = retry.WithMaxDuration(3600*time.Second, retryPolicy)
 	err = retry.Do(ctx, retryPolicy, func(ctx context.Context) error {
-		asState, readInfoOK, message := getTaskState(accountId, projectId, clusterId, openapiclient.ENTITYTYPEENUM_CLUSTER, openapiclient.TASKTYPEENUM_DELETE_CLUSTER, apiClient, ctx)
+		asState, readInfoOK, message := getTaskState(accountId, projectId, clusterId, openapiclient.ENTITYTYPEENUM_CLUSTER, openapiclient.TASKTYPEENUM_DELETE_CLUSTER, time.Time{}, apiClient, ctx)
 
 		tflog.Info(ctx, "Cluster delete operation in progress, state: "+asState)
 
