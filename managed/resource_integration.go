@@ -55,7 +55,7 @@ func (r resourceIntegrationType) getSchemaAttributes() map[string]tfsdk.Attribut
 			Description: "Defines different exporter destination types.",
 			Type:        types.StringType,
 			Required:    true,
-			Validators:  []tfsdk.AttributeValidator{stringvalidator.OneOf("DATADOG", "GRAFANA", "SUMOLOGIC", "GOOGLECLOUD")},
+			Validators:  []tfsdk.AttributeValidator{stringvalidator.OneOf("DATADOG", "GRAFANA", "SUMOLOGIC", "GOOGLECLOUD", "PROMETHEUS")},
 		},
 		"is_valid": {
 			Description: "Signifies whether the integration configuration is valid or not",
@@ -75,6 +75,18 @@ func (r resourceIntegrationType) getSchemaAttributes() map[string]tfsdk.Attribut
 				},
 				"site": {
 					Description: "Datadog site.",
+					Type:        types.StringType,
+					Required:    true,
+				},
+			}),
+		},
+		"prometheus_spec": {
+			Description: "The specifications of a Prometheus integration.",
+			Optional:    true,
+			Validators:  onlyContainsPath("prometheus_spec"),
+			Attributes: tfsdk.SingleNestedAttributes(map[string]tfsdk.Attribute{
+				"endpoint": {
+					Description: "Prometheus OTLP endpoint URL",
 					Type:        types.StringType,
 					Required:    true,
 				},
@@ -200,7 +212,7 @@ func (r resourceIntegrationType) getSchemaAttributes() map[string]tfsdk.Attribut
 }
 
 func onlyContainsPath(requiredPath string) []tfsdk.AttributeValidator {
-	allPaths := []string{"datadog_spec", "grafana_spec", "sumologic_spec", "googlecloud_spec"}
+	allPaths := []string{"datadog_spec", "grafana_spec", "sumologic_spec", "googlecloud_spec", "prometheus_spec"}
 	var validators []tfsdk.AttributeValidator
 
 	for _, specPath := range allPaths {
@@ -227,6 +239,7 @@ func getIntegrationPlan(ctx context.Context, plan tfsdk.Plan, tp *TelemetryProvi
 	diags.Append(plan.GetAttribute(ctx, path.Root("config_name"), &tp.ConfigName)...)
 	diags.Append(plan.GetAttribute(ctx, path.Root("type"), &tp.Type)...)
 	diags.Append(plan.GetAttribute(ctx, path.Root("datadog_spec"), &tp.DataDogSpec)...)
+	diags.Append(plan.GetAttribute(ctx, path.Root("prometheus_spec"), &tp.PrometheusSpec)...)
 	diags.Append(plan.GetAttribute(ctx, path.Root("grafana_spec"), &tp.GrafanaSpec)...)
 	diags.Append(plan.GetAttribute(ctx, path.Root("sumologic_spec"), &tp.SumoLogicSpec)...)
 	diags.Append(plan.GetAttribute(ctx, path.Root("googlecloud_spec"), &tp.GoogleCloudSpec)...)
@@ -241,6 +254,8 @@ func getIDsFromIntegrationState(ctx context.Context, state tfsdk.State, tp *Tele
 	switch tp.Type.Value {
 	case string(openapiclient.TELEMETRYPROVIDERTYPEENUM_DATADOG):
 		state.GetAttribute(ctx, path.Root("datadog_spec"), &tp.DataDogSpec)
+	case string(openapiclient.TELEMETRYPROVIDERTYPEENUM_PROMETHEUS):
+		state.GetAttribute(ctx, path.Root("prometheus_spec"), &tp.PrometheusSpec)
 	case string(openapiclient.TELEMETRYPROVIDERTYPEENUM_GRAFANA):
 		state.GetAttribute(ctx, path.Root("grafana_spec"), &tp.GrafanaSpec)
 	case string(openapiclient.TELEMETRYPROVIDERTYPEENUM_SUMOLOGIC):
@@ -306,6 +321,15 @@ func (r resourceIntegration) Create(ctx context.Context, req tfsdk.CreateResourc
 			return
 		}
 		telemetryProviderSpec.SetDatadogSpec(*openapiclient.NewDatadogTelemetryProviderSpec(plan.DataDogSpec.ApiKey.Value, plan.DataDogSpec.Site.Value))
+	case openapiclient.TELEMETRYPROVIDERTYPEENUM_PROMETHEUS:
+		if plan.PrometheusSpec == nil {
+			resp.Diagnostics.AddError(
+				"prometheus_spec is required for type PROMETHEUS",
+				"prometheus_spec is required when telemetry sink is PROMETHEUS. Please include this field in the resource",
+			)
+			return
+		}
+		telemetryProviderSpec.SetPrometheusSpec(*openapiclient.NewPrometheusTelemetryProviderSpec(plan.PrometheusSpec.Endpoint.Value))
 	case openapiclient.TELEMETRYPROVIDERTYPEENUM_GRAFANA:
 		if plan.GrafanaSpec == nil {
 			resp.Diagnostics.AddError(
@@ -431,6 +455,10 @@ func resourceTelemetryProviderRead(accountId string, projectId string, configID 
 		tp.DataDogSpec = &DataDogSpec{
 			ApiKey: userProvidedTpDetails.DataDogSpec.ApiKey,
 			Site:   types.String{Value: configSpec.DatadogSpec.Get().Site},
+		}
+	case openapiclient.TELEMETRYPROVIDERTYPEENUM_PROMETHEUS:
+		tp.PrometheusSpec = &PrometheusSpec{
+			Endpoint: types.String{Value: userProvidedTpDetails.PrometheusSpec.Endpoint.Value},
 		}
 	case openapiclient.TELEMETRYPROVIDERTYPEENUM_GRAFANA:
 		grafanaSpec := configSpec.GetGrafanaSpec()
