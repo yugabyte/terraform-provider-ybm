@@ -43,7 +43,7 @@ data "ybm_cluster" "example_cluster" {
 - `cluster_version` (String)
 - `cmk_spec` (Attributes) KMS Provider Configuration. (see [below for nested schema](#nestedatt--cmk_spec))
 - `credentials` (Attributes) (see [below for nested schema](#nestedatt--credentials))
-- `database_track` (String) The track of the database. Stable or Preview.
+- `database_track` (String) The track of the database. Stable or Early Access.
 - `desired_state` (String) The desired state of the database, Active or Paused. This parameter can be used to pause/resume a cluster.
 - `endpoints` (Attributes List) The endpoints used to connect to the cluster. (see [below for nested schema](#nestedatt--endpoints))
 - `fault_tolerance` (String) The fault tolerance of the cluster.

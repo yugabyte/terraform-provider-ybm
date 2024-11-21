@@ -466,10 +466,12 @@ and modify the backup schedule of the cluster being created.`,
 				Computed: true,
 			},
 			"database_track": {
-				Description: "The track of the database. Production or Innovation or Preview.",
+				Description: "The track of the database. Production or Innovation or Early Access.",
 				Type:        types.StringType,
 				Optional:    true,
 				Computed:    true,
+				Validators: []tfsdk.AttributeValidator{
+					stringvalidator.OneOfCaseInsensitive([]string{"Production","Innovation","Early Access"}...),
 			},
 			"desired_state": {
 				Description: "The desired state of the database, Active or Paused. This parameter can be used to pause/resume a cluster.",
