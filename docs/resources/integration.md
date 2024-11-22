@@ -66,6 +66,7 @@ resource "ybm_integration" "sumologic" {
 - `datadog_spec` (Attributes) The specifications of a Datadog integration. (see [below for nested schema](#nestedatt--datadog_spec))
 - `googlecloud_spec` (Attributes) The specifications of a Google Cloud integration. (see [below for nested schema](#nestedatt--googlecloud_spec))
 - `grafana_spec` (Attributes) The specifications of a Grafana integration. (see [below for nested schema](#nestedatt--grafana_spec))
+- `prometheus_spec` (Attributes) The specifications of a Prometheus integration. (see [below for nested schema](#nestedatt--prometheus_spec))
 - `sumologic_spec` (Attributes) The specifications of a Sumo Logic integration. (see [below for nested schema](#nestedatt--sumologic_spec))
 
 ### Read-Only
@@ -114,6 +115,14 @@ Required:
 - `instance_id` (String) Grafana InstanceID.
 - `org_slug` (String) Grafana OrgSlug.
 - `zone` (String) Grafana Zone.
+
+
+<a id="nestedatt--prometheus_spec"></a>
+### Nested Schema for `prometheus_spec`
+
+Required:
+
+- `endpoint` (String) Prometheus OTLP endpoint URL e.g. http://prometheus.yourcompany.com/api/v1/otlp
 
 
 <a id="nestedatt--sumologic_spec"></a>

@@ -278,6 +278,10 @@ type DataDogSpec struct {
 	ApiKey types.String `tfsdk:"api_key"`
 }
 
+type PrometheusSpec struct {
+	Endpoint types.String `tfsdk:"endpoint"`
+}
+
 type GrafanaSpec struct {
 	AccessTokenPolicy types.String `tfsdk:"access_policy_token"`
 	Zone              types.String `tfsdk:"zone"`
@@ -354,6 +358,7 @@ type TelemetryProvider struct {
 	ConfigName      types.String       `tfsdk:"config_name"`
 	Type            types.String       `tfsdk:"type"`
 	DataDogSpec     *DataDogSpec       `tfsdk:"datadog_spec"`
+	PrometheusSpec  *PrometheusSpec    `tfsdk:"prometheus_spec"`
 	GrafanaSpec     *GrafanaSpec       `tfsdk:"grafana_spec"`
 	SumoLogicSpec   *SumoLogicSpec     `tfsdk:"sumologic_spec"`
 	GoogleCloudSpec *GCPServiceAccount `tfsdk:"googlecloud_spec"`
