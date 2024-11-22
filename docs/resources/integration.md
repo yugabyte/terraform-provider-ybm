@@ -68,6 +68,7 @@ resource "ybm_integration" "sumologic" {
 - `grafana_spec` (Attributes) The specifications of a Grafana integration. (see [below for nested schema](#nestedatt--grafana_spec))
 - `prometheus_spec` (Attributes) The specifications of a Prometheus integration. (see [below for nested schema](#nestedatt--prometheus_spec))
 - `sumologic_spec` (Attributes) The specifications of a Sumo Logic integration. (see [below for nested schema](#nestedatt--sumologic_spec))
+- `victoriametrics_spec` (Attributes) The specifications of a VictoriaMetrics integration. (see [below for nested schema](#nestedatt--victoriametrics_spec))
 
 ### Read-Only
 
@@ -133,3 +134,11 @@ Required:
 - `access_id` (String, Sensitive) Sumo Logic Access Key ID
 - `access_key` (String, Sensitive) Sumo Logic Access Key
 - `installation_token` (String, Sensitive) A Sumo Logic installation token to export telemetry to Grafana with
+
+
+<a id="nestedatt--victoriametrics_spec"></a>
+### Nested Schema for `victoriametrics_spec`
+
+Required:
+
+- `endpoint` (String) VictoriaMetrics OTLP endpoint URL e.g. http://my-victoria-metrics-endpoint/opentelemetry

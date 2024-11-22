@@ -282,6 +282,10 @@ type PrometheusSpec struct {
 	Endpoint types.String `tfsdk:"endpoint"`
 }
 
+type VictoriaMetricsSpec struct {
+	Endpoint types.String `tfsdk:"endpoint"`
+}
+
 type GrafanaSpec struct {
 	AccessTokenPolicy types.String `tfsdk:"access_policy_token"`
 	Zone              types.String `tfsdk:"zone"`
@@ -352,17 +356,18 @@ type LogSettings struct {
 }
 
 type TelemetryProvider struct {
-	AccountID       types.String       `tfsdk:"account_id"`
-	ProjectID       types.String       `tfsdk:"project_id"`
-	ConfigID        types.String       `tfsdk:"config_id"`
-	ConfigName      types.String       `tfsdk:"config_name"`
-	Type            types.String       `tfsdk:"type"`
-	DataDogSpec     *DataDogSpec       `tfsdk:"datadog_spec"`
-	PrometheusSpec  *PrometheusSpec    `tfsdk:"prometheus_spec"`
-	GrafanaSpec     *GrafanaSpec       `tfsdk:"grafana_spec"`
-	SumoLogicSpec   *SumoLogicSpec     `tfsdk:"sumologic_spec"`
-	GoogleCloudSpec *GCPServiceAccount `tfsdk:"googlecloud_spec"`
-	IsValid         types.Bool         `tfsdk:"is_valid"`
+	AccountID           types.String         `tfsdk:"account_id"`
+	ProjectID           types.String         `tfsdk:"project_id"`
+	ConfigID            types.String         `tfsdk:"config_id"`
+	ConfigName          types.String         `tfsdk:"config_name"`
+	Type                types.String         `tfsdk:"type"`
+	DataDogSpec         *DataDogSpec         `tfsdk:"datadog_spec"`
+	PrometheusSpec      *PrometheusSpec      `tfsdk:"prometheus_spec"`
+	VictoriaMetricsSpec *VictoriaMetricsSpec `tfsdk:"victoriametrics_spec"`
+	GrafanaSpec         *GrafanaSpec         `tfsdk:"grafana_spec"`
+	SumoLogicSpec       *SumoLogicSpec       `tfsdk:"sumologic_spec"`
+	GoogleCloudSpec     *GCPServiceAccount   `tfsdk:"googlecloud_spec"`
+	IsValid             types.Bool           `tfsdk:"is_valid"`
 }
 
 type LogConfig struct {

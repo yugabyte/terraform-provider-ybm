@@ -55,7 +55,7 @@ func (r resourceIntegrationType) getSchemaAttributes() map[string]tfsdk.Attribut
 			Description: "Defines different exporter destination types.",
 			Type:        types.StringType,
 			Required:    true,
-			Validators:  []tfsdk.AttributeValidator{stringvalidator.OneOf("DATADOG", "GRAFANA", "SUMOLOGIC", "GOOGLECLOUD", "PROMETHEUS")},
+			Validators:  []tfsdk.AttributeValidator{stringvalidator.OneOf("DATADOG", "GRAFANA", "SUMOLOGIC", "GOOGLECLOUD", "PROMETHEUS", "VICTORIAMETRICS")},
 		},
 		"is_valid": {
 			Description: "Signifies whether the integration configuration is valid or not",
@@ -87,6 +87,18 @@ func (r resourceIntegrationType) getSchemaAttributes() map[string]tfsdk.Attribut
 			Attributes: tfsdk.SingleNestedAttributes(map[string]tfsdk.Attribute{
 				"endpoint": {
 					Description: "Prometheus OTLP endpoint URL e.g. http://prometheus.yourcompany.com/api/v1/otlp",
+					Type:        types.StringType,
+					Required:    true,
+				},
+			}),
+		},
+		"victoriametrics_spec": {
+			Description: "The specifications of a VictoriaMetrics integration.",
+			Optional:    true,
+			Validators:  onlyContainsPath("victoriametrics_spec"),
+			Attributes: tfsdk.SingleNestedAttributes(map[string]tfsdk.Attribute{
+				"endpoint": {
+					Description: "VictoriaMetrics OTLP endpoint URL e.g. http://my-victoria-metrics-endpoint/opentelemetry",
 					Type:        types.StringType,
 					Required:    true,
 				},
@@ -212,7 +224,7 @@ func (r resourceIntegrationType) getSchemaAttributes() map[string]tfsdk.Attribut
 }
 
 func onlyContainsPath(requiredPath string) []tfsdk.AttributeValidator {
-	allPaths := []string{"datadog_spec", "grafana_spec", "sumologic_spec", "googlecloud_spec", "prometheus_spec"}
+	allPaths := []string{"datadog_spec", "grafana_spec", "sumologic_spec", "googlecloud_spec", "prometheus_spec", "victoriametrics_spec"}
 	var validators []tfsdk.AttributeValidator
 
 	for _, specPath := range allPaths {
@@ -240,6 +252,7 @@ func getIntegrationPlan(ctx context.Context, plan tfsdk.Plan, tp *TelemetryProvi
 	diags.Append(plan.GetAttribute(ctx, path.Root("type"), &tp.Type)...)
 	diags.Append(plan.GetAttribute(ctx, path.Root("datadog_spec"), &tp.DataDogSpec)...)
 	diags.Append(plan.GetAttribute(ctx, path.Root("prometheus_spec"), &tp.PrometheusSpec)...)
+	diags.Append(plan.GetAttribute(ctx, path.Root("victoriametrics_spec"), &tp.VictoriaMetricsSpec)...)
 	diags.Append(plan.GetAttribute(ctx, path.Root("grafana_spec"), &tp.GrafanaSpec)...)
 	diags.Append(plan.GetAttribute(ctx, path.Root("sumologic_spec"), &tp.SumoLogicSpec)...)
 	diags.Append(plan.GetAttribute(ctx, path.Root("googlecloud_spec"), &tp.GoogleCloudSpec)...)
@@ -256,6 +269,8 @@ func getIDsFromIntegrationState(ctx context.Context, state tfsdk.State, tp *Tele
 		state.GetAttribute(ctx, path.Root("datadog_spec"), &tp.DataDogSpec)
 	case string(openapiclient.TELEMETRYPROVIDERTYPEENUM_PROMETHEUS):
 		state.GetAttribute(ctx, path.Root("prometheus_spec"), &tp.PrometheusSpec)
+	case string(openapiclient.TELEMETRYPROVIDERTYPEENUM_VICTORIAMETRICS):
+		state.GetAttribute(ctx, path.Root("victoriametrics_spec"), &tp.VictoriaMetricsSpec)
 	case string(openapiclient.TELEMETRYPROVIDERTYPEENUM_GRAFANA):
 		state.GetAttribute(ctx, path.Root("grafana_spec"), &tp.GrafanaSpec)
 	case string(openapiclient.TELEMETRYPROVIDERTYPEENUM_SUMOLOGIC):
@@ -330,6 +345,15 @@ func (r resourceIntegration) Create(ctx context.Context, req tfsdk.CreateResourc
 			return
 		}
 		telemetryProviderSpec.SetPrometheusSpec(*openapiclient.NewPrometheusTelemetryProviderSpec(plan.PrometheusSpec.Endpoint.Value))
+	case openapiclient.TELEMETRYPROVIDERTYPEENUM_VICTORIAMETRICS:
+		if plan.VictoriaMetricsSpec == nil {
+			resp.Diagnostics.AddError(
+				"victoriametrics_spec is required for type VICTORIAMETRICS",
+				"victoriametrics_spec is required when telemetry sink is VICTORIAMETRICS. Please include this field in the resource",
+			)
+			return
+		}
+		telemetryProviderSpec.SetVictoriametricsSpec(*openapiclient.NewVictoriaMetricsTelemetryProviderSpec(plan.VictoriaMetricsSpec.Endpoint.Value))
 	case openapiclient.TELEMETRYPROVIDERTYPEENUM_GRAFANA:
 		if plan.GrafanaSpec == nil {
 			resp.Diagnostics.AddError(
@@ -459,6 +483,10 @@ func resourceTelemetryProviderRead(accountId string, projectId string, configID 
 	case openapiclient.TELEMETRYPROVIDERTYPEENUM_PROMETHEUS:
 		tp.PrometheusSpec = &PrometheusSpec{
 			Endpoint: types.String{Value: userProvidedTpDetails.PrometheusSpec.Endpoint.Value},
+		}
+	case openapiclient.TELEMETRYPROVIDERTYPEENUM_VICTORIAMETRICS:
+		tp.VictoriaMetricsSpec = &VictoriaMetricsSpec{
+			Endpoint: types.String{Value: configSpec.VictoriametricsSpec.Get().Endpoint},
 		}
 	case openapiclient.TELEMETRYPROVIDERTYPEENUM_GRAFANA:
 		grafanaSpec := configSpec.GetGrafanaSpec()
