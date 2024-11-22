@@ -1267,11 +1267,6 @@ func (r resourceCluster) Create(ctx context.Context, req tfsdk.CreateResourceReq
 		cluster.RestoreBackupID.Null = true
 	}
 
-	// support backward compatibility during pause and resume flows
-	if strings.EqualFold(plan.DesiredState.Value, "Active") || strings.EqualFold(plan.DesiredState.Value, "Paused") {
-		cluster.DesiredState.Value = plan.DesiredState.Value
-	}
-
 	if fflags.IsFeatureFlagEnabled(fflags.CONNECTION_POOLING) && (strings.EqualFold(plan.DesiredConnectionPoolingState.Value, "Enabled") || strings.EqualFold(plan.DesiredConnectionPoolingState.Value, "Disabled")) {
 		cluster.DesiredConnectionPoolingState.Value = plan.DesiredConnectionPoolingState.Value
 	}
@@ -1709,7 +1704,11 @@ func resourceClusterRead(ctx context.Context, accountId string, projectId string
 	cluster.ProjectID.Value = projectId
 	cluster.ClusterID.Value = clusterId
 	cluster.ClusterName.Value = clusterResp.Data.Spec.Name
-	cluster.DesiredState.Value = string(clusterResp.Data.Info.GetState())
+	desiredState := "Active"
+	if strings.EqualFold("Paused", string(clusterResp.Data.Info.GetState())) {
+		desiredState = "Paused"
+	}
+	cluster.DesiredState.Value = desiredState
 	if fflags.IsFeatureFlagEnabled(fflags.CONNECTION_POOLING) {
 		if clusterResp.Data.Info.GetIsConnectionPoolingEnabled() {
 			cluster.DesiredConnectionPoolingState.Value = "Enabled"
@@ -1948,8 +1947,9 @@ func (r resourceCluster) Update(ctx context.Context, req tfsdk.UpdateResourceReq
 	clusterId := state.ClusterID.Value
 
 	// Resume the cluster if the desired state is set to 'Active' and it is paused currently
-	if strings.EqualFold(plan.DesiredState.Value, "Paused") && (plan.DesiredState.Unknown || strings.EqualFold(plan.DesiredState.Value, "Active")) {
+	if strings.EqualFold(state.DesiredState.Value, "Paused") && (plan.DesiredState.Unknown || strings.EqualFold(plan.DesiredState.Value, "Active")) {
 		// Resume the cluster
+		tflog.Debug(ctx, "The cluster has been resumed successfully")
 		err := resumeCluster(ctx, apiClient, accountId, projectId, clusterId)
 		if err != nil {
 			resp.Diagnostics.AddError("Cluster update failed: ", err.Error())
@@ -2250,12 +2250,8 @@ func (r resourceCluster) Update(ctx context.Context, req tfsdk.UpdateResourceReq
 	} else {
 		cluster.RestoreBackupID.Null = true
 	}
-	// support backward compatibility during pause and resume flows
-	if strings.EqualFold(plan.DesiredState.Value, "Active") || strings.EqualFold(plan.DesiredState.Value, "Paused") {
-		cluster.DesiredState.Value = plan.DesiredState.Value
-	}
 
-	if fflags.IsFeatureFlagEnabled(fflags.CONNECTION_POOLING) && (strings.EqualFold(plan.DesiredConnectionPoolingState.Value, "Enabled") || strings.EqualFold(plan.DesiredConnectionPoolingState.Value, "Enabled")) {
+	if fflags.IsFeatureFlagEnabled(fflags.CONNECTION_POOLING) && (strings.EqualFold(plan.DesiredConnectionPoolingState.Value, "Enabled") || strings.EqualFold(plan.DesiredConnectionPoolingState.Value, "Disabled")) {
 		cluster.DesiredConnectionPoolingState.Value = plan.DesiredConnectionPoolingState.Value
 	}
 
