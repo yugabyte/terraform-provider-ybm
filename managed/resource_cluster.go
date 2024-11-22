@@ -610,6 +610,7 @@ func createClusterSpec(ctx context.Context, apiClient *openapiclient.APIClient, 
 	clusterRegionInfo := []openapiclient.ClusterRegionInfo{}
 	totalNodes := 0
 	clusterType := plan.ClusterType.Value
+	isDefaultSet := false
 	for _, regionInfo := range plan.ClusterRegionInfo {
 		regionNodes := regionInfo.NumNodes.Value
 		totalNodes += int(regionNodes)
@@ -694,7 +695,11 @@ func createClusterSpec(ctx context.Context, apiClient *openapiclient.APIClient, 
 			info.SetIsAffinitized(regionInfo.IsPreferred.Value)
 		}
 		if !regionInfo.IsDefault.IsUnknown() && !regionInfo.IsDefault.IsNull() {
+			if isDefaultSet {
+				return nil, false, "Cluster must exactly one default region."
+			}
 			info.SetIsDefault(regionInfo.IsDefault.Value)
+			isDefaultSet = true
 		}
 		clusterRegionInfo = append(clusterRegionInfo, info)
 	}
