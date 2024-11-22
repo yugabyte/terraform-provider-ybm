@@ -25,6 +25,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
 	retry "github.com/sethvargo/go-retry"
+	"github.com/yugabyte/terraform-provider-ybm/managed/fflags"
 	"github.com/yugabyte/terraform-provider-ybm/managed/util"
 	openapiclient "github.com/yugabyte/yugabytedb-managed-go-client-internal"
 )
@@ -1271,7 +1272,7 @@ func (r resourceCluster) Create(ctx context.Context, req tfsdk.CreateResourceReq
 		cluster.DesiredState.Value = plan.DesiredState.Value
 	}
 
-	if strings.EqualFold(plan.DesiredConnectionPoolingState.Value, "Enabled") || strings.EqualFold(plan.DesiredConnectionPoolingState.Value, "Disabled") {
+	if fflags.IsFeatureFlagEnabled(fflags.CONNECTION_POOLING) && (strings.EqualFold(plan.DesiredConnectionPoolingState.Value, "Enabled") || strings.EqualFold(plan.DesiredConnectionPoolingState.Value, "Disabled")) {
 		cluster.DesiredConnectionPoolingState.Value = plan.DesiredConnectionPoolingState.Value
 	}
 
@@ -1709,11 +1710,14 @@ func resourceClusterRead(ctx context.Context, accountId string, projectId string
 	cluster.ClusterID.Value = clusterId
 	cluster.ClusterName.Value = clusterResp.Data.Spec.Name
 	cluster.DesiredState.Value = string(clusterResp.Data.Info.GetState())
-	if clusterResp.Data.Info.GetIsConnectionPoolingEnabled() {
-		cluster.DesiredConnectionPoolingState.Value = "Enabled"
-	} else {
-		cluster.DesiredConnectionPoolingState.Value = "Disabled"
+	if fflags.IsFeatureFlagEnabled(fflags.CONNECTION_POOLING) {
+		if clusterResp.Data.Info.GetIsConnectionPoolingEnabled() {
+			cluster.DesiredConnectionPoolingState.Value = "Enabled"
+		} else {
+			cluster.DesiredConnectionPoolingState.Value = "Disabled"
+		}
 	}
+
 	cluster.ClusterType.Value = string(*clusterResp.Data.Spec.ClusterInfo.ClusterType)
 	cluster.ClusterTier.Value = string(clusterResp.Data.Spec.ClusterInfo.ClusterTier)
 	cluster.ClusterVersion.Value = strconv.Itoa(int(clusterResp.Data.Spec.ClusterInfo.GetVersion()))
@@ -1953,9 +1957,12 @@ func (r resourceCluster) Update(ctx context.Context, req tfsdk.UpdateResourceReq
 		}
 	}
 
-	// Disable Connection Pooling if the desired state is set to 'Disabled and it is enabeld currently
-	if plan.DesiredConnectionPoolingState.Unknown || strings.EqualFold(plan.DesiredConnectionPoolingState.Value, "Disabled") {
+	tflog.Info(ctx, fmt.Sprintf("Existing Desired Connection Pooling State in State is %v", state.DesiredConnectionPoolingState.Value))
+
+	// Disable Connection Pooling if the desired state is set to 'Disabled' and it is enabled currently
+	if fflags.IsFeatureFlagEnabled(fflags.CONNECTION_POOLING) && !state.DesiredConnectionPoolingState.Unknown && strings.EqualFold(state.DesiredConnectionPoolingState.Value, "Enabled") && (plan.DesiredConnectionPoolingState.Unknown || strings.EqualFold(plan.DesiredConnectionPoolingState.Value, "Disabled")) {
 		// Disable Connection Pooling
+		tflog.Info(ctx, fmt.Sprintf("Existing Desired Connection Pooling State in State is %v", state.DesiredConnectionPoolingState.Value))
 		err := disableConnectionPooling(ctx, apiClient, accountId, projectId, clusterId)
 		if err != nil {
 			resp.Diagnostics.AddError("Disable connection pooling failed: ", err.Error())
@@ -2199,7 +2206,7 @@ func (r resourceCluster) Update(ctx context.Context, req tfsdk.UpdateResourceReq
 	}
 
 	// Enable connection pooling if the desired state is set to 'Enabled'
-	if !plan.DesiredConnectionPoolingState.Unknown && strings.EqualFold(plan.DesiredConnectionPoolingState.Value, "Enabled") {
+	if fflags.IsFeatureFlagEnabled(fflags.CONNECTION_POOLING) && !plan.DesiredConnectionPoolingState.Unknown && strings.EqualFold(plan.DesiredConnectionPoolingState.Value, "Enabled") {
 		err := enableConnectionPooling(ctx, apiClient, accountId, projectId, clusterId)
 		if err != nil {
 			resp.Diagnostics.AddError("Enabling connection pooling Failed: ", err.Error())
@@ -2248,7 +2255,7 @@ func (r resourceCluster) Update(ctx context.Context, req tfsdk.UpdateResourceReq
 		cluster.DesiredState.Value = plan.DesiredState.Value
 	}
 
-	if strings.EqualFold(plan.DesiredConnectionPoolingState.Value, "Enabled") || strings.EqualFold(plan.DesiredConnectionPoolingState.Value, "Enabled") {
+	if fflags.IsFeatureFlagEnabled(fflags.CONNECTION_POOLING) && (strings.EqualFold(plan.DesiredConnectionPoolingState.Value, "Enabled") || strings.EqualFold(plan.DesiredConnectionPoolingState.Value, "Enabled")) {
 		cluster.DesiredConnectionPoolingState.Value = plan.DesiredConnectionPoolingState.Value
 	}
 
