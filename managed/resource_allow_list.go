@@ -334,7 +334,7 @@ func findNetworkAllowList(nals []openapiclient.NetworkAllowListData, name string
 func getNetworkAllowListIdByName(ctx context.Context, accountId string, projectId string, networkAllowListName string, apiClient openapiclient.APIClient) (string, error) {
 	var continuationToken string
 	for {
-		request := apiClient.NetworkApi.ListNetworkAllowLists(ctx, accountId, projectId).Limit(100)
+		request := apiClient.NetworkApi.ListNetworkAllowLists(ctx, accountId, projectId)
 		if continuationToken != "" {
 			request = request.ContinuationToken(continuationToken)
 		}
