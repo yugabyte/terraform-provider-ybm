@@ -122,7 +122,7 @@ Required:
 
 Required:
 
-- `endpoint` (String) Prometheus OTLP endpoint URL
+- `endpoint` (String) Prometheus OTLP endpoint URL e.g. http://prometheus.yourcompany.com/api/v1/otlp
 
 
 <a id="nestedatt--sumologic_spec"></a>
