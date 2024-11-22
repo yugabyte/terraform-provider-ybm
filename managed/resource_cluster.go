@@ -1078,7 +1078,7 @@ func (r resourceCluster) Create(ctx context.Context, req tfsdk.CreateResourceReq
 	retryPolicy := retry.NewConstant(10 * time.Second)
 	retryPolicy = retry.WithMaxDuration(3600*time.Second, retryPolicy)
 	err = retry.Do(ctx, retryPolicy, func(ctx context.Context) error {
-		asState, readInfoOK, message := getTaskState(accountId, projectId, clusterId, openapiclient.ENTITYTYPEENUM_CLUSTER, openapiclient.TASKTYPEENUM_CREATE_CLUSTER, time.Time{}, apiClient, ctx)
+		asState, readInfoOK, message := getTaskState(accountId, projectId, clusterId, openapiclient.ENTITYTYPEENUM_CLUSTER, openapiclient.TASKTYPEENUM_CREATE_CLUSTER, apiClient, ctx)
 		if readInfoOK {
 			if asState == string(openapiclient.TASKACTIONSTATEENUM_SUCCEEDED) {
 				return nil
@@ -2018,7 +2018,6 @@ func (r resourceCluster) Update(ctx context.Context, req tfsdk.UpdateResourceReq
 		return
 	}
 	clusterSpec.ClusterInfo.SetVersion(int32(clusterVersion))
-	thresholdTime := time.Now().UTC()
 	_, response, err := apiClient.ClusterApi.EditCluster(context.Background(), accountId, projectId, clusterId).ClusterSpec(*clusterSpec).Execute()
 	if err != nil {
 		errMsg := getErrorMessage(response, err)
@@ -2046,20 +2045,15 @@ func (r resourceCluster) Update(ctx context.Context, req tfsdk.UpdateResourceReq
 	// Something similar will happen if changing the backup schedule or the CMK spec.
 	retries := 0
 	readClusterRetries := 0
+	checkNewTaskSpawned := true
 	retryPolicy := retry.NewConstant(10 * time.Second)
 	retryPolicy = retry.WithMaxDuration(3600*time.Second, retryPolicy)
 	err = retry.Do(ctx, retryPolicy, func(ctx context.Context) error {
-		asState, readInfoOK, message := getTaskState(accountId, projectId, clusterId, openapiclient.ENTITYTYPEENUM_CLUSTER, openapiclient.TASKTYPEENUM_EDIT_CLUSTER, thresholdTime, apiClient, ctx)
+		asState, readInfoOK, message := getTaskState(accountId, projectId, clusterId, openapiclient.ENTITYTYPEENUM_CLUSTER, openapiclient.TASKTYPEENUM_EDIT_CLUSTER, apiClient, ctx)
 
 		tflog.Info(ctx, "Cluster edit operation in progress, state: "+asState)
 
 		if readInfoOK {
-			if asState == string(openapiclient.TASKACTIONSTATEENUM_SUCCEEDED) {
-				return nil
-			}
-			if asState == string(openapiclient.TASKACTIONSTATEENUM_FAILED) {
-				return ErrFailedTask
-			}
 			if asState == "TASK_NOT_FOUND" {
 				// We try for a minute waiting for the tasks to be spawned. If edit cluster responded with a success
 				// without creating a task for about a minute, we can safely assume that a task is not required to be spawned.
@@ -2073,6 +2067,24 @@ func (r resourceCluster) Update(ctx context.Context, req tfsdk.UpdateResourceReq
 					return nil
 				}
 			}
+			// There are cases this code flow checks for the state of previously spawned tasks instead of checking for new tasks.
+			// Hence, we check whether a new task is spawned.
+			if checkNewTaskSpawned {
+				if asState == string(openapiclient.TASKACTIONSTATEENUM_IN_PROGRESS) {
+					checkNewTaskSpawned = false
+					return retry.RetryableError(errors.New("Cluster edit operation in progress"))
+				} else {
+					tflog.Info(ctx, "Cluster edit task not found, the change would not have required a task creation")
+					return nil
+				}
+			}
+			if asState == string(openapiclient.TASKACTIONSTATEENUM_SUCCEEDED) {
+				return nil
+			}
+			if asState == string(openapiclient.TASKACTIONSTATEENUM_FAILED) {
+				return ErrFailedTask
+			}
+
 		} else {
 			return handleReadFailureWithRetries(ctx, &readClusterRetries, 2, message)
 		}
@@ -2287,7 +2299,7 @@ func (r resourceCluster) Delete(ctx context.Context, req tfsdk.DeleteResourceReq
 	retryPolicy := retry.NewConstant(10 * time.Second)
 	retryPolicy = retry.WithMaxDuration(3600*time.Second, retryPolicy)
 	err = retry.Do(ctx, retryPolicy, func(ctx context.Context) error {
-		asState, readInfoOK, message := getTaskState(accountId, projectId, clusterId, openapiclient.ENTITYTYPEENUM_CLUSTER, openapiclient.TASKTYPEENUM_DELETE_CLUSTER, time.Time{}, apiClient, ctx)
+		asState, readInfoOK, message := getTaskState(accountId, projectId, clusterId, openapiclient.ENTITYTYPEENUM_CLUSTER, openapiclient.TASKTYPEENUM_DELETE_CLUSTER, apiClient, ctx)
 
 		tflog.Info(ctx, "Cluster delete operation in progress, state: "+asState)
 
