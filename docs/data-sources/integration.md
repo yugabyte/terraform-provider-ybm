@@ -33,8 +33,10 @@ data "ybm_integration" "example_name" {
 - `grafana_spec` (Attributes) The specifications of a Grafana integration. (see [below for nested schema](#nestedatt--grafana_spec))
 - `is_valid` (Boolean) Signifies whether the integration configuration is valid or not
 - `project_id` (String) The ID of the project this integration belongs to.
+- `prometheus_spec` (Attributes) The specifications of a Prometheus integration. (see [below for nested schema](#nestedatt--prometheus_spec))
 - `sumologic_spec` (Attributes) The specifications of a Sumo Logic integration. (see [below for nested schema](#nestedatt--sumologic_spec))
 - `type` (String) Defines different exporter destination types.
+- `victoriametrics_spec` (Attributes) The specifications of a VictoriaMetrics integration. (see [below for nested schema](#nestedatt--victoriametrics_spec))
 
 <a id="nestedatt--datadog_spec"></a>
 ### Nested Schema for `datadog_spec`
@@ -74,6 +76,14 @@ Read-Only:
 - `zone` (String) Grafana Zone.
 
 
+<a id="nestedatt--prometheus_spec"></a>
+### Nested Schema for `prometheus_spec`
+
+Read-Only:
+
+- `endpoint` (String) Prometheus OTLP endpoint URL e.g. http://prometheus.yourcompany.com/api/v1/otlp
+
+
 <a id="nestedatt--sumologic_spec"></a>
 ### Nested Schema for `sumologic_spec`
 
@@ -82,3 +92,11 @@ Read-Only:
 - `access_id` (String, Sensitive) Sumo Logic Access Key ID
 - `access_key` (String, Sensitive) Sumo Logic Access Key
 - `installation_token` (String, Sensitive) A Sumo Logic installation token to export telemetry to Grafana with
+
+
+<a id="nestedatt--victoriametrics_spec"></a>
+### Nested Schema for `victoriametrics_spec`
+
+Read-Only:
+
+- `endpoint` (String) VictoriaMetrics OTLP endpoint URL e.g. http://my-victoria-metrics-endpoint/opentelemetry
