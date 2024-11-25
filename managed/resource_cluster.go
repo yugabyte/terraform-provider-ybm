@@ -696,7 +696,7 @@ func createClusterSpec(ctx context.Context, apiClient *openapiclient.APIClient, 
 		}
 		if !regionInfo.IsDefault.IsUnknown() && !regionInfo.IsDefault.IsNull() {
 			if isDefaultSet {
-				return nil, false, "Cluster must exactly one default region."
+				return nil, false, "Cluster must have exactly one default region."
 			}
 			info.SetIsDefault(regionInfo.IsDefault.Value)
 			isDefaultSet = true
