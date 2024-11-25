@@ -332,13 +332,24 @@ func findNetworkAllowList(nals []openapiclient.NetworkAllowListData, name string
 }
 
 func getNetworkAllowListIdByName(ctx context.Context, accountId string, projectId string, networkAllowListName string, apiClient openapiclient.APIClient) (string, error) {
-	nalResp, resp, err := apiClient.NetworkApi.ListNetworkAllowLists(ctx, accountId, projectId).Execute()
-	if err != nil {
-		errMsg := getErrorMessage(resp, err)
-		return "", fmt.Errorf("Unable to read the Network allow list %s: %s", networkAllowListName, errMsg)
-	}
-	if nalData, ok := findNetworkAllowList(nalResp.Data, networkAllowListName); ok {
-		return nalData.Info.GetId(), nil
+	var continuationToken string
+	for {
+		request := apiClient.NetworkApi.ListNetworkAllowLists(ctx, accountId, projectId)
+		if continuationToken != "" {
+			request = request.ContinuationToken(continuationToken)
+		}
+		nalResp, resp, err := request.Execute()
+		if err != nil {
+			errMsg := getErrorMessage(resp, err)
+			return "", fmt.Errorf("Unable to read the Network allow list %s: %s", networkAllowListName, errMsg)
+		}
+		if nalData, ok := findNetworkAllowList(nalResp.Data, networkAllowListName); ok {
+			return nalData.Info.GetId(), nil
+		}
+		continuationToken = nalResp.Metadata.GetContinuationToken()
+		if continuationToken == "" {
+			break
+		}
 	}
 
 	return "", fmt.Errorf("NetworkAllowList %s not found", networkAllowListName)
