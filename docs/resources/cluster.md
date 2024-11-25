@@ -618,7 +618,7 @@ resource "ybm_private_service_endpoint" "npsenonok-region" {
 - `cluster_endpoints` (Map of String, Deprecated) The endpoints used to connect to the cluster.
 - `cluster_id` (String) The ID of the cluster. Created automatically when a cluster is created. Used to get a specific cluster.
 - `cmk_spec` (Attributes) KMS Provider Configuration. (see [below for nested schema](#nestedatt--cmk_spec))
-- `database_track` (String) The track of the database. Production or Innovation or Preview.
+- `database_track` (String) The track of the database. Production or Innovation or Early Access.
 - `desired_connection_pooling_state` (String) The desired connection pooling state of the cluster, Enabled or Disabled. This parameter can be used to enable/disable Connection Pooling
 - `desired_state` (String) The desired state of the database, Active or Paused. This parameter can be used to pause/resume a cluster.
 - `endpoints` (Attributes List) The endpoints used to connect to the cluster. (see [below for nested schema](#nestedatt--endpoints))
