@@ -615,13 +615,9 @@ resource "ybm_private_service_endpoint" "npsenonok-region" {
 - `backup_schedules` (Attributes List) (see [below for nested schema](#nestedatt--backup_schedules))
 - `cloud_type` (String) The cloud provider where the cluster is deployed: AWS, AZURE or GCP.
 - `cluster_allow_list_ids` (List of String) List of IDs of the allow lists assigned to the cluster.
-- `cluster_endpoints` (Map of String, Deprecated) The endpoints used to connect to the cluster.
-- `cluster_id` (String) The ID of the cluster. Created automatically when a cluster is created. Used to get a specific cluster.
 - `cmk_spec` (Attributes) KMS Provider Configuration. (see [below for nested schema](#nestedatt--cmk_spec))
 - `database_track` (String) The track of the database. Production or Innovation or Preview.
-- `desired_connection_pooling_state` (String) The desired connection pooling state of the cluster, Enabled or Disabled. This parameter can be used to enable/disable Connection Pooling
 - `desired_state` (String) The desired state of the database, Active or Paused. This parameter can be used to pause/resume a cluster.
-- `endpoints` (Attributes List) The endpoints used to connect to the cluster. (see [below for nested schema](#nestedatt--endpoints))
 - `fault_tolerance` (String) The fault tolerance of the cluster. NONE, NODE, ZONE or REGION.
 - `num_faults_to_tolerate` (Number) The number of domain faults the cluster can tolerate. 0 for NONE, 1 for ZONE and [1-3] for NODE and REGION
 - `restore_backup_id` (String) The ID of the backup to be restored to the cluster.
@@ -630,8 +626,11 @@ resource "ybm_private_service_endpoint" "npsenonok-region" {
 
 - `account_id` (String) The ID of the account this cluster belongs to.
 - `cluster_certificate` (String) The certificate used to connect to the cluster.
+- `cluster_endpoints` (Map of String, Deprecated) The endpoints used to connect to the cluster.
+- `cluster_id` (String) The ID of the cluster. Created automatically when a cluster is created. Used to get a specific cluster.
 - `cluster_info` (Attributes) (see [below for nested schema](#nestedatt--cluster_info))
 - `cluster_version` (String)
+- `endpoints` (Attributes List) The endpoints used to connect to the cluster. (see [below for nested schema](#nestedatt--endpoints))
 - `project_id` (String) The ID of the project this cluster belongs to.
 
 <a id="nestedatt--cluster_region_info"></a>
@@ -764,16 +763,6 @@ Optional:
 
 
 
-<a id="nestedatt--endpoints"></a>
-### Nested Schema for `endpoints`
-
-Optional:
-
-- `accessibility_type` (String) The accessibility type of the endpoint. PUBLIC or PRIVATE.
-- `host` (String) The host of the endpoint.
-- `region` (String) The region of the endpoint.
-
-
 <a id="nestedatt--cluster_info"></a>
 ### Nested Schema for `cluster_info`
 
@@ -783,3 +772,13 @@ Read-Only:
 - `software_version` (String)
 - `state` (String)
 - `updated_time` (String)
+
+
+<a id="nestedatt--endpoints"></a>
+### Nested Schema for `endpoints`
+
+Optional:
+
+- `accessibility_type` (String) The accessibility type of the endpoint. PUBLIC or PRIVATE.
+- `host` (String) The host of the endpoint.
+- `region` (String) The region of the endpoint.

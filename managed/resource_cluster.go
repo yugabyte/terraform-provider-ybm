@@ -38,500 +38,504 @@ func b64(s string) string {
 }
 
 func (r resourceClusterType) GetSchema(_ context.Context) (tfsdk.Schema, diag.Diagnostics) {
+	attributes := map[string]tfsdk.Attribute{
+		"account_id": {
+			Description: "The ID of the account this cluster belongs to.",
+			Type:        types.StringType,
+			Computed:    true,
+		},
+		"project_id": {
+			Description: "The ID of the project this cluster belongs to.",
+			Type:        types.StringType,
+			Computed:    true,
+		},
+		"cluster_id": {
+			Description: "The ID of the cluster. Created automatically when a cluster is created. Used to get a specific cluster.",
+			Type:        types.StringType,
+			Computed:    true,
+		},
+		"cluster_name": {
+			Description: "The name of the cluster.",
+			Type:        types.StringType,
+			Required:    true,
+		},
+		"cluster_type": {
+			Description: "The type of the cluster. SYNCHRONOUS or GEO_PARTITIONED",
+			Type:        types.StringType,
+			Required:    true,
+		},
+		"cloud_type": {
+			Description: "The cloud provider where the cluster is deployed: AWS, AZURE or GCP.",
+			Type:        types.StringType,
+			Optional:    true,
+			Computed:    true,
+			Validators:  []tfsdk.AttributeValidator{stringvalidator.OneOf("AWS", "GCP", "AZURE")},
+		},
+		"cluster_region_info": {
+			Required: true,
+			Attributes: tfsdk.ListNestedAttributes(map[string]tfsdk.Attribute{
+				"num_nodes": {
+					Type:     types.Int64Type,
+					Required: true,
+				},
+				"region": {
+					Type:     types.StringType,
+					Required: true,
+				},
+				"num_cores": {
+					Description: "Number of CPU cores in the nodes of the region.",
+					Type:        types.Int64Type,
+					Optional:    true,
+					Computed:    true,
+				},
+				"disk_size_gb": {
+					Description: "Disk size of the nodes of the region.",
+					Type:        types.Int64Type,
+					Optional:    true,
+					Computed:    true,
+				},
+				"disk_iops": {
+					Description: "Disk IOPS of the nodes of the region.",
+					Type:        types.Int64Type,
+					Optional:    true,
+					Computed:    true,
+				},
+				"vpc_id": {
+					Type:     types.StringType,
+					Optional: true,
+					Computed: true,
+					Validators: []tfsdk.AttributeValidator{
+						schemavalidator.ConflictsWith(path.MatchRelative().AtParent().AtName("vpc_name")),
+					},
+				},
+				"vpc_name": {
+					Type:     types.StringType,
+					Optional: true,
+					Computed: true,
+				},
+				"public_access": {
+					Type:     types.BoolType,
+					Optional: true,
+					Computed: true,
+				},
+				"is_preferred": {
+					Type:     types.BoolType,
+					Optional: true,
+					Computed: true,
+				},
+				"is_default": {
+					Type:     types.BoolType,
+					Optional: true,
+					Computed: true,
+				},
+			}),
+		},
+		"backup_schedules": {
+			Optional: true,
+			Attributes: tfsdk.ListNestedAttributes(map[string]tfsdk.Attribute{
+
+				"state": {
+
+					Description: "The state of the backup schedule. Used to pause or resume the backup schedule. Valid values are ACTIVE or PAUSED.",
+					Type:        types.StringType,
+					Computed:    true,
+					Optional:    true,
+				},
+
+				"cron_expression": {
+					Description: "The cron expression for the backup schedule",
+					Type:        types.StringType,
+					Computed:    true,
+					Optional:    true,
+				},
+
+				"time_interval_in_days": {
+					Description: "The time interval in days for the backup schedule.",
+					Type:        types.Int64Type,
+					Computed:    true,
+					Optional:    true,
+				},
+
+				"retention_period_in_days": {
+					Description: "The retention period of the backup schedule.",
+					Type:        types.Int64Type,
+					Computed:    true,
+					Optional:    true,
+				},
+
+				"backup_description": {
+					Description: "The description of the backup schedule.",
+					Type:        types.StringType,
+					Computed:    true,
+					Optional:    true,
+				},
+
+				"schedule_id": {
+					Description: "The ID of the backup schedule. Created automatically when the backup schedule is created. Used to get a specific backup schedule.",
+					Type:        types.StringType,
+					Computed:    true,
+					Optional:    true,
+				},
+				"incremental_interval_in_mins": {
+					Description: "The time interval in minutes for the incremental backup schedule.",
+					Type:        types.Int64Type,
+					Optional:    true,
+					Validators:  []tfsdk.AttributeValidator{int64validator.AtLeast(60)},
+				},
+			}),
+		},
+		"cmk_spec": {
+			Description: "KMS Provider Configuration.",
+			Optional:    true,
+			Attributes: tfsdk.SingleNestedAttributes(map[string]tfsdk.Attribute{
+				"provider_type": {
+					Description: "CMK Provider Type.",
+					Type:        types.StringType,
+					Required:    true,
+					Validators:  []tfsdk.AttributeValidator{stringvalidator.OneOf("AWS", "GCP", "AZURE")},
+				},
+				"is_enabled": {
+					Description: "Is Enabled",
+					Type:        types.BoolType,
+					Required:    true,
+				},
+				"aws_cmk_spec": {
+					Description: "AWS CMK Provider Configuration.",
+					Optional:    true,
+					Attributes: tfsdk.SingleNestedAttributes(map[string]tfsdk.Attribute{
+						"access_key": {
+							Description: "Access Key",
+							Type:        types.StringType,
+							Required:    true,
+						},
+						"secret_key": {
+							Description: "Secret Key",
+							Type:        types.StringType,
+							Required:    true,
+						},
+						"arn_list": {
+							Description: "AWS ARN List",
+							Type:        types.ListType{ElemType: types.StringType},
+							Required:    true,
+						},
+					}),
+				},
+				"gcp_cmk_spec": {
+					Description: "GCP CMK Provider Configuration.",
+					Optional:    true,
+					Attributes: tfsdk.SingleNestedAttributes(map[string]tfsdk.Attribute{
+						"key_ring_name": {
+							Description: "Key Ring Name",
+							Type:        types.StringType,
+							Required:    true,
+						},
+						"key_name": {
+							Description: "Key Name",
+							Type:        types.StringType,
+							Required:    true,
+						},
+						"location": {
+							Description: "Location",
+							Type:        types.StringType,
+							Required:    true,
+						},
+						"protection_level": {
+							Description: "Key Protection Level",
+							Type:        types.StringType,
+							Required:    true,
+						},
+						"gcp_service_account": {
+							Description: "GCP Service Account",
+							Required:    true,
+							Attributes: tfsdk.SingleNestedAttributes(map[string]tfsdk.Attribute{
+								"type": {
+									Description: "Service Account Type",
+									Type:        types.StringType,
+									Required:    true,
+								},
+								"project_id": {
+									Description: "GCP Project ID",
+									Type:        types.StringType,
+									Required:    true,
+								},
+								"private_key": {
+									Description: "Private Key",
+									Type:        types.StringType,
+									Required:    true,
+								},
+								"private_key_id": {
+									Description: "Private Key ID",
+									Type:        types.StringType,
+									Required:    true,
+								},
+								"client_email": {
+									Description: "Client Email",
+									Type:        types.StringType,
+									Required:    true,
+								},
+								"client_id": {
+									Description: "Client ID",
+									Type:        types.StringType,
+									Required:    true,
+								},
+								"auth_uri": {
+									Description: "Auth URI",
+									Type:        types.StringType,
+									Required:    true,
+								},
+								"token_uri": {
+									Description: "Token URI",
+									Type:        types.StringType,
+									Required:    true,
+								},
+								"auth_provider_x509_cert_url": {
+									Description: "Auth Provider X509 Cert URL",
+									Type:        types.StringType,
+									Required:    true,
+								},
+								"client_x509_cert_url": {
+									Description: "Client X509 Cert URL",
+									Type:        types.StringType,
+									Required:    true,
+								},
+								"universe_domain": {
+									Description: "Google Universe Domain",
+									Type:        types.StringType,
+									Optional:    true,
+								},
+							}),
+						},
+					}),
+				},
+				"azure_cmk_spec": {
+					Description: "AZURE CMK Provider Configuration.",
+					Optional:    true,
+					Attributes: tfsdk.SingleNestedAttributes(map[string]tfsdk.Attribute{
+						"client_id": {
+							Description: "Azure Active Directory (AD) Client ID for Key Vault service principal.",
+							Type:        types.StringType,
+							Required:    true,
+						},
+						"client_secret": {
+							Description: "Azure AD Client Secret for Key Vault service principal.",
+							Type:        types.StringType,
+							Required:    true,
+						},
+						"tenant_id": {
+							Description: "Azure AD Tenant ID for Key Vault service principal.",
+							Type:        types.StringType,
+							Required:    true,
+						},
+						"key_vault_uri": {
+							Description: "URI of Azure Key Vault storing cryptographic keys.",
+							Type:        types.StringType,
+							Required:    true,
+						},
+						"key_name": {
+							Description: "Name of cryptographic key in Azure Key Vault.",
+							Type:        types.StringType,
+							Required:    true,
+						},
+					}),
+				},
+			}),
+		},
+		"cluster_tier": {
+			Description: "FREE (Sandbox) or PAID (Dedicated).",
+			Type:        types.StringType,
+			Required:    true,
+			Validators:  []tfsdk.AttributeValidator{stringvalidator.OneOf("FREE", "PAID")},
+		},
+		"fault_tolerance": {
+			Description: "The fault tolerance of the cluster. NONE, NODE, ZONE or REGION.",
+			Type:        types.StringType,
+			Optional:    true,
+			Computed:    true,
+			Validators:  []tfsdk.AttributeValidator{stringvalidator.OneOf("NONE", "NODE", "ZONE", "REGION")},
+		},
+		"num_faults_to_tolerate": {
+			Description: "The number of domain faults the cluster can tolerate. 0 for NONE, 1 for ZONE and [1-3] for NODE and REGION",
+			Type:        types.Int64Type,
+			Optional:    true,
+			Computed:    true,
+			Validators:  []tfsdk.AttributeValidator{int64validator.OneOf(0, 1, 2, 3)},
+		},
+		"cluster_allow_list_ids": {
+			Description: "List of IDs of the allow lists assigned to the cluster.",
+			Type: types.ListType{
+				ElemType: types.StringType,
+			},
+			Optional: true,
+		},
+		"restore_backup_id": {
+			Description: "The ID of the backup to be restored to the cluster.",
+			Type:        types.StringType,
+			Optional:    true,
+		},
+		"node_config": {
+			Required: true,
+			Attributes: tfsdk.SingleNestedAttributes(map[string]tfsdk.Attribute{
+				"num_cores": {
+					Description: "Number of CPU cores in the node.",
+					Type:        types.Int64Type,
+					Required:    true,
+				},
+				"disk_size_gb": {
+					Description: "Disk size of the node.",
+					Type:        types.Int64Type,
+					Computed:    true,
+					Optional:    true,
+				},
+				"disk_iops": {
+					Description: "Disk IOPS of the node.",
+					Type:        types.Int64Type,
+					Computed:    true,
+					Optional:    true,
+				},
+			}),
+		},
+		"credentials": {
+			Description: `Credentials to be used by the database. Please provide 'username' and 'password' 
+(which would be used in common for both YSQL and YCQL) OR all of 'ysql_username',
+'ysql_password', 'ycql_username' and 'ycql_password' but not a mix of both.`,
+			Required: true,
+			Attributes: tfsdk.SingleNestedAttributes(map[string]tfsdk.Attribute{
+				"username": {
+					Description: "The username to be used for both YSQL and YCQL.",
+					Type:        types.StringType,
+					Optional:    true,
+				},
+				"password": {
+					Description: "The password to be used for both YSQL and YCQL. Note that this will be stored in the state file.",
+					Type:        types.StringType,
+					Optional:    true,
+					Sensitive:   true,
+				},
+				"ysql_username": {
+					Description: "YSQL username for the database.",
+					Type:        types.StringType,
+					Optional:    true,
+				},
+				"ysql_password": {
+					Description: "YSQL password for the database. Note that this will be stored in the state file.",
+					Type:        types.StringType,
+					Optional:    true,
+					Sensitive:   true,
+				},
+				"ycql_username": {
+					Description: "YCQL username for the database.",
+					Type:        types.StringType,
+					Optional:    true,
+				},
+				"ycql_password": {
+					Description: "YCQL password for the database. Note that this will be stored in the state file.",
+					Type:        types.StringType,
+					Optional:    true,
+					Sensitive:   true,
+				},
+			}),
+		},
+		"cluster_info": {
+			Computed: true,
+			Attributes: tfsdk.SingleNestedAttributes(map[string]tfsdk.Attribute{
+				"state": {
+					Type:     types.StringType,
+					Computed: true,
+				},
+				"software_version": {
+					Type:     types.StringType,
+					Computed: true,
+				},
+				"created_time": {
+					Type:     types.StringType,
+					Computed: true,
+				},
+				"updated_time": {
+					Type:     types.StringType,
+					Computed: true,
+				},
+			}),
+		},
+		"cluster_version": {
+			Type:     types.StringType,
+			Computed: true,
+		},
+		"database_track": {
+			Description: "The track of the database. Production or Innovation or Preview.",
+			Type:        types.StringType,
+			Optional:    true,
+			Computed:    true,
+		},
+		"desired_state": {
+			Description: "The desired state of the database, Active or Paused. This parameter can be used to pause/resume a cluster.",
+			Type:        types.StringType,
+			Optional:    true,
+			Computed:    true,
+			Validators: []tfsdk.AttributeValidator{
+				// Validate string value must be "Active" or "Paused"
+				stringvalidator.OneOfCaseInsensitive([]string{"Active", "Paused"}...),
+			},
+		},
+		"desired_connection_pooling_state": {
+			Description: "The desired connection pooling state of the cluster, Enabled or Disabled. This parameter can be used to enable/disable Connection Pooling",
+			Type:        types.StringType,
+			Optional:    true,
+			Computed:    true,
+			Validators: []tfsdk.AttributeValidator{
+				// Validate string value must be "Enabled" or "Disabled"
+				stringvalidator.OneOfCaseInsensitive([]string{"Enabled", "Disabled"}...),
+			},
+		},
+		"cluster_endpoints": {
+			Description:        "The endpoints used to connect to the cluster.",
+			DeprecationMessage: "This attribute is deprecated. Please use the 'endpoints' attribute instead.",
+			Type: types.MapType{
+				ElemType: types.StringType,
+			},
+			Computed: true,
+		},
+		"endpoints": {
+			Description: "The endpoints used to connect to the cluster.",
+			Attributes: tfsdk.ListNestedAttributes(map[string]tfsdk.Attribute{
+				"accessibility_type": {
+					Description: "The accessibility type of the endpoint. PUBLIC or PRIVATE.",
+					Type:        types.StringType,
+					Computed:    true,
+					Optional:    true,
+				},
+				"host": {
+					Description: "The host of the endpoint.",
+					Type:        types.StringType,
+					Computed:    true,
+					Optional:    true,
+				},
+				"region": {
+					Description: "The region of the endpoint.",
+					Type:        types.StringType,
+					Computed:    true,
+					Optional:    true,
+				},
+			}),
+			Computed: true,
+		},
+		"cluster_certificate": {
+			Description: "The certificate used to connect to the cluster.",
+			Type:        types.StringType,
+			Computed:    true,
+		},
+	}
+	// remove once feature flag is enabled
+	// TODO: Think of a more scalable solution
+	if !fflags.IsFeatureFlagEnabled(fflags.CONNECTION_POOLING) {
+		delete(attributes, "desired_connection_pooling_state")
+	}
+
 	return tfsdk.Schema{
 		Description: `The resource to create a YugabyteDB cluster. Use this resource to create both 
 single- and multi-region clusters. You can also use this resource to bind allow lists to the cluster 
 being created; restore previously taken backups to the cluster being created; 
 and modify the backup schedule of the cluster being created.`,
-		Attributes: map[string]tfsdk.Attribute{
-			"account_id": {
-				Description: "The ID of the account this cluster belongs to.",
-				Type:        types.StringType,
-				Computed:    true,
-			},
-			"project_id": {
-				Description: "The ID of the project this cluster belongs to.",
-				Type:        types.StringType,
-				Computed:    true,
-			},
-			"cluster_id": {
-				Description: "The ID of the cluster. Created automatically when a cluster is created. Used to get a specific cluster.",
-				Type:        types.StringType,
-				Optional:    true,
-				Computed:    true,
-			},
-			"cluster_name": {
-				Description: "The name of the cluster.",
-				Type:        types.StringType,
-				Required:    true,
-			},
-			"cluster_type": {
-				Description: "The type of the cluster. SYNCHRONOUS or GEO_PARTITIONED",
-				Type:        types.StringType,
-				Required:    true,
-			},
-			"cloud_type": {
-				Description: "The cloud provider where the cluster is deployed: AWS, AZURE or GCP.",
-				Type:        types.StringType,
-				Optional:    true,
-				Computed:    true,
-				Validators:  []tfsdk.AttributeValidator{stringvalidator.OneOf("AWS", "GCP", "AZURE")},
-			},
-			"cluster_region_info": {
-				Required: true,
-				Attributes: tfsdk.ListNestedAttributes(map[string]tfsdk.Attribute{
-					"num_nodes": {
-						Type:     types.Int64Type,
-						Required: true,
-					},
-					"region": {
-						Type:     types.StringType,
-						Required: true,
-					},
-					"num_cores": {
-						Description: "Number of CPU cores in the nodes of the region.",
-						Type:        types.Int64Type,
-						Optional:    true,
-						Computed:    true,
-					},
-					"disk_size_gb": {
-						Description: "Disk size of the nodes of the region.",
-						Type:        types.Int64Type,
-						Optional:    true,
-						Computed:    true,
-					},
-					"disk_iops": {
-						Description: "Disk IOPS of the nodes of the region.",
-						Type:        types.Int64Type,
-						Optional:    true,
-						Computed:    true,
-					},
-					"vpc_id": {
-						Type:     types.StringType,
-						Optional: true,
-						Computed: true,
-						Validators: []tfsdk.AttributeValidator{
-							schemavalidator.ConflictsWith(path.MatchRelative().AtParent().AtName("vpc_name")),
-						},
-					},
-					"vpc_name": {
-						Type:     types.StringType,
-						Optional: true,
-						Computed: true,
-					},
-					"public_access": {
-						Type:     types.BoolType,
-						Optional: true,
-						Computed: true,
-					},
-					"is_preferred": {
-						Type:     types.BoolType,
-						Optional: true,
-						Computed: true,
-					},
-					"is_default": {
-						Type:     types.BoolType,
-						Optional: true,
-						Computed: true,
-					},
-				}),
-			},
-			"backup_schedules": {
-				Optional: true,
-				Attributes: tfsdk.ListNestedAttributes(map[string]tfsdk.Attribute{
-
-					"state": {
-
-						Description: "The state of the backup schedule. Used to pause or resume the backup schedule. Valid values are ACTIVE or PAUSED.",
-						Type:        types.StringType,
-						Computed:    true,
-						Optional:    true,
-					},
-
-					"cron_expression": {
-						Description: "The cron expression for the backup schedule",
-						Type:        types.StringType,
-						Computed:    true,
-						Optional:    true,
-					},
-
-					"time_interval_in_days": {
-						Description: "The time interval in days for the backup schedule.",
-						Type:        types.Int64Type,
-						Computed:    true,
-						Optional:    true,
-					},
-
-					"retention_period_in_days": {
-						Description: "The retention period of the backup schedule.",
-						Type:        types.Int64Type,
-						Computed:    true,
-						Optional:    true,
-					},
-
-					"backup_description": {
-						Description: "The description of the backup schedule.",
-						Type:        types.StringType,
-						Computed:    true,
-						Optional:    true,
-					},
-
-					"schedule_id": {
-						Description: "The ID of the backup schedule. Created automatically when the backup schedule is created. Used to get a specific backup schedule.",
-						Type:        types.StringType,
-						Computed:    true,
-						Optional:    true,
-					},
-					"incremental_interval_in_mins": {
-						Description: "The time interval in minutes for the incremental backup schedule.",
-						Type:        types.Int64Type,
-						Optional:    true,
-						Validators:  []tfsdk.AttributeValidator{int64validator.AtLeast(60)},
-					},
-				}),
-			},
-			"cmk_spec": {
-				Description: "KMS Provider Configuration.",
-				Optional:    true,
-				Attributes: tfsdk.SingleNestedAttributes(map[string]tfsdk.Attribute{
-					"provider_type": {
-						Description: "CMK Provider Type.",
-						Type:        types.StringType,
-						Required:    true,
-						Validators:  []tfsdk.AttributeValidator{stringvalidator.OneOf("AWS", "GCP", "AZURE")},
-					},
-					"is_enabled": {
-						Description: "Is Enabled",
-						Type:        types.BoolType,
-						Required:    true,
-					},
-					"aws_cmk_spec": {
-						Description: "AWS CMK Provider Configuration.",
-						Optional:    true,
-						Attributes: tfsdk.SingleNestedAttributes(map[string]tfsdk.Attribute{
-							"access_key": {
-								Description: "Access Key",
-								Type:        types.StringType,
-								Required:    true,
-							},
-							"secret_key": {
-								Description: "Secret Key",
-								Type:        types.StringType,
-								Required:    true,
-							},
-							"arn_list": {
-								Description: "AWS ARN List",
-								Type:        types.ListType{ElemType: types.StringType},
-								Required:    true,
-							},
-						}),
-					},
-					"gcp_cmk_spec": {
-						Description: "GCP CMK Provider Configuration.",
-						Optional:    true,
-						Attributes: tfsdk.SingleNestedAttributes(map[string]tfsdk.Attribute{
-							"key_ring_name": {
-								Description: "Key Ring Name",
-								Type:        types.StringType,
-								Required:    true,
-							},
-							"key_name": {
-								Description: "Key Name",
-								Type:        types.StringType,
-								Required:    true,
-							},
-							"location": {
-								Description: "Location",
-								Type:        types.StringType,
-								Required:    true,
-							},
-							"protection_level": {
-								Description: "Key Protection Level",
-								Type:        types.StringType,
-								Required:    true,
-							},
-							"gcp_service_account": {
-								Description: "GCP Service Account",
-								Required:    true,
-								Attributes: tfsdk.SingleNestedAttributes(map[string]tfsdk.Attribute{
-									"type": {
-										Description: "Service Account Type",
-										Type:        types.StringType,
-										Required:    true,
-									},
-									"project_id": {
-										Description: "GCP Project ID",
-										Type:        types.StringType,
-										Required:    true,
-									},
-									"private_key": {
-										Description: "Private Key",
-										Type:        types.StringType,
-										Required:    true,
-									},
-									"private_key_id": {
-										Description: "Private Key ID",
-										Type:        types.StringType,
-										Required:    true,
-									},
-									"client_email": {
-										Description: "Client Email",
-										Type:        types.StringType,
-										Required:    true,
-									},
-									"client_id": {
-										Description: "Client ID",
-										Type:        types.StringType,
-										Required:    true,
-									},
-									"auth_uri": {
-										Description: "Auth URI",
-										Type:        types.StringType,
-										Required:    true,
-									},
-									"token_uri": {
-										Description: "Token URI",
-										Type:        types.StringType,
-										Required:    true,
-									},
-									"auth_provider_x509_cert_url": {
-										Description: "Auth Provider X509 Cert URL",
-										Type:        types.StringType,
-										Required:    true,
-									},
-									"client_x509_cert_url": {
-										Description: "Client X509 Cert URL",
-										Type:        types.StringType,
-										Required:    true,
-									},
-									"universe_domain": {
-										Description: "Google Universe Domain",
-										Type:        types.StringType,
-										Optional:    true,
-									},
-								}),
-							},
-						}),
-					},
-					"azure_cmk_spec": {
-						Description: "AZURE CMK Provider Configuration.",
-						Optional:    true,
-						Attributes: tfsdk.SingleNestedAttributes(map[string]tfsdk.Attribute{
-							"client_id": {
-								Description: "Azure Active Directory (AD) Client ID for Key Vault service principal.",
-								Type:        types.StringType,
-								Required:    true,
-							},
-							"client_secret": {
-								Description: "Azure AD Client Secret for Key Vault service principal.",
-								Type:        types.StringType,
-								Required:    true,
-							},
-							"tenant_id": {
-								Description: "Azure AD Tenant ID for Key Vault service principal.",
-								Type:        types.StringType,
-								Required:    true,
-							},
-							"key_vault_uri": {
-								Description: "URI of Azure Key Vault storing cryptographic keys.",
-								Type:        types.StringType,
-								Required:    true,
-							},
-							"key_name": {
-								Description: "Name of cryptographic key in Azure Key Vault.",
-								Type:        types.StringType,
-								Required:    true,
-							},
-						}),
-					},
-				}),
-			},
-			"cluster_tier": {
-				Description: "FREE (Sandbox) or PAID (Dedicated).",
-				Type:        types.StringType,
-				Required:    true,
-				Validators:  []tfsdk.AttributeValidator{stringvalidator.OneOf("FREE", "PAID")},
-			},
-			"fault_tolerance": {
-				Description: "The fault tolerance of the cluster. NONE, NODE, ZONE or REGION.",
-				Type:        types.StringType,
-				Optional:    true,
-				Computed:    true,
-				Validators:  []tfsdk.AttributeValidator{stringvalidator.OneOf("NONE", "NODE", "ZONE", "REGION")},
-			},
-			"num_faults_to_tolerate": {
-				Description: "The number of domain faults the cluster can tolerate. 0 for NONE, 1 for ZONE and [1-3] for NODE and REGION",
-				Type:        types.Int64Type,
-				Optional:    true,
-				Computed:    true,
-				Validators:  []tfsdk.AttributeValidator{int64validator.OneOf(0, 1, 2, 3)},
-			},
-			"cluster_allow_list_ids": {
-				Description: "List of IDs of the allow lists assigned to the cluster.",
-				Type: types.ListType{
-					ElemType: types.StringType,
-				},
-				Optional: true,
-			},
-			"restore_backup_id": {
-				Description: "The ID of the backup to be restored to the cluster.",
-				Type:        types.StringType,
-				Optional:    true,
-			},
-			"node_config": {
-				Required: true,
-				Attributes: tfsdk.SingleNestedAttributes(map[string]tfsdk.Attribute{
-					"num_cores": {
-						Description: "Number of CPU cores in the node.",
-						Type:        types.Int64Type,
-						Required:    true,
-					},
-					"disk_size_gb": {
-						Description: "Disk size of the node.",
-						Type:        types.Int64Type,
-						Computed:    true,
-						Optional:    true,
-					},
-					"disk_iops": {
-						Description: "Disk IOPS of the node.",
-						Type:        types.Int64Type,
-						Computed:    true,
-						Optional:    true,
-					},
-				}),
-			},
-			"credentials": {
-				Description: `Credentials to be used by the database. Please provide 'username' and 'password' 
-(which would be used in common for both YSQL and YCQL) OR all of 'ysql_username',
-'ysql_password', 'ycql_username' and 'ycql_password' but not a mix of both.`,
-				Required: true,
-				Attributes: tfsdk.SingleNestedAttributes(map[string]tfsdk.Attribute{
-					"username": {
-						Description: "The username to be used for both YSQL and YCQL.",
-						Type:        types.StringType,
-						Optional:    true,
-					},
-					"password": {
-						Description: "The password to be used for both YSQL and YCQL. Note that this will be stored in the state file.",
-						Type:        types.StringType,
-						Optional:    true,
-						Sensitive:   true,
-					},
-					"ysql_username": {
-						Description: "YSQL username for the database.",
-						Type:        types.StringType,
-						Optional:    true,
-					},
-					"ysql_password": {
-						Description: "YSQL password for the database. Note that this will be stored in the state file.",
-						Type:        types.StringType,
-						Optional:    true,
-						Sensitive:   true,
-					},
-					"ycql_username": {
-						Description: "YCQL username for the database.",
-						Type:        types.StringType,
-						Optional:    true,
-					},
-					"ycql_password": {
-						Description: "YCQL password for the database. Note that this will be stored in the state file.",
-						Type:        types.StringType,
-						Optional:    true,
-						Sensitive:   true,
-					},
-				}),
-			},
-			"cluster_info": {
-				Computed: true,
-				Attributes: tfsdk.SingleNestedAttributes(map[string]tfsdk.Attribute{
-					"state": {
-						Type:     types.StringType,
-						Computed: true,
-					},
-					"software_version": {
-						Type:     types.StringType,
-						Computed: true,
-					},
-					"created_time": {
-						Type:     types.StringType,
-						Computed: true,
-					},
-					"updated_time": {
-						Type:     types.StringType,
-						Computed: true,
-					},
-				}),
-			},
-			"cluster_version": {
-				Type:     types.StringType,
-				Computed: true,
-			},
-			"database_track": {
-				Description: "The track of the database. Production or Innovation or Preview.",
-				Type:        types.StringType,
-				Optional:    true,
-				Computed:    true,
-			},
-			"desired_state": {
-				Description: "The desired state of the database, Active or Paused. This parameter can be used to pause/resume a cluster.",
-				Type:        types.StringType,
-				Optional:    true,
-				Computed:    true,
-				Validators: []tfsdk.AttributeValidator{
-					// Validate string value must be "Active" or "Paused"
-					stringvalidator.OneOfCaseInsensitive([]string{"Active", "Paused"}...),
-				},
-			},
-			"desired_connection_pooling_state": {
-				Description: "The desired connection pooling state of the cluster, Enabled or Disabled. This parameter can be used to enable/disable Connection Pooling",
-				Type:        types.StringType,
-				Optional:    true,
-				Computed:    true,
-				Validators: []tfsdk.AttributeValidator{
-					// Validate string value must be "Enabled" or "Disabled"
-					stringvalidator.OneOfCaseInsensitive([]string{"Enabled", "Disabled"}...),
-				},
-			},
-			"cluster_endpoints": {
-				Description:        "The endpoints used to connect to the cluster.",
-				DeprecationMessage: "This attribute is deprecated. Please use the 'endpoints' attribute instead.",
-				Type: types.MapType{
-					ElemType: types.StringType,
-				},
-				Optional: true,
-				Computed: true,
-			},
-			"endpoints": {
-				Description: "The endpoints used to connect to the cluster.",
-				Attributes: tfsdk.ListNestedAttributes(map[string]tfsdk.Attribute{
-					"accessibility_type": {
-						Description: "The accessibility type of the endpoint. PUBLIC or PRIVATE.",
-						Type:        types.StringType,
-						Computed:    true,
-						Optional:    true,
-					},
-					"host": {
-						Description: "The host of the endpoint.",
-						Type:        types.StringType,
-						Computed:    true,
-						Optional:    true,
-					},
-					"region": {
-						Description: "The region of the endpoint.",
-						Type:        types.StringType,
-						Computed:    true,
-						Optional:    true,
-					},
-				}),
-				Computed: true,
-				Optional: true,
-			},
-			"cluster_certificate": {
-				Description: "The certificate used to connect to the cluster.",
-				Type:        types.StringType,
-				Computed:    true,
-			},
-		},
+		Attributes: attributes,
 	}, nil
 }
 
