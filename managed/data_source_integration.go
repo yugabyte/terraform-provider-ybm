@@ -70,6 +70,28 @@ func (r dataSourceIntegrationType) GetSchema(_ context.Context) (tfsdk.Schema, d
 					},
 				}),
 			},
+			"prometheus_spec": {
+				Description: "The specifications of a Prometheus integration.",
+				Computed:    true,
+				Attributes: tfsdk.SingleNestedAttributes(map[string]tfsdk.Attribute{
+					"endpoint": {
+						Description: "Prometheus OTLP endpoint URL e.g. http://prometheus.yourcompany.com/api/v1/otlp",
+						Type:        types.StringType,
+						Computed:    true,
+					},
+				}),
+			},
+			"victoriametrics_spec": {
+				Description: "The specifications of a VictoriaMetrics integration.",
+				Computed:    true,
+				Attributes: tfsdk.SingleNestedAttributes(map[string]tfsdk.Attribute{
+					"endpoint": {
+						Description: "VictoriaMetrics OTLP endpoint URL e.g. http://my-victoria-metrics-endpoint/opentelemetry",
+						Type:        types.StringType,
+						Computed:    true,
+					},
+				}),
+			},
 			"grafana_spec": {
 				Description: "The specifications of a Grafana integration.",
 				Computed:    true,
@@ -280,6 +302,14 @@ func dataSourceTelemetryProviderRead(accountId string, projectId string, configN
 		tp.DataDogSpec = &DataDogSpec{
 			ApiKey: types.String{Value: configSpec.DatadogSpec.Get().ApiKey},
 			Site:   types.String{Value: configSpec.DatadogSpec.Get().Site},
+		}
+	case openapiclient.TELEMETRYPROVIDERTYPEENUM_PROMETHEUS:
+		tp.PrometheusSpec = &PrometheusSpec{
+			Endpoint: types.String{Value: configSpec.PrometheusSpec.Get().Endpoint},
+		}
+	case openapiclient.TELEMETRYPROVIDERTYPEENUM_VICTORIAMETRICS:
+		tp.VictoriaMetricsSpec = &VictoriaMetricsSpec{
+			Endpoint: types.String{Value: configSpec.VictoriametricsSpec.Get().Endpoint},
 		}
 	case openapiclient.TELEMETRYPROVIDERTYPEENUM_GRAFANA:
 		grafanaSpec := configSpec.GetGrafanaSpec()
