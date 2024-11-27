@@ -3,7 +3,7 @@ page_title: "ybm_integration Resource - YugabyteDB Aeon"
 description: |-
   The resource to create an export configuration for the integration you want to use in YugabyteDB Aeon.
   Using the configuration you created, connect to your cluster:
-  -  Export metrics using resourceybm_associate_metrics_exporter_cluster
+  -  Export metrics using resource ybm_associate_metrics_exporter_cluster
 ---
 
 # ybm_integration (Resource)
@@ -11,7 +11,7 @@ description: |-
 The resource to create an export configuration for the integration you want to use in YugabyteDB Aeon.
 
 Using the configuration you created, connect to your cluster:
-	-  Export metrics using resource`ybm_associate_metrics_exporter_cluster`
+	-  Export metrics using resource `ybm_associate_metrics_exporter_cluster`
 
 
 ## Example Usage
@@ -54,6 +54,30 @@ resource "ybm_integration" "sumologic" {
     access_id          = "<access-id>"
     access_key         = "<access-key>"
     installation_token = "<installation-token>"
+  }
+}
+```
+
+To create Prometheus integration
+
+```terraform
+resource "ybm_integration" "prometheus" {
+  config_name = "prometheus-example"
+  type        = "PROMETHEUS"
+  prometheus_spec = {
+    endpoint = "http://my-prometheus-endpoint/api/v1/otlp"
+  }
+}
+```
+
+To create VictoriaMetrics integration
+
+```terraform
+resource "ybm_integration" "victoriametrics" {
+  config_name = "victoriametrics-example"
+  type        = "VICTORIAMETRICS"
+  victoriametrics_spec = {
+    endpoint = "http://my-victoria-metrics-endpoint/opentelemetry"
   }
 }
 ```
@@ -128,7 +152,7 @@ Required:
 
 Required:
 
-- `endpoint` (String) Prometheus OTLP endpoint URL e.g. http://prometheus.yourcompany.com/api/v1/otlp
+- `endpoint` (String) Prometheus OTLP endpoint URL e.g. http://my-prometheus-endpoint/api/v1/otlp
 
 
 <a id="nestedatt--sumologic_spec"></a>

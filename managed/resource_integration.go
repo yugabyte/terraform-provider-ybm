@@ -27,8 +27,8 @@ func (r resourceIntegrationType) GetSchema(_ context.Context) (tfsdk.Schema, dia
 		Description: `The resource to create an export configuration for the integration you want to use in YugabyteDB Aeon.
 
 Using the configuration you created, connect to your cluster:
-	-  Export metrics using resource` + "`ybm_associate_metrics_exporter_cluster`",
-		Attributes:  r.getSchemaAttributes(),
+	-  Export metrics using resource ` + "`ybm_associate_metrics_exporter_cluster`",
+		Attributes: r.getSchemaAttributes(),
 	}, nil
 }
 
@@ -89,7 +89,7 @@ func (r resourceIntegrationType) getSchemaAttributes() map[string]tfsdk.Attribut
 			Validators:  onlyContainsPath("prometheus_spec"),
 			Attributes: tfsdk.SingleNestedAttributes(map[string]tfsdk.Attribute{
 				"endpoint": {
-					Description: "Prometheus OTLP endpoint URL e.g. http://prometheus.yourcompany.com/api/v1/otlp",
+					Description: "Prometheus OTLP endpoint URL e.g. http://my-prometheus-endpoint/api/v1/otlp",
 					Type:        types.StringType,
 					Required:    true,
 				},

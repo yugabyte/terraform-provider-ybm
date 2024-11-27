@@ -75,7 +75,7 @@ func (r dataSourceIntegrationType) GetSchema(_ context.Context) (tfsdk.Schema, d
 				Computed:    true,
 				Attributes: tfsdk.SingleNestedAttributes(map[string]tfsdk.Attribute{
 					"endpoint": {
-						Description: "Prometheus OTLP endpoint URL e.g. http://prometheus.yourcompany.com/api/v1/otlp",
+						Description: "Prometheus OTLP endpoint URL e.g. http://my-prometheus-endpoint/api/v1/otlp",
 						Type:        types.StringType,
 						Computed:    true,
 					},
