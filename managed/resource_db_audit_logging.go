@@ -418,6 +418,13 @@ func (r resourceDbAuditLogging) Update(ctx context.Context, req tfsdk.UpdateReso
 
 	errMsg := fmt.Sprintf("Failed to update the DB Audit Logging configuration on cluster %s", clusterName)
 
+	integrationData, err := GetIntegrationDataByName(ctx, apiClient, accountId, projectId, plan.IntegrationName.Value)
+	if err != nil {
+		resp.Diagnostics.AddError("Unable to fetch integration details", err.Error())
+		return
+	}
+	plan.IntegrationId.Value = integrationData.GetInfo().Id
+
 	dbAuditLoggingConfigSpec, err := getDbAuditLoggingConfigSpec(plan)
 	if err != nil {
 		resp.Diagnostics.AddError(errMsg, err.Error())
