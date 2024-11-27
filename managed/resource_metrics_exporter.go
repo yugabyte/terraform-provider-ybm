@@ -26,6 +26,7 @@ func (r resourceMetricsExporterType) GetSchema(_ context.Context) (tfsdk.Schema,
 		Description: `[DEPRECATED] The resource to create a metrics exporter config in YugabyteDB Aeon.
 
 This resource has been deprecated on 2024-11-30 and will be supported until 2025-2-28. Please use ` + "`ybm_integration`" + ` instead.`,
+		DeprecationMessage: `This resource has been deprecated on 2024-11-30 and will be supported until 2025-2-28. Please use ` + "`ybm_integration`" + ` instead.`,
 		Attributes: map[string]tfsdk.Attribute{
 			"account_id": {
 				Description: "The ID of the account this metrics exporter config belongs to.",
