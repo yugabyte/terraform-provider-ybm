@@ -1,15 +1,15 @@
 ---
 page_title: "ybm_metrics_exporter Resource - YugabyteDB Aeon"
 description: |-
-  [DEPRECATED] Please use ybm_integration instead.
-  The resource to create a metrics exporter config in YugabyteDB Aeon.
+  [DEPRECATED] The resource to create a metrics exporter config in YugabyteDB Aeon.
+  This resource has been deprecated on 2024-11-30 and will be supported until 2025-2-28. Please use ybm_integration instead.
 ---
 
 # ybm_metrics_exporter (Resource)
 
-[DEPRECATED] Please use `ybm_integration` instead.
+[DEPRECATED] The resource to create a metrics exporter config in YugabyteDB Aeon.
 
-The resource to create a metrics exporter config in YugabyteDB Aeon.
+This resource has been deprecated on 2024-11-30 and will be supported until 2025-2-28. Please use `ybm_integration` instead.
 
 
 ## Example Usage

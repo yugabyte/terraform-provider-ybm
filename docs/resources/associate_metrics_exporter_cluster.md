@@ -1,12 +1,12 @@
 ---
 page_title: "ybm_associate_metrics_exporter_cluster Resource - YugabyteDB Aeon"
 description: |-
-  The resource to associate a metrics exporter config to a cluster in YugabyteDB Aeon.
+  The resource to manage metrics export configuration for a cluster in YugabyteDB Aeon.
 ---
 
 # ybm_associate_metrics_exporter_cluster (Resource)
 
-The resource to associate a metrics exporter config to a cluster in YugabyteDB Aeon.
+The resource to manage metrics export configuration for a cluster in YugabyteDB Aeon.
 
 
 ## Example Usage
