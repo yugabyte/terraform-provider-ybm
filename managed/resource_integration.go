@@ -24,7 +24,10 @@ type resourceIntegrationType struct{}
 
 func (r resourceIntegrationType) GetSchema(_ context.Context) (tfsdk.Schema, diag.Diagnostics) {
 	return tfsdk.Schema{
-		Description: "The resource to create an integration in YugabyteDB Aeon.",
+		Description: `The resource to create an export configuration for the integration you want to use in YugabyteDB Aeon.
+
+Using the configuration you created, connect to your cluster:
+	-  Export metrics using resource` + "`ybm_associate_metrics_exporter_cluster`",
 		Attributes:  r.getSchemaAttributes(),
 	}, nil
 }

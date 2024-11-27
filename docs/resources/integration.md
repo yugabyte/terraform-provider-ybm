@@ -1,12 +1,17 @@
 ---
 page_title: "ybm_integration Resource - YugabyteDB Aeon"
 description: |-
-  The resource to create an integration in YugabyteDB Aeon.
+  The resource to create an export configuration for the integration you want to use in YugabyteDB Aeon.
+  Using the configuration you created, connect to your cluster:
+  -  Export metrics using resourceybm_associate_metrics_exporter_cluster
 ---
 
 # ybm_integration (Resource)
 
-The resource to create an integration in YugabyteDB Aeon.
+The resource to create an export configuration for the integration you want to use in YugabyteDB Aeon.
+
+Using the configuration you created, connect to your cluster:
+	-  Export metrics using resource`ybm_associate_metrics_exporter_cluster`
 
 
 ## Example Usage
