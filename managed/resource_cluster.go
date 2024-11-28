@@ -796,7 +796,9 @@ func getPlan(ctx context.Context, plan tfsdk.Plan, cluster *Cluster) diag.Diagno
 	diags.Append(plan.GetAttribute(ctx, path.Root("restore_backup_id"), &cluster.RestoreBackupID)...)
 	diags.Append(plan.GetAttribute(ctx, path.Root("database_track"), &cluster.DatabaseTrack)...)
 	diags.Append(plan.GetAttribute(ctx, path.Root("desired_state"), &cluster.DesiredState)...)
-	diags.Append(plan.GetAttribute(ctx, path.Root("desired_connection_pooling_state"), &cluster.DesiredConnectionPoolingState)...)
+	if !fflags.IsFeatureFlagEnabled(fflags.CONNECTION_POOLING) {
+		diags.Append(plan.GetAttribute(ctx, path.Root("desired_connection_pooling_state"), &cluster.DesiredConnectionPoolingState)...)
+	}
 	diags.Append(plan.GetAttribute(ctx, path.Root("node_config"), &cluster.NodeConfig)...)
 	diags.Append(plan.GetAttribute(ctx, path.Root("credentials"), &cluster.Credentials)...)
 	diags.Append(plan.GetAttribute(ctx, path.Root("backup_schedules"), &cluster.BackupSchedules)...)
@@ -811,7 +813,9 @@ func getIDsFromState(ctx context.Context, state tfsdk.State, cluster *Cluster) {
 	state.GetAttribute(ctx, path.Root("project_id"), &cluster.ProjectID)
 	state.GetAttribute(ctx, path.Root("cluster_id"), &cluster.ClusterID)
 	state.GetAttribute(ctx, path.Root("desired_state"), &cluster.DesiredState)
-	state.GetAttribute(ctx, path.Root("desired_connection_pooling_state"), &cluster.DesiredConnectionPoolingState)
+	if !fflags.IsFeatureFlagEnabled(fflags.CONNECTION_POOLING) {
+		state.GetAttribute(ctx, path.Root("desired_connection_pooling_state"), &cluster.DesiredConnectionPoolingState)
+	}
 	state.GetAttribute(ctx, path.Root("cluster_allow_list_ids"), &cluster.ClusterAllowListIDs)
 	state.GetAttribute(ctx, path.Root("cluster_region_info"), &cluster.ClusterRegionInfo)
 	state.GetAttribute(ctx, path.Root("backup_schedules"), &cluster.BackupSchedules)
@@ -1965,8 +1969,6 @@ func (r resourceCluster) Update(ctx context.Context, req tfsdk.UpdateResourceReq
 			return
 		}
 	}
-
-	tflog.Info(ctx, fmt.Sprintf("Existing Desired Connection Pooling State in State is %v", state.DesiredConnectionPoolingState.Value))
 
 	// Disable Connection Pooling if the desired state is set to 'Disabled' and it is enabled currently
 	if fflags.IsFeatureFlagEnabled(fflags.CONNECTION_POOLING) && !state.DesiredConnectionPoolingState.Unknown && strings.EqualFold(state.DesiredConnectionPoolingState.Value, "Enabled") && (plan.DesiredConnectionPoolingState.Unknown || strings.EqualFold(plan.DesiredConnectionPoolingState.Value, "Disabled")) {
