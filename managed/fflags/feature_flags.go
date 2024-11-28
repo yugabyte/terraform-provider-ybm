@@ -17,6 +17,7 @@ const (
 	DB_AUDIT_LOGGING                FeatureFlag = "DB_AUDIT_LOGGING"
 	DB_QUERY_LOGGING                FeatureFlag = "DB_QUERY_LOGGING"
 	CONNECTION_POOLING              FeatureFlag = "CONNECTION_POOLING"
+	DR                              FeatureFlag = "DR"
 )
 
 var flagEnabled = map[FeatureFlag]bool{
@@ -24,6 +25,7 @@ var flagEnabled = map[FeatureFlag]bool{
 	DB_AUDIT_LOGGING:                false,
 	DB_QUERY_LOGGING:                false,
 	CONNECTION_POOLING:              false,
+	DR:                              false,
 }
 
 func (f FeatureFlag) String() string {

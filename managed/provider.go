@@ -169,6 +169,11 @@ func (p *provider) GetResources(_ context.Context) (map[string]tfsdk.ResourceTyp
 		resources["ybm_db_query_logging"] = resourceDbQueryLoggingType{}
 	}
 
+	// Add DR config resource only if the feature flag is enabled
+	if fflags.IsFeatureFlagEnabled(fflags.DR) {
+		resources["ybm_dr_config"] = resourceDrConfig{}
+	}
+
 	return resources, nil
 }
 
