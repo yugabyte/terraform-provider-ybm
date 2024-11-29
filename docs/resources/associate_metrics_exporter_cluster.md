@@ -14,8 +14,8 @@ The resource to manage metrics export configuration for a cluster in YugabyteDB 
 ```terraform
 resource "ybm_associate_metrics_exporter_cluster" "metrics-srcluster" {
   cluster_id = ybm_cluster.single_region_cluster.cluster_id
-  config_id  = ybm_metrics_exporter.test.config_id
-  depends_on = [ybm_cluster.single_region_cluster, ybm_metrics_exporter.test]
+  config_id  = ybm_integration.test.config_id
+  depends_on = [ybm_cluster.single_region_cluster, ybm_integration.test]
 }
 ```
 
@@ -24,12 +24,12 @@ resource "ybm_associate_metrics_exporter_cluster" "metrics-srcluster" {
 
 ### Optional
 
-- `cluster_id` (String) The ID of the metrics exporter config.
-- `cluster_name` (String) The name of the metrics exporter configuration
-- `config_id` (String) The ID of the metrics exporter config.
-- `config_name` (String) The name of the metrics exporter configuration
+- `cluster_id` (String) ID of the cluster with which this metrics export configuration will be associated.
+- `cluster_name` (String) Name of the cluster with which this metrics export configuration will be associated.
+- `config_id` (String) ID of the integration for this metrics export configuration.
+- `config_name` (String) Name of the integration for this metrics export configuration
 
 ### Read-Only
 
-- `account_id` (String) The ID of the account this private service endpoint belongs to.
-- `project_id` (String) The ID of the project this private service endpoint belongs to.
+- `account_id` (String) ID of the account this metrics export configuration belongs to.
+- `project_id` (String) ID of the project this metrics export configuration belongs to.

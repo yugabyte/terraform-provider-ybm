@@ -39,7 +39,7 @@ func (r resourceDbQueryLoggingType) GetSchema(ctx context.Context) (tfsdk.Schema
 				Computed:    true,
 			},
 			"cluster_id": {
-				Description: "ID of the cluster with which this DB query logging config will be associated.",
+				Description: "ID of the cluster with which this DB query logging configuration will be associated.",
 				Type:        types.StringType,
 				Required:    true,
 			},
@@ -216,7 +216,7 @@ func getPgLogExporterConfig(ctx context.Context, accountId string, projectId str
 	}
 
 	if len(specList.GetData()) < 1 {
-		return nil, false, "no DB query logging config found for the cluster"
+		return nil, false, "no DB query logging configuration found for the cluster"
 	}
 	return &specList.Data[0], true, ""
 }
@@ -284,7 +284,7 @@ func (r resourceDbQueryLogging) Update(ctx context.Context, req tfsdk.UpdateReso
 	var planConfig DbQueryLoggingConfig
 	resp.Diagnostics.Append(getConfigFromPlan(ctx, req.Plan, &planConfig)...)
 	if resp.Diagnostics.HasError() {
-		tflog.Debug(ctx, "Error while getting the plan for the Db query logging config")
+		tflog.Debug(ctx, "Error while getting the plan for the Db query logging configuration")
 		return
 	}
 	integrationName := planConfig.IntegrationName.Value
@@ -305,7 +305,7 @@ func (r resourceDbQueryLogging) Update(ctx context.Context, req tfsdk.UpdateReso
 
 	spec, ok, errMsg := getPgLogExporterConfig(ctx, accountId, projectId, clusterId, apiClient)
 	if !ok {
-		resp.Diagnostics.AddError("Unable to fetch DB query logging config", errMsg)
+		resp.Diagnostics.AddError("Unable to fetch DB query logging configuration", errMsg)
 		return
 	}
 
@@ -323,13 +323,13 @@ func (r resourceDbQueryLogging) Update(ctx context.Context, req tfsdk.UpdateReso
 	// Use planConfig provided in tf file to build new API Pg log exporter config spec
 	apiConfigSpec, err := buildDbQueryLoggingSpec(planConfig, integrationId, &spec.Spec.ExportConfig)
 	if err != nil {
-		resp.Diagnostics.AddError("Unable to update DB query logging config", GetApiErrorDetails(err))
+		resp.Diagnostics.AddError("Unable to update DB query logging configuration", GetApiErrorDetails(err))
 		return
 	}
 
 	_, _, err = apiClient.ClusterApi.UpdatePgLogExporterConfig(ctx, accountId, projectId, clusterId, configId).PgLogExporterConfigSpec(*apiConfigSpec).Execute()
 	if err != nil {
-		resp.Diagnostics.AddError(fmt.Sprintf("Unable to update DB query logging config for cluster %s", clusterId), GetApiErrorDetails(err))
+		resp.Diagnostics.AddError(fmt.Sprintf("Unable to update DB query logging configuration for cluster %s", clusterId), GetApiErrorDetails(err))
 		return
 	}
 
@@ -342,17 +342,17 @@ func (r resourceDbQueryLogging) Update(ctx context.Context, req tfsdk.UpdateReso
 				return nil
 			}
 			if asState == string(openapiclient.TASKACTIONSTATEENUM_FAILED) {
-				return fmt.Errorf("failed to update DB query log config")
+				return fmt.Errorf("failed to update DB query log configuration")
 			}
 		} else {
-			return retry.RetryableError(errors.New("unable to check DB query log config update status: " + message))
+			return retry.RetryableError(errors.New("unable to check DB query log configuration update status: " + message))
 		}
-		return retry.RetryableError(errors.New("DB query log config is being updated"))
+		return retry.RetryableError(errors.New("DB query log configuration is being updated"))
 	})
 
 	if err != nil {
-		errorSummary := fmt.Sprintf("Unable to update DB query log config for cluster: %s", clusterId)
-		resp.Diagnostics.AddError(errorSummary, "The operation timed out waiting for DB query log config update operation.")
+		errorSummary := fmt.Sprintf("Unable to update DB query log configuration for cluster: %s", clusterId)
+		resp.Diagnostics.AddError(errorSummary, "The operation timed out waiting for DB query log configuration update operation.")
 		return
 	}
 
@@ -360,7 +360,7 @@ func (r resourceDbQueryLogging) Update(ctx context.Context, req tfsdk.UpdateReso
 
 	dbqlConfig, readOK, readErrMsg := resourceRead(ctx, accountId, projectId, clusterId, integrationName, apiClient)
 	if !readOK {
-		resp.Diagnostics.AddError("Unable to read the state of Db Query log config ", readErrMsg)
+		resp.Diagnostics.AddError("Unable to read the state of Db Query log configuration ", readErrMsg)
 		return
 	}
 
@@ -382,7 +382,7 @@ func (r resourceDbQueryLogging) Delete(ctx context.Context, req tfsdk.DeleteReso
 
 	_, err := apiClient.ClusterApi.RemovePgLogExporterConfig(ctx, accountId, projectId, clusterId, configId).Execute()
 	if err != nil {
-		resp.Diagnostics.AddError(fmt.Sprintf("Unable to remove DB query logging config for cluster: %s", clusterId), GetApiErrorDetails(err))
+		resp.Diagnostics.AddError(fmt.Sprintf("Unable to remove DB query logging configuration for cluster: %s", clusterId), GetApiErrorDetails(err))
 		return
 	}
 
@@ -404,7 +404,7 @@ func (r resourceDbQueryLogging) Delete(ctx context.Context, req tfsdk.DeleteReso
 	})
 
 	if err != nil {
-		resp.Diagnostics.AddError("Unable to remove Db Logging config from the cluster ", "The operation timed out waiting for DB  Query Logging removal to complete.")
+		resp.Diagnostics.AddError("Unable to remove Db Logging configuration from the cluster ", "The operation timed out waiting for DB  Query Logging removal to complete.")
 		return
 	}
 
@@ -461,7 +461,7 @@ func (r resourceDbQueryLogging) Create(ctx context.Context, req tfsdk.CreateReso
 
 	dbQueryLoggingConfigSpec, err := buildDbQueryLoggingSpec(config, integrationId, openapiclient.NewPgLogExportConfigWithDefaults())
 	if err != nil {
-		tflog.Warn(ctx, "Unable to build DB query logging config spec"+GetApiErrorDetails(err))
+		tflog.Warn(ctx, "Unable to build DB query logging configuration spec"+GetApiErrorDetails(err))
 		resp.Diagnostics.AddError("Encountered error while enabling DB Query Logging", GetApiErrorDetails(err))
 		return
 	}
@@ -502,7 +502,7 @@ func (r resourceDbQueryLogging) Create(ctx context.Context, req tfsdk.CreateReso
 	dbQueryLoggingConfig, readOK, readErrMsg := resourceRead(ctx, accountId, projectId,
 		clusterId, integrationName, apiClient)
 	if !readOK {
-		resp.Diagnostics.AddError("Unable to read the state of Db Query log config for the cluster ", readErrMsg)
+		resp.Diagnostics.AddError("Unable to read the state of Db Query log configuration for the cluster ", readErrMsg)
 		return
 	}
 
