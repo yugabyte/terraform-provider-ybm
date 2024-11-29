@@ -23,23 +23,23 @@ func (r resourceAssociateMetricsExporterClusterType) GetSchema(_ context.Context
 		Description: `The resource to manage metrics export configuration for a cluster in YugabyteDB Aeon.`,
 		Attributes: map[string]tfsdk.Attribute{
 			"account_id": {
-				Description: "The ID of the account this private service endpoint belongs to.",
+				Description: "ID of the account this metrics export configuration belongs to.",
 				Type:        types.StringType,
 				Computed:    true,
 			},
 			"project_id": {
-				Description: "The ID of the project this private service endpoint belongs to.",
+				Description: "ID of the project this metrics export configuration belongs to.",
 				Type:        types.StringType,
 				Computed:    true,
 			},
 			"cluster_id": {
-				Description: "The ID of the metrics exporter config.",
+				Description: "ID of the cluster with which this metrics export configuration will be associated.",
 				Type:        types.StringType,
 				Optional:    true,
 				Computed:    true,
 			},
 			"cluster_name": {
-				Description: "The name of the metrics exporter configuration",
+				Description: "Name of the cluster with which this metrics export configuration will be associated.",
 				Type:        types.StringType,
 				Optional:    true,
 				Computed:    true,
@@ -48,13 +48,13 @@ func (r resourceAssociateMetricsExporterClusterType) GetSchema(_ context.Context
 				},
 			},
 			"config_id": {
-				Description: "The ID of the metrics exporter config.",
+				Description: "ID of the integration for this metrics export configuration.",
 				Type:        types.StringType,
 				Optional:    true,
 				Computed:    true,
 			},
 			"config_name": {
-				Description: "The name of the metrics exporter configuration",
+				Description: "Name of the integration for this metrics export configuration",
 				Type:        types.StringType,
 				Optional:    true,
 				Computed:    true,
