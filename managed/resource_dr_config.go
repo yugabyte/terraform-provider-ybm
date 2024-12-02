@@ -153,7 +153,7 @@ func (r resourceDrConfig) Create(ctx context.Context, req tfsdk.CreateResourceRe
 		}
 	}
 
-	createDrRequest := openapiclient.NewCreateXClusterDrRequest(*openapiclient.NewXClusterDrSpec(drName, targetClusterId, databases))
+	createDrRequest := openapiclient.NewCreateXClusterDrRequest(*openapiclient.NewXClusterDrSpec(drName, targetClusterId, databaseIds))
 
 	drConfigResp, response, err := apiClient.XclusterDrApi.CreateXClusterDr(ctx, accountId, projectId, sourceClusterId).CreateXClusterDrRequest(*createDrRequest).Execute()
 	if err != nil {
@@ -210,8 +210,12 @@ func (r resourceDrConfig) Read(ctx context.Context, req tfsdk.ReadResourceReques
 	getDrConfigState(ctx, req.State, &state)
 
 	apiClient := r.p.client
+	accountId := state.AccountId.Value
+	projectId := state.ProjectId.Value
+	sourceClusterId := state.SourceClusterId.Value
+	drConfigId := state.DrConfigId.Value
 
-	drConfigResp, response, err := apiClient.XclusterDrApi.GetXClusterDr(ctx, state.AccountId.Value, state.ProjectId.Value, state.SourceClusterId.Value, state.DrConfigId.Value).Execute()
+	drConfigResp, response, err := apiClient.XclusterDrApi.GetXClusterDr(ctx, accountId, projectId, sourceClusterId, drConfigId).Execute()
 	if err != nil {
 		if response != nil && response.StatusCode == 404 {
 			resp.State.RemoveResource(ctx)
@@ -226,9 +230,22 @@ func (r resourceDrConfig) Read(ctx context.Context, req tfsdk.ReadResourceReques
 	state.SourceClusterId = types.String{Value: drConfigResp.Data.Info.SourceClusterId}
 	state.TargetClusterId = types.String{Value: drConfigResp.Data.Spec.TargetClusterId}
 
+	namespacesResp, response, err := apiClient.ClusterApi.GetClusterNamespaces(ctx, accountId, projectId, sourceClusterId).Execute()
+	if err != nil {
+		errMsg := getErrorMessage(response, err)
+		resp.Diagnostics.AddError("Unable to create DR configuration", errMsg)
+		return
+	}
+
+	dbIdToNameMap := map[string]string{}
+	for _, namespace := range namespacesResp.Data {
+		dbIdToNameMap[namespace.GetId()] = namespace.GetName()
+	}
+
 	databases := []types.String{}
-	for _, db := range drConfigResp.Data.Spec.DatabaseIds {
-		databases = append(databases, types.String{Value: db})
+	for _, dbId := range drConfigResp.Data.Spec.DatabaseIds {
+		database := dbIdToNameMap[dbId]
+		databases = append(databases, types.String{Value: database})
 	}
 	state.Databases = databases
 
