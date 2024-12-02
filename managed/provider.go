@@ -171,7 +171,7 @@ func (p *provider) GetResources(_ context.Context) (map[string]tfsdk.ResourceTyp
 
 	// Add DR config resource only if the feature flag is enabled
 	if fflags.IsFeatureFlagEnabled(fflags.DR) {
-		resources["ybm_dr_config"] = resourceDrConfig{}
+		resources["ybm_dr_config"] = resourceDrConfigType{}
 	}
 
 	return resources, nil
