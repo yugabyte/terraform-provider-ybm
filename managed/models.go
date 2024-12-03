@@ -391,3 +391,13 @@ type DbQueryLoggingConfig struct {
 	ConfigID        types.String `tfsdk:"config_id"`
 	LogConfig       *LogConfig   `tfsdk:"log_config"`
 }
+
+type DrConfig struct {
+	AccountId       types.String   `tfsdk:"account_id"`
+	ProjectId       types.String   `tfsdk:"project_id"`
+	DrConfigId      types.String   `tfsdk:"dr_config_id"`
+	Name            types.String   `tfsdk:"name"`
+	SourceClusterId types.String   `tfsdk:"source_cluster_id"`
+	TargetClusterId types.String   `tfsdk:"target_cluster_id"`
+	Databases       []types.String `tfsdk:"databases"`
+}
