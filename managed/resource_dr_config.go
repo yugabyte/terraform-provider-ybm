@@ -49,6 +49,11 @@ func (r resourceDrConfigType) GetSchema(_ context.Context) (tfsdk.Schema, diag.D
 				Type:        types.StringType,
 				Required:    true,
 			},
+			"name": {
+				Description: "The name for DR configuration.",
+				Type:        types.StringType,
+				Required:    true,
+			},
 			"databases": {
 				Description: "List of databases to be included in DR configuration.",
 				Type: types.SetType{
@@ -256,13 +261,119 @@ func (r resourceDrConfig) Read(ctx context.Context, req tfsdk.ReadResourceReques
 	}
 }
 
-// Update DR configuration
+// Edit DR configuration
 func (r resourceDrConfig) Update(ctx context.Context, req tfsdk.UpdateResourceRequest, resp *tfsdk.UpdateResourceResponse) {
-	resp.Diagnostics.AddError(
-		"Unable to update DR configuration",
-		"Updating DR configurations is not currently supported. Delete and recreate the configuration instead.",
-	)
-	return
+	var plan DrConfig
+	var state DrConfig
+
+	// Get current state
+	getDrConfigState(ctx, req.State, &state)
+
+	// Get planned changes
+	resp.Diagnostics.Append(getDrConfigPlan(ctx, req.Plan, &plan)...)
+	if resp.Diagnostics.HasError() {
+		tflog.Debug(ctx, "Error while getting the plan for the DR config edit")
+		return
+	}
+
+	// Verify that only databases field is being changed
+	if plan.Name.Value != state.Name.Value ||
+		plan.SourceClusterId.Value != state.SourceClusterId.Value ||
+		plan.TargetClusterId.Value != state.TargetClusterId.Value {
+		resp.Diagnostics.AddError(
+			"Invalid edit to DR configuration",
+			"Only the databases field can be modified in DR configurations. Other fields cannot be changed.",
+		)
+		return
+	}
+
+	apiClient := r.p.client
+	accountId := state.AccountId.Value
+	projectId := state.ProjectId.Value
+	sourceClusterId := state.SourceClusterId.Value
+	drConfigId := state.DrConfigId.Value
+
+	// Convert planned databases from []types.String to []string
+	databases := []string{}
+	for _, db := range plan.Databases {
+		databases = append(databases, db.Value)
+	}
+
+	// Get database IDs for the new database list
+	namespacesResp, response, err := apiClient.ClusterApi.GetClusterNamespaces(ctx, accountId, projectId, sourceClusterId).Execute()
+	if err != nil {
+		errMsg := getErrorMessage(response, err)
+		resp.Diagnostics.AddError("Unable to edit DR configuration", errMsg)
+		return
+	}
+
+	dbNameToIdMap := map[string]string{}
+	for _, namespace := range namespacesResp.Data {
+		dbNameToIdMap[namespace.GetName()] = namespace.GetId()
+	}
+
+	databaseIds := []string{}
+	for _, database := range databases {
+		if databaseId, exists := dbNameToIdMap[database]; exists {
+			databaseIds = append(databaseIds, databaseId)
+		} else {
+			msg := "The database " + database + " doesn't exist"
+			resp.Diagnostics.AddError("Unable to edit DR configuration", msg)
+			return
+		}
+	}
+
+	// Create edit request with new database IDs
+	editDrRequest := openapiclient.NewEditXClusterDrRequest(*openapiclient.NewEditXClusterDrSpec(databaseIds))
+
+	_, response, err = apiClient.XclusterDrApi.EditXClusterDr(ctx, accountId, projectId, sourceClusterId, drConfigId).EditXClusterDrRequest(*editDrRequest).Execute()
+	if err != nil {
+		errMsg := getErrorMessage(response, err)
+		resp.Diagnostics.AddError("Unable to edit DR configuration", errMsg)
+		return
+	}
+
+	// Wait for  to complete
+	readClusterRetries := 0
+	retryPolicy := retry.NewConstant(10 * time.Second)
+	retryPolicy = retry.WithMaxDuration(3600*time.Second, retryPolicy)
+	err = retry.Do(ctx, retryPolicy, func(ctx context.Context) error {
+		asState, readInfoOK, message := getTaskState(accountId, projectId, sourceClusterId, openapiclient.ENTITYTYPEENUM_CLUSTER, openapiclient.TASKTYPEENUM_EDIT_DR, apiClient, ctx)
+
+		tflog.Info(ctx, "DR config edit operation in progress, state: "+asState)
+
+		if readInfoOK {
+			if asState == string(openapiclient.TASKACTIONSTATEENUM_SUCCEEDED) {
+				return nil
+			}
+			if asState == string(openapiclient.TASKACTIONSTATEENUM_FAILED) {
+				return ErrFailedTask
+			}
+		} else {
+			return handleReadFailureWithRetries(ctx, &readClusterRetries, 2, message)
+		}
+		return retry.RetryableError(errors.New("DR config edit operation in progress"))
+	})
+
+	if err != nil {
+		msg := "The operation timed out waiting for DR config edit to complete."
+		if errors.Is(err, ErrFailedTask) {
+			msg = "DR config edit operation failed"
+		}
+		resp.Diagnostics.AddError("Unable to edit DR config:", msg)
+		return
+	}
+
+	// Set state to planned new state
+	plan.AccountId = state.AccountId
+	plan.ProjectId = state.ProjectId
+	plan.DrConfigId = state.DrConfigId
+
+	diags := resp.State.Set(ctx, plan)
+	resp.Diagnostics.Append(diags...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
 }
 
 // Delete DR configuration
