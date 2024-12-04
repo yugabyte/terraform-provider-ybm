@@ -336,6 +336,7 @@ func (r dataClusterNameType) GetSchema(_ context.Context) (tfsdk.Schema, diag.Di
 						Computed: true,
 					},
 				}),
+				DeprecationMessage: "Remove reliance on the attribute as it will be removed in the next major version of the provider. Please use cluster_region_info to read node config instead.",
 			},
 			"credentials": {
 				Computed: true,

@@ -66,3 +66,5 @@ terraform
 
 # Ignore Intellij files.
 .idea/
+
+terraform-provider-ybm
