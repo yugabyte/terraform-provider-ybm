@@ -40,17 +40,14 @@ resource "ybm_cluster" "single_region" {
       region    = "us-west2"
       num_nodes = 1
       vpc_id    = ybm_vpc.newvpc.vpc_id
+      num_cores = 2
     }
   ]
   cluster_tier           = "PAID"
   cluster_allow_list_ids = [ybm_allow_list.mylist.allow_list_id]
   fault_tolerance        = "NONE"
-  node_config = {
-    num_cores    = 2
-    disk_size_gb = 10
-  }
-  // for custom_backup_schedule to be activated pass true 
 
+  // for custom_backup_schedule to be activated pass true
   backup_schedules = [
     {
       state                    = "ACTIVE"
@@ -64,12 +61,11 @@ resource "ybm_cluster" "single_region" {
     ycql_username = "example_ycql_user"
     ycql_password = var.ycql_password
   }
-
 }
 
-data "ybm_cluster" "clustername" {
-  cluster_name = "terraform-test-posriniv-1"
-}
+# data "ybm_cluster" "clustername" {
+#   cluster_name = "terraform-test-posriniv-1"
+# }
 
 resource "ybm_allow_list" "mylist" {
   allow_list_name        = "all"
@@ -87,7 +83,7 @@ resource "ybm_allow_list" "mylist" {
 # resource "ybm_backup" "mybackup" {
 #   cluster_id = ybm_cluster.single_region.cluster_id
 #   backup_description = "backup"
-#   retention_period_in_days = 2  
+#   retention_period_in_days = 2
 # }
 
 
@@ -102,7 +98,7 @@ resource "ybm_vpc" "newvpc" {
   #     cidr = "10.231.0.0/24"
   #   },
   #   {
-  #     region = "us-west2" 
+  #     region = "us-west2"
   #     cidr = "10.9.0.0/24"
   #   }
   # ]
@@ -126,14 +122,14 @@ resource "ybm_read_replicas" "myrr" {
   primary_cluster_id = ybm_cluster.single_region.cluster_id
 }
 
-resource "ybm_vpc_peering" "example_vpc_peering" {
-  name              = "example_name"
-  yugabytedb_vpc_id = "example_vpc_id"
-  application_vpc_info = {
-    cloud   = "GCP"
-    project = "example_project"
-    region  = "us-west1"
-    vpc_id  = "application_vpc_id"
-    cidr    = "example_cidr"
-  }
-}
+# resource "ybm_vpc_peering" "example_vpc_peering" {
+#   name              = "example_name"
+#   yugabytedb_vpc_id = "example_vpc_id"
+#   application_vpc_info = {
+#     cloud   = "GCP"
+#     project = "example_project"
+#     region  = "us-west1"
+#     vpc_id  = "application_vpc_id"
+#     cidr    = "example_cidr"
+#   }
+# }

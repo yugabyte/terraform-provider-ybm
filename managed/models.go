@@ -25,7 +25,7 @@ type Cluster struct {
 	ClusterTier                   types.String         `tfsdk:"cluster_tier"`
 	ClusterAllowListIDs           []types.String       `tfsdk:"cluster_allow_list_ids"`
 	RestoreBackupID               types.String         `tfsdk:"restore_backup_id"`
-	NodeConfig                    NodeConfig           `tfsdk:"node_config"`
+	NodeConfig                    *NodeConfig          `tfsdk:"node_config"`
 	Credentials                   Credentials          `tfsdk:"credentials"`
 	ClusterInfo                   ClusterInfo          `tfsdk:"cluster_info"`
 	ClusterVersion                types.String         `tfsdk:"cluster_version"`
