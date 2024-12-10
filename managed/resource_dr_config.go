@@ -7,6 +7,7 @@ package managed
 import (
 	"context"
 	"errors"
+	"fmt"
 	"time"
 
 	"github.com/hashicorp/terraform-plugin-framework/diag"
@@ -14,11 +15,39 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
+
 	retry "github.com/sethvargo/go-retry"
 	openapiclient "github.com/yugabyte/yugabytedb-managed-go-client-internal"
 )
 
 type resourceDrConfigType struct{}
+
+type ignoreChangesModifier struct{}
+
+func (m ignoreChangesModifier) Modify(ctx context.Context, req tfsdk.ModifyAttributePlanRequest, resp *tfsdk.ModifyAttributePlanResponse) {
+
+	if req.AttributeState.IsNull() {
+		return
+	}
+
+	if !req.AttributeConfig.IsNull() && !req.AttributeConfig.Equal(req.AttributeState) {
+		resp.Diagnostics.AddWarning(
+			"Value Change Ignored",
+			fmt.Sprintf("An attempt to change the value of '%s' will be ignored as this field cannot be modified after creation.", req.AttributePath.String()),
+		)
+	}
+
+	resp.AttributePlan = req.AttributeState
+
+}
+
+func (m ignoreChangesModifier) Description(ctx context.Context) string {
+	return "Ignores changes to this field after creation"
+}
+
+func (m ignoreChangesModifier) MarkdownDescription(ctx context.Context) string {
+	return "Ignores changes to this field after creation"
+}
 
 func (r resourceDrConfigType) GetSchema(_ context.Context) (tfsdk.Schema, diag.Diagnostics) {
 	return tfsdk.Schema{
@@ -28,31 +57,49 @@ func (r resourceDrConfigType) GetSchema(_ context.Context) (tfsdk.Schema, diag.D
 				Description: "The ID of the account this DR config belongs to.",
 				Type:        types.StringType,
 				Computed:    true,
+				PlanModifiers: []tfsdk.AttributePlanModifier{
+					tfsdk.UseStateForUnknown(),
+				},
 			},
 			"project_id": {
 				Description: "The ID of the project this DR config belongs to.",
 				Type:        types.StringType,
 				Computed:    true,
+				PlanModifiers: []tfsdk.AttributePlanModifier{
+					tfsdk.UseStateForUnknown(),
+				},
 			},
 			"dr_config_id": {
 				Description: "The ID of the DR configuration.",
 				Type:        types.StringType,
 				Computed:    true,
+				PlanModifiers: []tfsdk.AttributePlanModifier{
+					tfsdk.UseStateForUnknown(),
+				},
 			},
 			"source_cluster_id": {
 				Description: "The ID of the source cluster for DR configuration.",
 				Type:        types.StringType,
 				Required:    true,
+				PlanModifiers: []tfsdk.AttributePlanModifier{
+					ignoreChangesModifier{},
+				},
 			},
 			"target_cluster_id": {
 				Description: "The ID of the target cluster for DR configuration.",
 				Type:        types.StringType,
 				Required:    true,
+				PlanModifiers: []tfsdk.AttributePlanModifier{
+					ignoreChangesModifier{},
+				},
 			},
 			"name": {
 				Description: "The name for DR configuration.",
 				Type:        types.StringType,
 				Required:    true,
+				PlanModifiers: []tfsdk.AttributePlanModifier{
+					ignoreChangesModifier{},
+				},
 			},
 			"databases": {
 				Description: "List of databases to be included in DR configuration.",

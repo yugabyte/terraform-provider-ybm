@@ -133,3 +133,10 @@ resource "ybm_read_replicas" "myrr" {
 #     cidr    = "example_cidr"
 #   }
 # }
+
+# resource "ybm_dr_config" "sample_dr" {
+#   name = "test-config"
+#   source_cluster_id = "eec5b720-e0fb-4cf6-82a8-788b40ed905b"
+#   target_cluster_id = "e35dbf4d-cfd7-4e17-b9de-7d4ebd56a0e0"
+#   databases = ["test1", "test2"]
+# }
