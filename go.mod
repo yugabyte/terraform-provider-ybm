@@ -8,7 +8,7 @@ require (
 	github.com/hashicorp/terraform-plugin-framework-validators v0.4.0
 	github.com/hashicorp/terraform-plugin-log v0.9.0
 	github.com/sethvargo/go-retry v0.2.3
-	github.com/yugabyte/yugabytedb-managed-go-client-internal v0.0.0-20241111184456-64fb00419bec
+	github.com/yugabyte/yugabytedb-managed-go-client-internal v0.0.0-20241121131757-c39c1074998a
 )
 
 require (
