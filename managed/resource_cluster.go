@@ -24,7 +24,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
-	retry "github.com/sethvargo/go-retry"
+	"github.com/sethvargo/go-retry"
 	"github.com/yugabyte/terraform-provider-ybm/managed/fflags"
 	"github.com/yugabyte/terraform-provider-ybm/managed/util"
 	openapiclient "github.com/yugabyte/yugabytedb-managed-go-client-internal"
@@ -63,6 +63,9 @@ func (r resourceClusterType) GetSchema(_ context.Context) (tfsdk.Schema, diag.Di
 			Description: "The type of the cluster. SYNCHRONOUS or GEO_PARTITIONED",
 			Type:        types.StringType,
 			Required:    true,
+			Validators: []tfsdk.AttributeValidator{
+				stringvalidator.OneOf("SYNCHRONOUS", "GEO_PARTITIONED"),
+			},
 		},
 		"cloud_type": {
 			Description: "The cloud provider where the cluster is deployed: AWS, AZURE or GCP.",
@@ -87,18 +90,34 @@ func (r resourceClusterType) GetSchema(_ context.Context) (tfsdk.Schema, diag.Di
 					Type:        types.Int64Type,
 					Optional:    true,
 					Computed:    true,
+					Validators: []tfsdk.AttributeValidator{
+						schemavalidator.ExactlyOneOf(
+							path.MatchRelative().AtParent().AtParent().AtParent().AtName("node_config").AtName("num_cores"),
+							path.MatchRelative(),
+						),
+					},
 				},
 				"disk_size_gb": {
 					Description: "Disk size of the nodes of the region.",
 					Type:        types.Int64Type,
 					Optional:    true,
 					Computed:    true,
+					Validators: []tfsdk.AttributeValidator{
+						schemavalidator.ConflictsWith(
+							path.MatchRelative().AtParent().AtParent().AtParent().AtName("node_config").AtName("disk_size_gb"),
+						),
+					},
 				},
 				"disk_iops": {
 					Description: "Disk IOPS of the nodes of the region.",
 					Type:        types.Int64Type,
 					Optional:    true,
 					Computed:    true,
+					Validators: []tfsdk.AttributeValidator{
+						schemavalidator.ConflictsWith(
+							path.MatchRelative().AtParent().AtParent().AtParent().AtName("node_config").AtName("disk_iops"),
+						),
+					},
 				},
 				"vpc_id": {
 					Type:     types.StringType,
@@ -373,26 +392,39 @@ func (r resourceClusterType) GetSchema(_ context.Context) (tfsdk.Schema, diag.Di
 			Optional:    true,
 		},
 		"node_config": {
-			Required: true,
+			Optional: true,
+			Computed: true,
 			Attributes: tfsdk.SingleNestedAttributes(map[string]tfsdk.Attribute{
 				"num_cores": {
 					Description: "Number of CPU cores in the node.",
 					Type:        types.Int64Type,
-					Required:    true,
+					Optional:    true,
+					Computed:    true,
 				},
 				"disk_size_gb": {
 					Description: "Disk size of the node.",
 					Type:        types.Int64Type,
 					Computed:    true,
 					Optional:    true,
+					Validators: []tfsdk.AttributeValidator{
+						schemavalidator.ConflictsWith(
+							path.MatchRelative().AtParent().AtParent().AtName("cluster_region_info").AtAnyListIndex().AtName("disk_size_gb"),
+						),
+					},
 				},
 				"disk_iops": {
 					Description: "Disk IOPS of the node.",
 					Type:        types.Int64Type,
 					Computed:    true,
 					Optional:    true,
+					Validators: []tfsdk.AttributeValidator{
+						schemavalidator.ConflictsWith(
+							path.MatchRelative().AtParent().AtParent().AtName("cluster_region_info").AtAnyListIndex().AtName("disk_iops"),
+						),
+					},
 				},
 			}),
+			DeprecationMessage: "Remove this attribute's configuration as it's no longer in use and the attribute will be removed in the next major version of the provider. Please use cluster_region_info to specify node config instead.",
 		},
 		"credentials": {
 			Description: `Credentials to be used by the database. Please provide 'username' and 'password' 
@@ -577,7 +609,7 @@ func editBackupScheduleV2(ctx context.Context, backupScheduleStruct BackupSchedu
 			backupScheduleSpec.UnsetTimeIntervalInDays()
 		}
 		if backupScheduleStruct.TimeIntervalInDays.Value != 0 && backupScheduleStruct.CronExpression.Value != "" {
-			return errors.New("Unable to create custom backup schedule. You can't pass both the cron expression and time interval in days.")
+			return errors.New("unable to create custom backup schedule. You can't pass both the cron expression and time interval in days")
 		}
 
 		_, res, err := apiClient.BackupApi.ModifyBackupScheduleV2(ctx, accountId, projectId, clusterId, scheduleId).ScheduleSpecV2(backupScheduleSpec).Execute()
@@ -611,7 +643,7 @@ func createClusterSpec(ctx context.Context, apiClient *openapiclient.APIClient, 
 		softwareInfo.SetTrackId(trackId)
 	}
 
-	clusterRegionInfo := []openapiclient.ClusterRegionInfo{}
+	var clusterRegionInfo []openapiclient.ClusterRegionInfo
 	totalNodes := 0
 	clusterType := plan.ClusterType.Value
 	isDefaultSet := false
@@ -633,41 +665,50 @@ func createClusterSpec(ctx context.Context, apiClient *openapiclient.APIClient, 
 			regionInfo.VPCID.Value = vpcData.Info.Id
 		}
 
-		if !regionInfo.NumCores.IsUnknown() && !regionInfo.NumCores.IsNull() {
-			cloud := plan.CloudType.Value
-			tier := plan.ClusterTier.Value
-			region := regionInfo.Region.Value
-			numCores := int32(regionInfo.NumCores.Value)
-			memoryMb, memoryOK, message = getMemoryFromInstanceType(ctx, apiClient, accountId, cloud, tier, region, numCores)
-			if !memoryOK {
+		cloud := plan.CloudType.Value
+		tier := plan.ClusterTier.Value
+		region := regionInfo.Region.Value
+		var numCores int32
+		// If regionInfo numCores is null, then it must be coming from the root level node info.
+		if regionInfo.NumCores.IsNull() || regionInfo.NumCores.IsUnknown() {
+			numCores = int32(plan.NodeConfig.NumCores.Value)
+		} else {
+			numCores = int32(regionInfo.NumCores.Value)
+		}
+
+		memoryMb, memoryOK, message = getMemoryFromInstanceType(ctx, apiClient, accountId, cloud, tier, region, numCores)
+		if !memoryOK {
+			return nil, false, message
+		}
+
+		if !regionInfo.DiskSizeGb.IsUnknown() && !regionInfo.DiskSizeGb.IsNull() {
+			diskSizeGb = int32(regionInfo.DiskSizeGb.Value)
+		} else if plan.NodeConfig != nil && !plan.NodeConfig.DiskSizeGb.IsUnknown() && !plan.NodeConfig.DiskSizeGb.IsNull() {
+			diskSizeGb = int32(plan.NodeConfig.DiskSizeGb.Value)
+		} else {
+			diskSizeGb, diskSizeOK, message = getDiskSizeFromInstanceType(ctx, apiClient, accountId, cloud, tier, region, numCores)
+			if !diskSizeOK {
 				return nil, false, message
 			}
-
-			if !regionInfo.DiskSizeGb.IsUnknown() && !regionInfo.DiskSizeGb.IsNull() {
-				diskSizeGb = int32(regionInfo.DiskSizeGb.Value)
-			} else {
-				diskSizeGb, diskSizeOK, message = getDiskSizeFromInstanceType(ctx, apiClient, accountId, cloud, tier, region, numCores)
-				if !diskSizeOK {
-					return nil, false, message
-				}
-			}
-
-			nodeInfo := *openapiclient.NewOptionalClusterNodeInfo(numCores, memoryMb, diskSizeGb)
-			if !regionInfo.DiskIops.IsUnknown() && !regionInfo.DiskIops.IsNull() {
-				nodeInfo.SetDiskIops(int32(regionInfo.DiskIops.Value))
-			}
-
-			info.SetNodeInfo(nodeInfo)
-		} else {
-			info.UnsetNodeInfo()
 		}
+
+		nodeInfo := *openapiclient.NewOptionalClusterNodeInfo(numCores, memoryMb, diskSizeGb)
+		if !regionInfo.DiskIops.IsUnknown() && !regionInfo.DiskIops.IsNull() && int32(regionInfo.DiskIops.Value) > 0 {
+			nodeInfo.SetDiskIops(int32(regionInfo.DiskIops.Value))
+		} else if plan.NodeConfig != nil && !plan.NodeConfig.DiskIops.IsNull() && !plan.NodeConfig.DiskIops.IsNull() && int32(plan.NodeConfig.DiskIops.Value) > 0 {
+			nodeInfo.SetDiskIops(int32(plan.NodeConfig.DiskIops.Value))
+		} else {
+			nodeInfo.UnsetDiskIops()
+		}
+
+		info.SetNodeInfo(nodeInfo)
 
 		// Create an array of AccessibilityType and populate it according to
 		// the following logic:
 		// if the cluster is in a private VPC, it MUST always have PRIVATE.
 		// if the cluster is NOT in a private VPC, it MUST always have PUBLIC.
 		// if the cluster is in a private VPC and customer wants public access, it MUST have PRIVATE and PUBLIC.
-		accessibilityTypes := []openapiclient.AccessibilityType{}
+		var accessibilityTypes []openapiclient.AccessibilityType
 
 		if vpcID := regionInfo.VPCID.Value; vpcID != "" {
 			info.PlacementInfo.SetVpcId(vpcID)
@@ -679,7 +720,7 @@ func createClusterSpec(ctx context.Context, apiClient *openapiclient.APIClient, 
 		} else {
 			accessibilityTypes = append(accessibilityTypes, openapiclient.ACCESSIBILITYTYPE_PUBLIC)
 
-			// If the value is specified and it is false, then it is an error because the user
+			// If the value is specified, and it is false, then it is an error because the user
 			// wants disabled public access on a non-dedicated VPC cluster.
 			if !regionInfo.PublicAccess.IsUnknown() && !regionInfo.PublicAccess.Value {
 				tflog.Debug(ctx, fmt.Sprintf("Cluster %v is in a public VPC and public access is disabled. ", plan.ClusterName.Value))
@@ -709,31 +750,9 @@ func createClusterSpec(ctx context.Context, apiClient *openapiclient.APIClient, 
 	}
 
 	// This is to pass in the region information to fetch memory and disk size
-	region := ""
 	regionCount := len(clusterRegionInfo)
-	if regionCount > 0 {
-		region = clusterRegionInfo[0].PlacementInfo.CloudInfo.Region
-		if regionCount == 1 {
-			clusterRegionInfo[0].SetIsDefault(true)
-		}
-	}
-
-	cloud := plan.CloudType.Value
-	tier := plan.ClusterTier.Value
-	numCores := int32(plan.NodeConfig.NumCores.Value)
-	memoryMb, memoryOK, message = getMemoryFromInstanceType(ctx, apiClient, accountId, cloud, tier, region, numCores)
-	if !memoryOK {
-		return nil, false, message
-	}
-
-	// Computing the default disk size if it is not provided
-	if !plan.NodeConfig.DiskSizeGb.IsUnknown() {
-		diskSizeGb = int32(plan.NodeConfig.DiskSizeGb.Value)
-	} else {
-		diskSizeGb, diskSizeOK, message = getDiskSizeFromInstanceType(ctx, apiClient, accountId, cloud, tier, region, numCores)
-		if !diskSizeOK {
-			return nil, false, message
-		}
+	if regionCount == 1 {
+		clusterRegionInfo[0].SetIsDefault(true)
 	}
 
 	// This is to support a redundant value in the API.
@@ -744,18 +763,13 @@ func createClusterSpec(ctx context.Context, apiClient *openapiclient.APIClient, 
 	}
 
 	clusterInfo := *openapiclient.NewClusterInfo(
-		openapiclient.ClusterTier(tier),
+		openapiclient.ClusterTier(plan.ClusterTier.Value),
 		int32(totalNodes),
 		openapiclient.ClusterFaultTolerance(plan.FaultTolerance.Value),
 		isProduction,
 	)
 
-	nodeInfo := *openapiclient.NewClusterNodeInfo(numCores, memoryMb, diskSizeGb)
-	if !plan.NodeConfig.DiskIops.IsUnknown() {
-		nodeInfo.SetDiskIops(int32(plan.NodeConfig.DiskIops.Value))
-	}
-
-	clusterInfo.SetNodeInfo(nodeInfo)
+	clusterInfo.UnsetNodeInfo()
 
 	if !plan.NumFaultsToTolerate.IsUnknown() {
 		clusterInfo.SetNumFaultsToTolerate(int32(plan.NumFaultsToTolerate.Value))
@@ -763,8 +777,8 @@ func createClusterSpec(ctx context.Context, apiClient *openapiclient.APIClient, 
 
 	clusterInfo.SetClusterType(openapiclient.ClusterType(clusterType))
 	if clusterExists {
-		cluster_version, _ := strconv.Atoi(plan.ClusterVersion.Value)
-		clusterInfo.SetVersion(int32(cluster_version))
+		clusterVersion, _ := strconv.Atoi(plan.ClusterVersion.Value)
+		clusterInfo.SetVersion(int32(clusterVersion))
 	}
 
 	clusterSpec = openapiclient.NewClusterSpec(
@@ -799,7 +813,13 @@ func getPlan(ctx context.Context, plan tfsdk.Plan, cluster *Cluster) diag.Diagno
 	if fflags.IsFeatureFlagEnabled(fflags.CONNECTION_POOLING) {
 		diags.Append(plan.GetAttribute(ctx, path.Root("desired_connection_pooling_state"), &cluster.DesiredConnectionPoolingState)...)
 	}
-	diags.Append(plan.GetAttribute(ctx, path.Root("node_config"), &cluster.NodeConfig)...)
+
+	var nodeConfig *NodeConfig
+	plan.GetAttribute(ctx, path.Root("node_config"), &nodeConfig)
+	if nodeConfig != nil {
+		diags.Append(plan.GetAttribute(ctx, path.Root("node_config"), &cluster.NodeConfig)...)
+	}
+
 	diags.Append(plan.GetAttribute(ctx, path.Root("credentials"), &cluster.Credentials)...)
 	diags.Append(plan.GetAttribute(ctx, path.Root("backup_schedules"), &cluster.BackupSchedules)...)
 	diags.Append(plan.GetAttribute(ctx, path.Root("cmk_spec"), &cluster.CMKSpec)...)
@@ -860,7 +880,7 @@ func setClusterState(ctx context.Context, state *tfsdk.State, cluster *Cluster) 
 		ClusterTier         types.String         `tfsdk:"cluster_tier"`
 		ClusterAllowListIDs []types.String       `tfsdk:"cluster_allow_list_ids"`
 		RestoreBackupID     types.String         `tfsdk:"restore_backup_id"`
-		NodeConfig          NodeConfig           `tfsdk:"node_config"`
+		NodeConfig          *NodeConfig          `tfsdk:"node_config"`
 		Credentials         Credentials          `tfsdk:"credentials"`
 		ClusterInfo         ClusterInfo          `tfsdk:"cluster_info"`
 		ClusterVersion      types.String         `tfsdk:"cluster_version"`
@@ -912,7 +932,7 @@ func validateOnlyOneCMKSpec(plan *Cluster) error {
 	}
 
 	if count != 1 {
-		return errors.New("Invalid input. Only one CMK Provider out of AWS, GCP, or AZURE must be present.")
+		return errors.New("invalid input. Only one CMK Provider out of AWS, GCP, or AZURE must be present")
 	}
 
 	return nil
@@ -929,7 +949,7 @@ func createCmkSpec(plan Cluster) (*openapiclient.CMKSpec, error) {
 	switch cmkProvider {
 	case "GCP":
 		if plan.CMKSpec.GCPCMKSpec == nil {
-			return nil, errors.New("Provider type is GCP but GCP CMK spec is missing.")
+			return nil, errors.New("provider type is GCP but GCP CMK spec is missing")
 		}
 		gcpKeyRingName := plan.CMKSpec.GCPCMKSpec.KeyRingName.Value
 		gcpKeyName := plan.CMKSpec.GCPCMKSpec.KeyName.Value
@@ -959,7 +979,7 @@ func createCmkSpec(plan Cluster) (*openapiclient.CMKSpec, error) {
 		cmkSpec.SetGcpCmkSpec(*gcpCmkSpec)
 	case "AWS":
 		if plan.CMKSpec.AWSCMKSpec == nil {
-			return nil, errors.New("Provider type is AWS but AWS CMK spec is missing.")
+			return nil, errors.New("provider type is AWS but AWS CMK spec is missing")
 		}
 		awsSecretKey := plan.CMKSpec.AWSCMKSpec.SecretKey.Value
 		awsAccessKey := plan.CMKSpec.AWSCMKSpec.AccessKey.Value
@@ -973,7 +993,7 @@ func createCmkSpec(plan Cluster) (*openapiclient.CMKSpec, error) {
 		cmkSpec.SetAwsCmkSpec(*awsCmkSpec)
 	case "AZURE":
 		if plan.CMKSpec.AzureCMKSpec == nil {
-			return nil, errors.New("Provider type is AZURE but AZURE CMK spec is missing.")
+			return nil, errors.New("provider type is AZURE but AZURE CMK spec is missing")
 		}
 		azureClientId := plan.CMKSpec.AzureCMKSpec.ClientID.Value
 		azureClientSecret := plan.CMKSpec.AzureCMKSpec.ClientSecret.Value
@@ -1015,12 +1035,12 @@ func (r resourceCluster) Create(ctx context.Context, req tfsdk.CreateResourceReq
 		return
 	}
 
-	if !plan.NodeConfig.DiskSizeGb.IsUnknown() && !util.IsDiskSizeValid(plan.ClusterTier.Value, plan.NodeConfig.DiskSizeGb.Value) {
+	if plan.NodeConfig != nil && !plan.NodeConfig.DiskSizeGb.IsNull() && !plan.NodeConfig.DiskSizeGb.IsUnknown() && !util.IsDiskSizeValid(plan.ClusterTier.Value, plan.NodeConfig.DiskSizeGb.Value) {
 		resp.Diagnostics.AddError("Invalid disk size", "The disk size for a paid cluster must be at least 50 GB.")
 		return
 	}
 
-	if !(plan.NodeConfig.DiskIops.IsUnknown() || plan.NodeConfig.DiskIops.IsNull()) {
+	if plan.NodeConfig != nil && !plan.NodeConfig.DiskIops.IsNull() && !plan.NodeConfig.DiskIops.IsUnknown() {
 		isValid, err := util.IsDiskIopsValid(plan.CloudType.Value, plan.ClusterTier.Value, plan.NodeConfig.DiskIops.Value)
 		if !isValid {
 			resp.Diagnostics.AddError("Invalid disk IOPS", err)
@@ -1063,25 +1083,18 @@ func (r resourceCluster) Create(ctx context.Context, req tfsdk.CreateResourceReq
 				return
 			}
 		}
-		numCoresPresent := false
-		diskSizePresent := false
-		diskIopsPresent := false
-		if !regionInfo.NumCores.Unknown && !regionInfo.NumCores.Null {
-			numCoresPresent = true
-		}
-		if !regionInfo.DiskSizeGb.Unknown && !regionInfo.DiskSizeGb.Null {
-			diskSizePresent = true
-		}
-		if !regionInfo.DiskIops.Unknown && !regionInfo.DiskIops.Null {
-			diskIopsPresent = true
+
+		if !regionInfo.DiskSizeGb.IsUnknown() && !util.IsDiskSizeValid(plan.ClusterTier.Value, regionInfo.DiskSizeGb.Value) {
+			resp.Diagnostics.AddError("Invalid disk size in "+regionInfo.Region.Value, "The disk size for a paid cluster must be at least 50 GB.")
+			return
 		}
 
-		if !numCoresPresent && (diskSizePresent || diskIopsPresent) {
-			resp.Diagnostics.AddError(
-				"Specify num_cores per region, since per-region disk_size or disk_iops are specified.",
-				"To specify per-region node configuration, num_cores must be provided.",
-			)
-			return
+		if !regionInfo.DiskIops.IsUnknown() && !regionInfo.DiskIops.IsNull() {
+			isValid, err := util.IsDiskIopsValid(plan.CloudType.Value, plan.ClusterTier.Value, regionInfo.DiskIops.Value)
+			if !isValid {
+				resp.Diagnostics.AddError("Invalid disk IOPS in "+regionInfo.Region.Value, err)
+				return
+			}
 		}
 	}
 
@@ -1181,7 +1194,7 @@ func (r resourceCluster) Create(ctx context.Context, req tfsdk.CreateResourceReq
 		} else {
 			return handleReadFailureWithRetries(ctx, &readClusterRetries, 2, message)
 		}
-		return retry.RetryableError(errors.New("The cluster creation is in progress"))
+		return retry.RetryableError(errors.New("the cluster creation is in progress"))
 	})
 
 	if err != nil {
@@ -1241,7 +1254,7 @@ func (r resourceCluster) Create(ctx context.Context, req tfsdk.CreateResourceReq
 
 	}
 
-	allowListIDs := []string{}
+	var allowListIDs []string
 	allowListProvided := false
 	if plan.ClusterAllowListIDs != nil {
 		for i := range plan.ClusterAllowListIDs {
@@ -1272,7 +1285,7 @@ func (r resourceCluster) Create(ctx context.Context, req tfsdk.CreateResourceReq
 		}
 	}
 
-	regions := []string{}
+	var regions []string
 	for _, regionInfo := range plan.ClusterRegionInfo {
 		regions = append(regions, regionInfo.Region.Value)
 	}
@@ -1292,8 +1305,8 @@ func (r resourceCluster) Create(ctx context.Context, req tfsdk.CreateResourceReq
 		providerType := cluster.CMKSpec.ProviderType.Value
 		switch providerType {
 		case "AWS":
-			cluster.CMKSpec.AWSCMKSpec.SecretKey = types.String{Value: string(cmkSpec.GetAwsCmkSpec().SecretKey)}
-			cluster.CMKSpec.AWSCMKSpec.AccessKey = types.String{Value: string(cmkSpec.GetAwsCmkSpec().AccessKey)}
+			cluster.CMKSpec.AWSCMKSpec.SecretKey = types.String{Value: cmkSpec.GetAwsCmkSpec().SecretKey}
+			cluster.CMKSpec.AWSCMKSpec.AccessKey = types.String{Value: cmkSpec.GetAwsCmkSpec().AccessKey}
 		case "GCP":
 			if cmkSpec.GetGcpCmkSpec().GcpServiceAccount.IsSet() {
 				gcpServiceAccountData := cmkSpec.GetGcpCmkSpec().GcpServiceAccount.Get()
@@ -1305,7 +1318,7 @@ func (r resourceCluster) Create(ctx context.Context, req tfsdk.CreateResourceReq
 				}
 			}
 		case "AZURE":
-			cluster.CMKSpec.AzureCMKSpec.ClientSecret = types.String{Value: string(cmkSpec.GetAzureCmkSpec().ClientSecret)}
+			cluster.CMKSpec.AzureCMKSpec.ClientSecret = types.String{Value: cmkSpec.GetAzureCmkSpec().ClientSecret}
 		}
 	}
 
@@ -1387,11 +1400,11 @@ func pauseCluster(ctx context.Context, apiClient *openapiclient.APIClient, accou
 		} else {
 			return handleReadFailureWithRetries(ctx, &readClusterRetries, 2, message)
 		}
-		return retry.RetryableError(errors.New("The cluster is being paused."))
+		return retry.RetryableError(errors.New("the cluster is being paused"))
 	})
 
 	if err != nil {
-		return errors.New("Unable to pause cluster. " + "The operation timed out waiting to pause the cluster.")
+		return errors.New("unable to pause cluster. " + "The operation timed out waiting to pause the cluster")
 	}
 
 	return nil
@@ -1424,11 +1437,11 @@ func enableConnectionPooling(ctx context.Context, apiClient *openapiclient.APICl
 		} else {
 			return handleReadFailureWithRetries(ctx, &readClusterRetries, 2, message)
 		}
-		return retry.RetryableError(errors.New("Connection Pooling is being enabled"))
+		return retry.RetryableError(errors.New("connection Pooling is being enabled"))
 	})
 
 	if err != nil {
-		return errors.New("Unable to enable connection pooling " + "The operation timed out waiting to enable connection pooling")
+		return errors.New("unable to enable connection pooling " + "The operation timed out waiting to enable connection pooling")
 	}
 
 	return nil
@@ -1460,11 +1473,11 @@ func disableConnectionPooling(ctx context.Context, apiClient *openapiclient.APIC
 		} else {
 			return handleReadFailureWithRetries(ctx, &readClusterRetries, 2, message)
 		}
-		return retry.RetryableError(errors.New("Connection Pooling is being disabled"))
+		return retry.RetryableError(errors.New("connection Pooling is being disabled"))
 	})
 
 	if err != nil {
-		return errors.New("Unable to disable connection pooling " + "The operation timed out waiting to disable connection pooling")
+		return errors.New("unable to disable connection pooling " + "The operation timed out waiting to disable connection pooling")
 	}
 
 	return nil
@@ -1493,11 +1506,11 @@ func editClusterCmk(ctx context.Context, apiClient *openapiclient.APIClient, acc
 		} else {
 			return handleReadFailureWithRetries(ctx, &readClusterRetries, 2, message)
 		}
-		return retry.RetryableError(errors.New("Cluster CMK is getting updated."))
+		return retry.RetryableError(errors.New("cluster CMK is getting updated"))
 	})
 
 	if err != nil {
-		return errors.New("Unable to edit cluster CMK. " + "The operation timed out waiting to edit CMK.")
+		return errors.New("unable to edit cluster CMK. " + "The operation timed out waiting to edit CMK")
 	}
 
 	return nil
@@ -1539,11 +1552,11 @@ func resumeCluster(ctx context.Context, apiClient *openapiclient.APIClient, acco
 		} else {
 			return handleReadFailureWithRetries(ctx, &readClusterRetries, 2, message)
 		}
-		return retry.RetryableError(errors.New("The cluster is being resumed."))
+		return retry.RetryableError(errors.New("the cluster is being resumed"))
 	})
 
 	if err != nil {
-		return errors.New("Unable to resume cluster. " + "The operation timed out waiting to resume the cluster.")
+		return errors.New("unable to resume cluster. " + "The operation timed out waiting to resume the cluster")
 	}
 
 	return nil
@@ -1575,7 +1588,7 @@ func (r resourceCluster) Read(ctx context.Context, req tfsdk.ReadResourceRequest
 	var state Cluster
 	getIDsFromState(ctx, req.State, &state)
 
-	allowListIDs := []string{}
+	var allowListIDs []string
 	allowListProvided := false
 	if state.ClusterAllowListIDs != nil {
 		allowListProvided = true
@@ -1584,7 +1597,7 @@ func (r resourceCluster) Read(ctx context.Context, req tfsdk.ReadResourceRequest
 		}
 	}
 
-	regions := []string{}
+	var regions []string
 	for _, regionInfo := range state.ClusterRegionInfo {
 		regions = append(regions, regionInfo.Region.Value)
 	}
@@ -1611,7 +1624,7 @@ func (r resourceCluster) Read(ctx context.Context, req tfsdk.ReadResourceRequest
 			cluster.CMKSpec.GCPCMKSpec.GcpServiceAccount.ClientId.Value = cmkSpec.GCPCMKSpec.GcpServiceAccount.ClientId.Value
 			cluster.CMKSpec.GCPCMKSpec.GcpServiceAccount.PrivateKey.Value = cmkSpec.GCPCMKSpec.GcpServiceAccount.PrivateKey.Value
 		case "AZURE":
-			cluster.CMKSpec.AzureCMKSpec.ClientSecret = types.String{Value: string(cmkSpec.AzureCMKSpec.ClientSecret.Value)}
+			cluster.CMKSpec.AzureCMKSpec.ClientSecret = types.String{Value: cmkSpec.AzureCMKSpec.ClientSecret.Value}
 		}
 	}
 
@@ -1705,7 +1718,7 @@ func resourceClusterRead(ctx context.Context, accountId string, projectId string
 		cmkDataSpec := cmkResp.GetData().Spec.Get()
 
 		cmkSpec.ProviderType = types.String{Value: string(cmkDataSpec.GetProviderType())}
-		cmkSpec.IsEnabled = types.Bool{Value: bool(cmkDataSpec.GetIsEnabled())}
+		cmkSpec.IsEnabled = types.Bool{Value: cmkDataSpec.GetIsEnabled()}
 
 		switch cmkSpec.ProviderType.Value {
 		case "AWS":
@@ -1769,7 +1782,7 @@ func resourceClusterRead(ctx context.Context, accountId string, projectId string
 		}
 	}
 
-	// fill all fields of schema except credentials - credentials are not returned by api call
+	// fill with all fields of schema except credentials - credentials are not returned by api call
 	cluster.AccountID.Value = accountId
 	cluster.ProjectID.Value = projectId
 	cluster.ClusterID.Value = clusterId
@@ -1803,8 +1816,16 @@ func resourceClusterRead(ctx context.Context, accountId string, projectId string
 	cluster.NumFaultsToTolerate.Value = int64(*clusterResp.Data.Spec.ClusterInfo.NumFaultsToTolerate.Get())
 	nodeInfo := clusterResp.Data.Spec.ClusterInfo.NodeInfo.Get()
 	if nodeInfo != nil {
-		cluster.NodeConfig.NumCores.Value = int64((*nodeInfo).NumCores)
-		cluster.NodeConfig.DiskSizeGb.Value = int64((*nodeInfo).DiskSizeGb)
+		if cluster.NodeConfig == nil {
+			cluster.NodeConfig = &NodeConfig{
+				NumCores:   types.Int64{Value: int64((*nodeInfo).NumCores)},
+				DiskSizeGb: types.Int64{Value: int64((*nodeInfo).DiskSizeGb)},
+			}
+		} else {
+			cluster.NodeConfig.NumCores.Value = int64((*nodeInfo).NumCores)
+			cluster.NodeConfig.DiskSizeGb.Value = int64((*nodeInfo).DiskSizeGb)
+		}
+
 		iopsPtr := (*nodeInfo).DiskIops.Get()
 		if iopsPtr != nil {
 			cluster.NodeConfig.DiskIops.Value = int64(*iopsPtr)
@@ -1897,9 +1918,7 @@ func resourceClusterRead(ctx context.Context, accountId string, projectId string
 		}
 	}
 	cluster.ClusterRegionInfo = clusterRegionInfo
-	if len(respClusterRegionInfo) > 0 {
-		cluster.CloudType.Value = string(respClusterRegionInfo[0].PlacementInfo.CloudInfo.GetCode())
-	}
+	cluster.CloudType.Value = string(respClusterRegionInfo[0].PlacementInfo.CloudInfo.GetCode())
 
 	if allowListProvided {
 		for {
@@ -1909,8 +1928,8 @@ func resourceClusterRead(ctx context.Context, accountId string, projectId string
 				return cluster, false, errMsg
 			}
 			allowListIDMap := map[string]bool{}
-			allowListIDs := []types.String{}
-			allowListStrings := []string{}
+			var allowListIDs []types.String
+			var allowListStrings []string
 			// This is being to done to preserve order in the list since an order mismatch is treated as state mismatch by Terraform
 			for _, elem := range clusterAllowListMappingResp.Data {
 				allowListIDMap[elem.Info.Id] = true
@@ -1978,11 +1997,11 @@ func handleRestore(ctx context.Context, accountId string, projectId string, clus
 		} else {
 			return retry.RetryableError(errors.New("Unable to get restore state: " + message))
 		}
-		return retry.RetryableError(errors.New("The backup restore is in progress"))
+		return retry.RetryableError(errors.New("the backup restore is in progress"))
 	})
 
 	if err != nil {
-		return errors.New("Unable to restore backup to the cluster: The operation timed out waiting for backup restore.")
+		return errors.New("unable to restore backup to the cluster: The operation timed out waiting for backup restore")
 	}
 
 	return nil
@@ -1996,12 +2015,12 @@ func (r resourceCluster) Update(ctx context.Context, req tfsdk.UpdateResourceReq
 		return
 	}
 
-	if !plan.NodeConfig.DiskSizeGb.IsUnknown() && !util.IsDiskSizeValid(plan.ClusterTier.Value, plan.NodeConfig.DiskSizeGb.Value) {
+	if plan.NodeConfig != nil && !plan.NodeConfig.DiskSizeGb.IsUnknown() && !util.IsDiskSizeValid(plan.ClusterTier.Value, plan.NodeConfig.DiskSizeGb.Value) {
 		resp.Diagnostics.AddError("Invalid disk size", "The disk size for a paid cluster must be at least 50 GB.")
 		return
 	}
 
-	if !(plan.NodeConfig.DiskIops.IsUnknown() || plan.NodeConfig.DiskIops.IsNull()) {
+	if plan.NodeConfig != nil && !plan.NodeConfig.DiskIops.IsNull() && !plan.NodeConfig.DiskIops.IsUnknown() {
 		isValid, err := util.IsDiskIopsValid(plan.CloudType.Value, plan.ClusterTier.Value, plan.NodeConfig.DiskIops.Value)
 		if !isValid {
 			resp.Diagnostics.AddError("Invalid disk IOPS", err)
@@ -2053,6 +2072,19 @@ func (r resourceCluster) Update(ctx context.Context, req tfsdk.UpdateResourceReq
 					"Specify VPC name or VPC ID",
 					"To select a vpc, use either vpc_name or vpc_id. Don't provide both.",
 				)
+				return
+			}
+		}
+
+		if !regionInfo.DiskSizeGb.IsUnknown() && !util.IsDiskSizeValid(plan.ClusterTier.Value, regionInfo.DiskSizeGb.Value) {
+			resp.Diagnostics.AddError("Invalid disk size in "+regionInfo.Region.Value, "The disk size for a paid cluster must be at least 50 GB.")
+			return
+		}
+
+		if !(regionInfo.DiskIops.IsUnknown() || regionInfo.DiskIops.IsNull()) {
+			isValid, err := util.IsDiskIopsValid(plan.CloudType.Value, plan.ClusterTier.Value, regionInfo.DiskIops.Value)
+			if !isValid {
+				resp.Diagnostics.AddError("Invalid disk IOPS in "+regionInfo.Region.Value, err)
 				return
 			}
 		}
@@ -2124,7 +2156,7 @@ func (r resourceCluster) Update(ctx context.Context, req tfsdk.UpdateResourceReq
 				if retries < 6 {
 					retries++
 					tflog.Info(ctx, "Cluster edit task not found, retrying...")
-					return retry.RetryableError(errors.New("Cluster not found, retrying"))
+					return retry.RetryableError(errors.New("cluster not found, retrying"))
 				} else {
 					tflog.Info(ctx, "Cluster edit task not found, the change would not have required a task creation")
 					return nil
@@ -2135,7 +2167,7 @@ func (r resourceCluster) Update(ctx context.Context, req tfsdk.UpdateResourceReq
 			if checkNewTaskSpawned {
 				if asState == string(openapiclient.TASKACTIONSTATEENUM_IN_PROGRESS) {
 					checkNewTaskSpawned = false
-					return retry.RetryableError(errors.New("Cluster edit operation in progress"))
+					return retry.RetryableError(errors.New("cluster edit operation in progress"))
 				} else {
 					tflog.Info(ctx, "Cluster edit task not found, the change would not have required a task creation")
 					return nil
@@ -2151,7 +2183,7 @@ func (r resourceCluster) Update(ctx context.Context, req tfsdk.UpdateResourceReq
 		} else {
 			return handleReadFailureWithRetries(ctx, &readClusterRetries, 2, message)
 		}
-		return retry.RetryableError(errors.New("Cluster edit operation in progress"))
+		return retry.RetryableError(errors.New("cluster edit operation in progress"))
 	})
 
 	if err != nil {
@@ -2176,7 +2208,7 @@ func (r resourceCluster) Update(ctx context.Context, req tfsdk.UpdateResourceReq
 		} else {
 			return handleReadFailureWithRetries(ctx, &readClusterRetries, 2, message)
 		}
-		return retry.RetryableError(errors.New("Cluster edit is in progress"))
+		return retry.RetryableError(errors.New("cluster edit is in progress"))
 	})
 
 	if err != nil {
@@ -2238,7 +2270,7 @@ func (r resourceCluster) Update(ctx context.Context, req tfsdk.UpdateResourceReq
 		}
 	}
 
-	allowListIDs := []string{}
+	var allowListIDs []string
 	allowListProvided := false
 
 	if plan.ClusterAllowListIDs != nil {
@@ -2293,7 +2325,7 @@ func (r resourceCluster) Update(ctx context.Context, req tfsdk.UpdateResourceReq
 		}
 	}
 
-	regions := []string{}
+	var regions []string
 	for _, regionInfo := range plan.ClusterRegionInfo {
 		regions = append(regions, regionInfo.Region.Value)
 	}
@@ -2375,7 +2407,7 @@ func (r resourceCluster) Delete(ctx context.Context, req tfsdk.DeleteResourceReq
 		} else {
 			return handleReadFailureWithRetries(ctx, &readClusterRetries, 2, message)
 		}
-		return retry.RetryableError(errors.New("Cluster deletion operation in progress"))
+		return retry.RetryableError(errors.New("cluster deletion operation in progress"))
 	})
 
 	if err != nil {
@@ -2389,7 +2421,7 @@ func (r resourceCluster) Delete(ctx context.Context, req tfsdk.DeleteResourceReq
 	resp.State.RemoveResource(ctx)
 }
 
-// Import resource
+// ImportState Import resource
 func (r resourceCluster) ImportState(ctx context.Context, req tfsdk.ImportResourceStateRequest, resp *tfsdk.ImportResourceStateResponse) {
 	// Save the import identifier in the id attribute
 	tfsdk.ResourceImportStatePassthroughID(ctx, path.Root("id"), req, resp)

@@ -66,3 +66,7 @@ terraform
 
 # Ignore Intellij files.
 .idea/
+
+terraform-provider-ybm
+
+samples/.terraform.lock.hcl

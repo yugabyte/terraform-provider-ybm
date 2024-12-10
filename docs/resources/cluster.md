@@ -608,7 +608,6 @@ resource "ybm_private_service_endpoint" "npsenonok-region" {
 - `credentials` (Attributes) Credentials to be used by the database. Please provide 'username' and 'password' 
 (which would be used in common for both YSQL and YCQL) OR all of 'ysql_username',
 'ysql_password', 'ycql_username' and 'ycql_password' but not a mix of both. (see [below for nested schema](#nestedatt--credentials))
-- `node_config` (Attributes) (see [below for nested schema](#nestedatt--node_config))
 
 ### Optional
 
@@ -619,6 +618,7 @@ resource "ybm_private_service_endpoint" "npsenonok-region" {
 - `database_track` (String) The track of the database. Production or Innovation or Preview.
 - `desired_state` (String) The desired state of the database, Active or Paused. This parameter can be used to pause/resume a cluster.
 - `fault_tolerance` (String) The fault tolerance of the cluster. NONE, NODE, ZONE or REGION.
+- `node_config` (Attributes, Deprecated) (see [below for nested schema](#nestedatt--node_config))
 - `num_faults_to_tolerate` (Number) The number of domain faults the cluster can tolerate. 0 for NONE, 1 for ZONE and [1-3] for NODE and REGION
 - `restore_backup_id` (String) The ID of the backup to be restored to the cluster.
 
@@ -664,19 +664,6 @@ Optional:
 - `ycql_username` (String) YCQL username for the database.
 - `ysql_password` (String, Sensitive) YSQL password for the database. Note that this will be stored in the state file.
 - `ysql_username` (String) YSQL username for the database.
-
-
-<a id="nestedatt--node_config"></a>
-### Nested Schema for `node_config`
-
-Required:
-
-- `num_cores` (Number) Number of CPU cores in the node.
-
-Optional:
-
-- `disk_iops` (Number) Disk IOPS of the node.
-- `disk_size_gb` (Number) Disk size of the node.
 
 
 <a id="nestedatt--backup_schedules"></a>
@@ -761,6 +748,16 @@ Optional:
 - `universe_domain` (String) Google Universe Domain
 
 
+
+
+<a id="nestedatt--node_config"></a>
+### Nested Schema for `node_config`
+
+Optional:
+
+- `disk_iops` (Number) Disk IOPS of the node.
+- `disk_size_gb` (Number) Disk size of the node.
+- `num_cores` (Number) Number of CPU cores in the node.
 
 
 <a id="nestedatt--cluster_info"></a>
