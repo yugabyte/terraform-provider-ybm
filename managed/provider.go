@@ -158,11 +158,7 @@ func (p *provider) GetResources(_ context.Context) (map[string]tfsdk.ResourceTyp
 		"ybm_associate_metrics_exporter_cluster": resourceAssociateMetricsExporterClusterType{},
 		"ybm_integration":                        resourceIntegrationType{},
 		"ybm_db_query_logging":                   resourceDbQueryLoggingType{},
-	}
-
-	// Add DB Audit logging resource only if the feature flag is enabled
-	if fflags.IsFeatureFlagEnabled(fflags.DB_AUDIT_LOGGING) {
-		resources["ybm_db_audit_logging"] = resourceDbAuditLoggingType{}
+		"ybm_db_audit_logging":                   resourceDbAuditLoggingType{},
 	}
 
 	// Add DR config resource only if the feature flag is enabled
@@ -175,16 +171,12 @@ func (p *provider) GetResources(_ context.Context) (map[string]tfsdk.ResourceTyp
 
 func (p *provider) GetDataSources(_ context.Context) (map[string]tfsdk.DataSourceType, diag.Diagnostics) {
 	dataSources := map[string]tfsdk.DataSourceType{
-		"ybm_backup":      dataSourceBackupType{},
-		"ybm_cluster":     dataClusterNameType{},
-		"ybm_vpc":         dataSourceVPCType{},
-		"ybm_allow_list":  dataSourceAllowListType{},
-		"ybm_integration": dataSourceIntegrationType{},
-	}
-
-	// Add DB Audit logging data source only if the feature flag is enabled
-	if fflags.IsFeatureFlagEnabled(fflags.DB_AUDIT_LOGGING) {
-		dataSources["ybm_db_audit_logging"] = dataSourceDbAuditLoggingType{}
+		"ybm_backup":           dataSourceBackupType{},
+		"ybm_cluster":          dataClusterNameType{},
+		"ybm_vpc":              dataSourceVPCType{},
+		"ybm_allow_list":       dataSourceAllowListType{},
+		"ybm_integration":      dataSourceIntegrationType{},
+		"ybm_db_audit_logging": dataSourceDbAuditLoggingType{},
 	}
 
 	return dataSources, nil

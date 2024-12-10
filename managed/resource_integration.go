@@ -27,7 +27,9 @@ func (r resourceIntegrationType) GetSchema(_ context.Context) (tfsdk.Schema, dia
 		Description: `The resource to create an export configuration for the integration you want to use in YugabyteDB Aeon.
 
 Using the configuration you created, connect to your cluster:
-	-  Export metrics using resource ` + "`ybm_associate_metrics_exporter_cluster`",
+	-  Export metrics using resource ` + "`ybm_associate_metrics_exporter_cluster`" + `
+	-  Export DB Audit Logs using resource ` + "`ybm_associate_metrics_exporter_cluster`" + `
+	-  Export DB Query Logs using resource ` + "`ybm_associate_metrics_exporter_cluster`",
 		Attributes: r.getSchemaAttributes(),
 	}, nil
 }

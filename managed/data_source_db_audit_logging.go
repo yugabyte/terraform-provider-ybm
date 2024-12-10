@@ -19,7 +19,7 @@ type dataSourceDbAuditLoggingType struct{}
 
 func (r dataSourceDbAuditLoggingType) GetSchema(_ context.Context) (tfsdk.Schema, diag.Diagnostics) {
 	return tfsdk.Schema{
-		Description: `The data source to fetch DB Audit log configuration for a cluster given cluster ID or configuration ID in YugabyteDB Aeon.`,
+		Description: `The data source to fetch DB Audit log configuration for a cluster given cluster ID in YugabyteDB Aeon.`,
 		Attributes: map[string]tfsdk.Attribute{
 			"account_id": {
 				Description: "ID of the account this DB Audit log configuration belongs to.",
