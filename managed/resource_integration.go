@@ -17,6 +17,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
 	"github.com/yugabyte/terraform-provider-ybm/managed/fflags"
+	planmodifier "github.com/yugabyte/terraform-provider-ybm/managed/plan_modifier"
 	openapiclient "github.com/yugabyte/yugabytedb-managed-go-client-internal"
 )
 
@@ -53,12 +54,18 @@ func (r resourceIntegrationType) getSchemaAttributes() map[string]tfsdk.Attribut
 			Description: "The name of the integration",
 			Type:        types.StringType,
 			Required:    true,
+			PlanModifiers: []tfsdk.AttributePlanModifier{
+				planmodifier.ImmutableFieldModifier{},
+			},
 		},
 		"type": {
 			Description: "Defines different exporter destination types.",
 			Type:        types.StringType,
 			Required:    true,
 			Validators:  []tfsdk.AttributeValidator{stringvalidator.OneOf("DATADOG", "GRAFANA", "SUMOLOGIC", "GOOGLECLOUD", "PROMETHEUS", "VICTORIAMETRICS")},
+			PlanModifiers: []tfsdk.AttributePlanModifier{
+				planmodifier.ImmutableFieldModifier{},
+			},
 		},
 		"is_valid": {
 			Description: "Signifies whether the integration configuration is valid or not",
@@ -68,7 +75,10 @@ func (r resourceIntegrationType) getSchemaAttributes() map[string]tfsdk.Attribut
 		"datadog_spec": {
 			Description: "The specifications of a Datadog integration.",
 			Optional:    true,
-			Validators:  onlyContainsPath("datadog_spec"),
+			PlanModifiers: []tfsdk.AttributePlanModifier{
+				planmodifier.ImmutableFieldModifier{},
+			},
+			Validators: onlyContainsPath("datadog_spec"),
 			Attributes: tfsdk.SingleNestedAttributes(map[string]tfsdk.Attribute{
 				"api_key": {
 					Description: "Datadog Api Key",
@@ -80,13 +90,15 @@ func (r resourceIntegrationType) getSchemaAttributes() map[string]tfsdk.Attribut
 					Description: "Datadog site.",
 					Type:        types.StringType,
 					Required:    true,
-				},
-			}),
+				}}),
 		},
 		"prometheus_spec": {
 			Description: "The specifications of a Prometheus integration.",
 			Optional:    true,
-			Validators:  onlyContainsPath("prometheus_spec"),
+			PlanModifiers: []tfsdk.AttributePlanModifier{
+				planmodifier.ImmutableFieldModifier{},
+			},
+			Validators: onlyContainsPath("prometheus_spec"),
 			Attributes: tfsdk.SingleNestedAttributes(map[string]tfsdk.Attribute{
 				"endpoint": {
 					Description: "Prometheus OTLP endpoint URL e.g. http://my-prometheus-endpoint/api/v1/otlp",
@@ -98,7 +110,10 @@ func (r resourceIntegrationType) getSchemaAttributes() map[string]tfsdk.Attribut
 		"victoriametrics_spec": {
 			Description: "The specifications of a VictoriaMetrics integration.",
 			Optional:    true,
-			Validators:  onlyContainsPath("victoriametrics_spec"),
+			PlanModifiers: []tfsdk.AttributePlanModifier{
+				planmodifier.ImmutableFieldModifier{},
+			},
+			Validators: onlyContainsPath("victoriametrics_spec"),
 			Attributes: tfsdk.SingleNestedAttributes(map[string]tfsdk.Attribute{
 				"endpoint": {
 					Description: "VictoriaMetrics OTLP endpoint URL e.g. http://my-victoria-metrics-endpoint/opentelemetry",
@@ -110,7 +125,10 @@ func (r resourceIntegrationType) getSchemaAttributes() map[string]tfsdk.Attribut
 		"grafana_spec": {
 			Description: "The specifications of a Grafana integration.",
 			Optional:    true,
-			Validators:  onlyContainsPath("grafana_spec"),
+			PlanModifiers: []tfsdk.AttributePlanModifier{
+				planmodifier.ImmutableFieldModifier{},
+			},
+			Validators: onlyContainsPath("grafana_spec"),
 			Attributes: tfsdk.SingleNestedAttributes(map[string]tfsdk.Attribute{
 				"access_policy_token": {
 					Description: "Grafana Access Policy Token",
@@ -138,7 +156,10 @@ func (r resourceIntegrationType) getSchemaAttributes() map[string]tfsdk.Attribut
 		"sumologic_spec": {
 			Description: "The specifications of a Sumo Logic integration.",
 			Optional:    true,
-			Validators:  onlyContainsPath("sumologic_spec"),
+			PlanModifiers: []tfsdk.AttributePlanModifier{
+				planmodifier.ImmutableFieldModifier{},
+			},
+			Validators: onlyContainsPath("sumologic_spec"),
 			Attributes: tfsdk.SingleNestedAttributes(map[string]tfsdk.Attribute{
 				"access_id": {
 					Description: "Sumo Logic Access Key ID",
@@ -151,8 +172,7 @@ func (r resourceIntegrationType) getSchemaAttributes() map[string]tfsdk.Attribut
 					Type:        types.StringType,
 					Required:    true,
 					Sensitive:   true,
-				},
-				"installation_token": {
+				}, "installation_token": {
 					Description: "A Sumo Logic installation token to export telemetry to Grafana with",
 					Type:        types.StringType,
 					Required:    true,
@@ -163,7 +183,10 @@ func (r resourceIntegrationType) getSchemaAttributes() map[string]tfsdk.Attribut
 		"googlecloud_spec": {
 			Description: "The specifications of a Google Cloud integration.",
 			Optional:    true,
-			Validators:  onlyContainsPath("googlecloud_spec"),
+			PlanModifiers: []tfsdk.AttributePlanModifier{
+				planmodifier.ImmutableFieldModifier{},
+			},
+			Validators: onlyContainsPath("googlecloud_spec"),
 			Attributes: tfsdk.SingleNestedAttributes(map[string]tfsdk.Attribute{
 				"type": {
 					Description: "Service Account Type",
