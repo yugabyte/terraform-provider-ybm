@@ -16,7 +16,6 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
-	"github.com/yugabyte/terraform-provider-ybm/managed/fflags"
 	planmodifier "github.com/yugabyte/terraform-provider-ybm/managed/plan_modifier"
 	openapiclient "github.com/yugabyte/yugabytedb-managed-go-client-internal"
 )
@@ -327,10 +326,6 @@ func (r resourceIntegration) Create(ctx context.Context, req tfsdk.CreateResourc
 	telemetrySinkTypeEnum, err := openapiclient.NewTelemetryProviderTypeEnumFromValue(strings.ToUpper(sinkType))
 	if err != nil {
 		resp.Diagnostics.AddError(GetApiErrorDetails(err), "")
-		return
-	}
-	if *telemetrySinkTypeEnum == openapiclient.TELEMETRYPROVIDERTYPEENUM_GOOGLECLOUD && !fflags.IsFeatureFlagEnabled(fflags.GOOGLECLOUD_INTEGRATION_ENABLED) {
-		resp.Diagnostics.AddError("Invalid integration type", "Integration of type GOOGLECLOUD is currently not supported")
 		return
 	}
 

@@ -13,15 +13,13 @@ import (
 type FeatureFlag string
 
 const (
-	GOOGLECLOUD_INTEGRATION_ENABLED FeatureFlag = "GOOGLECLOUD_INTEGRATION_ENABLED"
-	CONNECTION_POOLING              FeatureFlag = "CONNECTION_POOLING"
-	DR                              FeatureFlag = "DR"
+	CONNECTION_POOLING FeatureFlag = "CONNECTION_POOLING"
+	DR                 FeatureFlag = "DR"
 )
 
 var flagEnabled = map[FeatureFlag]bool{
-	GOOGLECLOUD_INTEGRATION_ENABLED: false,
-	CONNECTION_POOLING:              false,
-	DR:                              false,
+	CONNECTION_POOLING: false,
+	DR:                 false,
 }
 
 func (f FeatureFlag) String() string {
