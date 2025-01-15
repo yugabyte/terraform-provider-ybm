@@ -21,7 +21,7 @@ type resourceDbQueryLoggingType struct{}
 
 func (r resourceDbQueryLoggingType) GetSchema(ctx context.Context) (tfsdk.Schema, diag.Diagnostics) {
 	return tfsdk.Schema{
-		Description: `The resource to manage DB query logging configuration for a cluster in YugabyteDB Aeon.`,
+		Description: "Use this resource to configure database query logging for a cluster, and specify the export configuration (created using the `ybm_integration` resource) to use for log export. When assigned to a cluster, cluster query logs are exported to the sink defined in the export configuration.",
 		Attributes: map[string]tfsdk.Attribute{
 			"integration_name": {
 				Description: "Name of the integration for this DB query logging configuration.",

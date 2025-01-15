@@ -1,17 +1,20 @@
 ---
 page_title: "ybm_integration Resource - YugabyteDB Aeon"
 description: |-
-  The resource to create an export configuration for the integration you want to use in YugabyteDB Aeon.
-  Using the configuration you created, connect to your cluster:
-  -  Export metrics using resource ybm_associate_metrics_exporter_cluster
+  Use this resource to create export configurations. Export configurations define parameters for connecting to third party tools, such as Datadog, for exporting cluster metrics and logs.
+  To use an export configuration, assign it to a cluster using the following resources:
+  -Export metrics using resource ybm_associate_metrics_exporter_cluster
+  -Export query logs using resource ybm_db_query_logging
+  -Export audit logs using resource ybm_db_audit_logging
 ---
 
 # ybm_integration (Resource)
 
-The resource to create an export configuration for the integration you want to use in YugabyteDB Aeon.
-
-Using the configuration you created, connect to your cluster:
-	-  Export metrics using resource `ybm_associate_metrics_exporter_cluster`
+Use this resource to create export configurations. Export configurations define parameters for connecting to third party tools, such as Datadog, for exporting cluster metrics and logs.
+To use an export configuration, assign it to a cluster using the following resources:
+-Export metrics using resource `ybm_associate_metrics_exporter_cluster`
+-Export query logs using resource `ybm_db_query_logging`
+-Export audit logs using resource `ybm_db_audit_logging`
 
 
 ## Example Usage

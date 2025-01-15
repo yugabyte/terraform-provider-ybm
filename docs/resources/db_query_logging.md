@@ -3,12 +3,12 @@
 page_title: "ybm_db_query_logging Resource - ybm"
 subcategory: ""
 description: |-
-  The resource to manage DB query logging configuration for a cluster in YugabyteDB Aeon.
+  Use this resource to configure database query logging for a cluster, and specify the export configuration (created using the ybm_integration resource) to use for log export. When assigned to a cluster, cluster query logs are exported to the sink defined in the export configuration.
 ---
 
 # ybm_db_query_logging (Resource)
 
-The resource to manage DB query logging configuration for a cluster in YugabyteDB Aeon.
+Use this resource to configure database query logging for a cluster, and specify the export configuration (created using the `ybm_integration` resource) to use for log export. When assigned to a cluster, cluster query logs are exported to the sink defined in the export configuration.
 
 
 

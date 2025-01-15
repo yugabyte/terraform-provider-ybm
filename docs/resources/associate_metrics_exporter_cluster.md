@@ -1,12 +1,12 @@
 ---
 page_title: "ybm_associate_metrics_exporter_cluster Resource - YugabyteDB Aeon"
 description: |-
-  The resource to manage metrics export configuration for a cluster in YugabyteDB Aeon.
+  Use this resource to assign an export configuration (created using the ybm_integration resource) to a cluster for the export of cluster metrics. When assigned, cluster metrics are exported to the sink defined in the export configuration.
 ---
 
 # ybm_associate_metrics_exporter_cluster (Resource)
 
-The resource to manage metrics export configuration for a cluster in YugabyteDB Aeon.
+Use this resource to assign an export configuration (created using the `ybm_integration` resource) to a cluster for the export of cluster metrics. When assigned, cluster metrics are exported to the sink defined in the export configuration.
 
 
 ## Example Usage
