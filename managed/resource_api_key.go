@@ -12,13 +12,14 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
+	"github.com/yugabyte/terraform-provider-ybm/managed/fflags"
 	openapiclient "github.com/yugabyte/yugabytedb-managed-go-client-internal"
 )
 
 type resourceApiKeyType struct{}
 
 func (r resourceApiKeyType) GetSchema(_ context.Context) (tfsdk.Schema, diag.Diagnostics) {
-	return tfsdk.Schema{
+	schema := tfsdk.Schema{
 		Description: `The resource to issue an API Key in YugabyteDB Aeon.`,
 		Attributes: map[string]tfsdk.Attribute{
 			"account_id": {
@@ -95,7 +96,18 @@ func (r resourceApiKeyType) GetSchema(_ context.Context) (tfsdk.Schema, diag.Dia
 				Computed:    true,
 			},
 		},
-	}, nil
+	}
+	// Add allow lists if the feature flag is enabled
+	if fflags.IsFeatureFlagEnabled(fflags.API_KEYS_ALLOW_LIST) {
+		schema.Attributes["allow_list_ids"] = tfsdk.Attribute{
+			Description: "List of IDs of the allow lists assigned to the API Key.",
+			Type: types.SetType{
+				ElemType: types.StringType,
+			},
+			Optional: true,
+		}
+	}
+	return schema, nil
 }
 
 func (r resourceApiKeyType) NewResource(_ context.Context, p tfsdk.Provider) (tfsdk.Resource, diag.Diagnostics) {
@@ -117,6 +129,7 @@ func getApiKeyPlan(ctx context.Context, plan tfsdk.Plan, apiKey *ApiKey) diag.Di
 	diags.Append(plan.GetAttribute(ctx, path.Root("unit"), &apiKey.Unit)...)
 	diags.Append(plan.GetAttribute(ctx, path.Root("role_name"), &apiKey.RoleName)...)
 	diags.Append(plan.GetAttribute(ctx, path.Root("description"), &apiKey.Description)...)
+	diags.Append(plan.GetAttribute(ctx, path.Root("allow_list_ids"), &apiKey.AllowListIDs)...)
 
 	return diags
 }
@@ -214,6 +227,14 @@ func (r resourceApiKey) Create(ctx context.Context, req tfsdk.CreateResourceRequ
 		apiKeySpec.SetDescription(plan.Description.Value)
 	}
 
+	allowListIDs := []string{}
+	if plan.AllowListIDs != nil {
+		for i := range plan.AllowListIDs {
+			allowListIDs = append(allowListIDs, plan.AllowListIDs[i].Value)
+		}
+	}
+	apiKeySpec.SetAllowListInfo(allowListIDs)
+
 	apiKeyResp, response, err := apiClient.AuthApi.CreateApiKey(ctx, accountId).ApiKeySpec(*apiKeySpec).Execute()
 	if err != nil {
 		errMsg := getErrorMessage(response, err)
@@ -267,6 +288,11 @@ func resourceApiKeyRead(accountId string, projectId string, apiKeyId string, dur
 	if description != "" {
 		apiKey.Description.Value = description
 	}
+	var allowListIDs []types.String
+	for _, elem := range *apiKeyResp.Data.Spec.AllowListInfo {
+		allowListIDs = append(allowListIDs, types.String{Value: elem})
+	}
+	apiKey.AllowListIDs = allowListIDs
 	apiKey.RoleName.Value = apiKeyResp.Data.Info.Role.Info.GetDisplayName()
 	apiKey.Status.Value = string(apiKeyResp.Data.Info.Status)
 	apiKey.Issuer.Value = apiKeyResp.Data.Info.Issuer
@@ -303,7 +329,7 @@ func (r resourceApiKey) Read(ctx context.Context, req tfsdk.ReadResourceRequest,
 
 // Update API Key
 func (r resourceApiKey) Update(ctx context.Context, req tfsdk.UpdateResourceRequest, resp *tfsdk.UpdateResourceResponse) {
-	resp.Diagnostics.AddError("Unable to update API Key", "Updating API Keys is not currently supported. Delete and recreate the provider.")
+	resp.Diagnostics.AddError("Unable to update API Key", "Updating API Keys is not supported. Delete and recreate the provider.")
 	return
 }
 

@@ -246,20 +246,21 @@ type PrivateServiceEndpoint struct {
 }
 
 type ApiKey struct {
-	AccountID   types.String `tfsdk:"account_id"`
-	ProjectID   types.String `tfsdk:"project_id"`
-	Name        types.String `tfsdk:"name"`
-	ApiKey      types.String `tfsdk:"api_key"`
-	Duration    types.Int64  `tfsdk:"duration"`
-	Unit        types.String `tfsdk:"unit"`
-	Description types.String `tfsdk:"description"`
-	RoleName    types.String `tfsdk:"role_name"`
-	Status      types.String `tfsdk:"status"`
-	ApiKeyID    types.String `tfsdk:"api_key_id"`
-	Issuer      types.String `tfsdk:"issuer"`
-	LastUsed    types.String `tfsdk:"last_used"`
-	ExpiryTime  types.String `tfsdk:"expiration"`
-	CreatedAt   types.String `tfsdk:"date_created"`
+	AccountID    types.String   `tfsdk:"account_id"`
+	ProjectID    types.String   `tfsdk:"project_id"`
+	Name         types.String   `tfsdk:"name"`
+	ApiKey       types.String   `tfsdk:"api_key"`
+	Duration     types.Int64    `tfsdk:"duration"`
+	Unit         types.String   `tfsdk:"unit"`
+	Description  types.String   `tfsdk:"description"`
+	RoleName     types.String   `tfsdk:"role_name"`
+	AllowListIDs []types.String `tfsdk:"allow_list_ids"`
+	Status       types.String   `tfsdk:"status"`
+	ApiKeyID     types.String   `tfsdk:"api_key_id"`
+	Issuer       types.String   `tfsdk:"issuer"`
+	LastUsed     types.String   `tfsdk:"last_used"`
+	ExpiryTime   types.String   `tfsdk:"expiration"`
+	CreatedAt    types.String   `tfsdk:"date_created"`
 }
 
 type MetricsExporter struct {
