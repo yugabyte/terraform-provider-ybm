@@ -29,7 +29,7 @@ var validStatementClasses = []string{
 
 func (r resourceDbAuditLoggingType) GetSchema(ctx context.Context) (tfsdk.Schema, diag.Diagnostics) {
 	return tfsdk.Schema{
-		Description: `The resource to manage DB Audit log configuration for a cluster in YugabyteDB Aeon.`,
+		Description: "Use this resource to configure database audit logging for a cluster, and specify the export configuration (created using the `ybm_integration` resource) to use for log export. When assigned to a cluster, cluster audit logs are exported to the sink defined in the export configuration.",
 		Attributes: map[string]tfsdk.Attribute{
 			"account_id": {
 				Description: "ID of the account this DB Audit log configuration belongs to.",
