@@ -2,7 +2,7 @@ module github.com/yugabyte/terraform-provider-ybm
 
 go 1.22.7
 
-toolchain go1.23.1
+toolchain go1.23.4
 
 require (
 	github.com/golang/mock v1.6.0
@@ -10,7 +10,7 @@ require (
 	github.com/hashicorp/terraform-plugin-framework-validators v0.4.0
 	github.com/hashicorp/terraform-plugin-log v0.9.0
 	github.com/sethvargo/go-retry v0.2.3
-	github.com/yugabyte/yugabytedb-managed-go-client-internal v0.0.0-20250111091824-e051c979c3dd
+	github.com/yugabyte/yugabytedb-managed-go-client-internal v0.0.0-20250204064923-ec656335987b
 )
 
 require github.com/stretchr/testify v1.8.2 // indirect

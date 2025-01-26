@@ -402,3 +402,40 @@ type DrConfig struct {
 	TargetClusterId types.String   `tfsdk:"target_cluster_id"`
 	Databases       []types.String `tfsdk:"databases"`
 }
+
+type PitrConfig struct {
+	AccountId                  types.String `tfsdk:"account_id"`
+	ProjectId                  types.String `tfsdk:"project_id"`
+	ClusterId                  types.String `tfsdk:"cluster_id"`
+	PitrConfigId               types.String `tfsdk:"pitr_config_id"`
+	NamespaceId                types.String `tfsdk:"namespace_id"`
+	NamespaceName              types.String `tfsdk:"namespace_name"`
+	NamespaceType              types.String `tfsdk:"namespace_type"`
+	RetentionPeriodInDays      types.Int64  `tfsdk:"retention_period_in_days"`
+	State                      types.String `tfsdk:"state"`
+	EarliestRecoveryTimeMillis types.Int64  `tfsdk:"earliest_recovery_time_millis"`
+	LatestRecoveryTimeMillis   types.Int64  `tfsdk:"latest_recovery_time_millis"`
+}
+
+type PitrRestore struct {
+	AccountId       types.String `tfsdk:"account_id"`
+	ProjectId       types.String `tfsdk:"project_id"`
+	ClusterId       types.String `tfsdk:"cluster_id"`
+	PitrConfigId    types.String `tfsdk:"pitr_config_id"`
+	PitrRestoreId   types.String `tfsdk:"pitr_restore_id"`
+	RestoreAtMillis types.Int64  `tfsdk:"restore_at_millis"`
+	State           types.String `tfsdk:"state"`
+}
+
+type PitrClone struct {
+	AccountId         types.String `tfsdk:"account_id"`
+	ProjectId         types.String `tfsdk:"project_id"`
+	ClusterId         types.String `tfsdk:"cluster_id"`
+	CloneNamespaceId  types.String `tfsdk:"clone_namespace_id"`
+	CloneAs           types.String `tfsdk:"clone_as"`
+	SourceNamespaceId types.String `tfsdk:"source_namespace_id"`
+	NamespaceName     types.String `tfsdk:"namespace_name"`
+	NamespaceType     types.String `tfsdk:"namespace_type"`
+	CloneAtMillis     types.Int64  `tfsdk:"clone_at_millis"`
+	State             types.String `tfsdk:"state"`
+}

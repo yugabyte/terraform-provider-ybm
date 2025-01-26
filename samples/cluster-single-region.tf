@@ -140,3 +140,31 @@ resource "ybm_read_replicas" "myrr" {
 #   target_cluster_id = "e35dbf4d-cfd7-4e17-b9de-7d4ebd56a0e0"
 #   databases = ["test1", "test2"]
 # }
+
+# resource "ybm_pitr_config" "sample_pitr" {
+#   cluster_id = ybm_cluster.single_region.cluster_id
+#   namespace_name = "test-PITR-DB"
+#   namespace_type = "YSQL"
+#   retention_period_in_days = 7
+# }
+
+# resource "ybm_pitr_restore" "sample_pitr_restore" {
+#   cluster_id = ybm_cluster.single_region.cluster_id
+#   pitr_config_id = "e35dbf4d-cfd7-4e17-b9de-7d4ebd56a0e0"
+#   restore_at_millis = "1234567889"
+# }
+
+# resource "ybm_pitr_clone" "sample_pitr_clone_now" {
+#   cluster_id = ybm_cluster.single_region.cluster_id
+#   clone_as = "test-clone-now-db-clone"
+#   namespace_name = "test-clone-now-DB"
+#   namespace_type = "YSQL"
+# }
+
+# resource "ybm_pitr_clone" "sample_pitr_clone_PIT" {
+#   cluster_id = ybm_cluster.single_region.cluster_id
+#   clone_as = "test-clone-PIT-db-clone"
+#   namespace_name = "test-clone-PIT-DB"
+#   namespace_type = "YSQL"
+#   clone_at_millis = "1234567889"
+# }
