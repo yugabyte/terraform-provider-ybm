@@ -12,14 +12,13 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
-	"github.com/yugabyte/terraform-provider-ybm/managed/fflags"
 	openapiclient "github.com/yugabyte/yugabytedb-managed-go-client-internal"
 )
 
 type resourceApiKeyType struct{}
 
 func (r resourceApiKeyType) GetSchema(_ context.Context) (tfsdk.Schema, diag.Diagnostics) {
-	schema := tfsdk.Schema{
+	return tfsdk.Schema{
 		Description: `The resource to issue an API Key in YugabyteDB Aeon.`,
 		Attributes: map[string]tfsdk.Attribute{
 			"account_id": {
@@ -57,6 +56,13 @@ func (r resourceApiKeyType) GetSchema(_ context.Context) (tfsdk.Schema, diag.Dia
 				Description: "The role of the API Key.",
 				Type:        types.StringType,
 				Required:    true,
+			},
+			"allow_list_ids": {
+				Description: "List of IDs of the allow lists assigned to the API Key.",
+				Type: types.SetType{
+					ElemType: types.StringType,
+				},
+				Optional: true,
 			},
 			"description": {
 				Description: "The description of the API Key.",
@@ -96,18 +102,7 @@ func (r resourceApiKeyType) GetSchema(_ context.Context) (tfsdk.Schema, diag.Dia
 				Computed:    true,
 			},
 		},
-	}
-	// Add allow lists if the feature flag is enabled
-	if fflags.IsFeatureFlagEnabled(fflags.API_KEYS_ALLOW_LIST) {
-		schema.Attributes["allow_list_ids"] = tfsdk.Attribute{
-			Description: "List of IDs of the allow lists assigned to the API Key.",
-			Type: types.SetType{
-				ElemType: types.StringType,
-			},
-			Optional: true,
-		}
-	}
-	return schema, nil
+	}, nil
 }
 
 func (r resourceApiKeyType) NewResource(_ context.Context, p tfsdk.Provider) (tfsdk.Resource, diag.Diagnostics) {
