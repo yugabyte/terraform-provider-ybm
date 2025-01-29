@@ -194,8 +194,9 @@ func (r resourceApiKey) Create(ctx context.Context, req tfsdk.CreateResourceRequ
 	if !validTimeUnit {
 		resp.Diagnostics.AddError(
 			"Invalid time unit for API Key creation",
-			"Available options are Hours, Days, and Months.",
+			"Available options are: Hours, Days, and Months.",
 		)
+		return
 	}
 
 	roleName := plan.RoleName.Value
