@@ -102,9 +102,6 @@ func (r resourceClusterType) GetSchema(_ context.Context) (tfsdk.Schema, diag.Di
 					Type:        types.Int64Type,
 					Optional:    true,
 					Computed:    true,
-					PlanModifiers: []tfsdk.AttributePlanModifier{
-						tfsdk.UseStateForUnknown(),
-					},
 					Validators: []tfsdk.AttributeValidator{
 						schemavalidator.ExactlyOneOf(
 							path.MatchRelative().AtParent().AtParent().AtParent().AtName("node_config").AtName("num_cores"),
@@ -117,9 +114,6 @@ func (r resourceClusterType) GetSchema(_ context.Context) (tfsdk.Schema, diag.Di
 					Type:        types.Int64Type,
 					Optional:    true,
 					Computed:    true,
-					PlanModifiers: []tfsdk.AttributePlanModifier{
-						tfsdk.UseStateForUnknown(),
-					},
 					Validators: []tfsdk.AttributeValidator{
 						schemavalidator.ConflictsWith(
 							path.MatchRelative().AtParent().AtParent().AtParent().AtName("node_config").AtName("disk_size_gb"),
@@ -131,9 +125,6 @@ func (r resourceClusterType) GetSchema(_ context.Context) (tfsdk.Schema, diag.Di
 					Type:        types.Int64Type,
 					Optional:    true,
 					Computed:    true,
-					PlanModifiers: []tfsdk.AttributePlanModifier{
-						tfsdk.UseStateForUnknown(),
-					},
 					Validators: []tfsdk.AttributeValidator{
 						schemavalidator.ConflictsWith(
 							path.MatchRelative().AtParent().AtParent().AtParent().AtName("node_config").AtName("disk_iops"),
@@ -144,9 +135,6 @@ func (r resourceClusterType) GetSchema(_ context.Context) (tfsdk.Schema, diag.Di
 					Type:     types.StringType,
 					Optional: true,
 					Computed: true,
-					PlanModifiers: []tfsdk.AttributePlanModifier{
-						tfsdk.UseStateForUnknown(),
-					},
 					Validators: []tfsdk.AttributeValidator{
 						schemavalidator.ConflictsWith(path.MatchRelative().AtParent().AtName("vpc_name")),
 					},
@@ -155,9 +143,6 @@ func (r resourceClusterType) GetSchema(_ context.Context) (tfsdk.Schema, diag.Di
 					Type:     types.StringType,
 					Optional: true,
 					Computed: true,
-					PlanModifiers: []tfsdk.AttributePlanModifier{
-						tfsdk.UseStateForUnknown(),
-					},
 				},
 				"public_access": {
 					Type:     types.BoolType,
@@ -203,9 +188,6 @@ func (r resourceClusterType) GetSchema(_ context.Context) (tfsdk.Schema, diag.Di
 					Type:        types.StringType,
 					Computed:    true,
 					Optional:    true,
-					PlanModifiers: []tfsdk.AttributePlanModifier{
-						tfsdk.UseStateForUnknown(),
-					},
 				},
 
 				"time_interval_in_days": {
@@ -213,9 +195,6 @@ func (r resourceClusterType) GetSchema(_ context.Context) (tfsdk.Schema, diag.Di
 					Type:        types.Int64Type,
 					Computed:    true,
 					Optional:    true,
-					PlanModifiers: []tfsdk.AttributePlanModifier{
-						tfsdk.UseStateForUnknown(),
-					},
 				},
 
 				"retention_period_in_days": {
@@ -422,20 +401,14 @@ func (r resourceClusterType) GetSchema(_ context.Context) (tfsdk.Schema, diag.Di
 			Type:        types.StringType,
 			Optional:    true,
 			Computed:    true,
-			PlanModifiers: []tfsdk.AttributePlanModifier{
-				tfsdk.UseStateForUnknown(),
-			},
-			Validators: []tfsdk.AttributeValidator{stringvalidator.OneOf("NONE", "NODE", "ZONE", "REGION")},
+			Validators:  []tfsdk.AttributeValidator{stringvalidator.OneOf("NONE", "NODE", "ZONE", "REGION")},
 		},
 		"num_faults_to_tolerate": {
 			Description: "The number of domain faults the cluster can tolerate. 0 for NONE, 1 for ZONE and [1-3] for NODE and REGION",
 			Type:        types.Int64Type,
 			Optional:    true,
 			Computed:    true,
-			PlanModifiers: []tfsdk.AttributePlanModifier{
-				tfsdk.UseStateForUnknown(),
-			},
-			Validators: []tfsdk.AttributeValidator{int64validator.OneOf(0, 1, 2, 3)},
+			Validators:  []tfsdk.AttributeValidator{int64validator.OneOf(0, 1, 2, 3)},
 		},
 		"cluster_allow_list_ids": {
 			Description: "List of IDs of the allow lists assigned to the cluster.",
@@ -452,27 +425,18 @@ func (r resourceClusterType) GetSchema(_ context.Context) (tfsdk.Schema, diag.Di
 		"node_config": {
 			Optional: true,
 			Computed: true,
-			PlanModifiers: []tfsdk.AttributePlanModifier{
-				tfsdk.UseStateForUnknown(),
-			},
 			Attributes: tfsdk.SingleNestedAttributes(map[string]tfsdk.Attribute{
 				"num_cores": {
 					Description: "Number of CPU cores in the node.",
 					Type:        types.Int64Type,
 					Optional:    true,
 					Computed:    true,
-					PlanModifiers: []tfsdk.AttributePlanModifier{
-						tfsdk.UseStateForUnknown(),
-					},
 				},
 				"disk_size_gb": {
 					Description: "Disk size of the node.",
 					Type:        types.Int64Type,
 					Computed:    true,
 					Optional:    true,
-					PlanModifiers: []tfsdk.AttributePlanModifier{
-						tfsdk.UseStateForUnknown(),
-					},
 					Validators: []tfsdk.AttributeValidator{
 						schemavalidator.ConflictsWith(
 							path.MatchRelative().AtParent().AtParent().AtName("cluster_region_info").AtAnyListIndex().AtName("disk_size_gb"),
@@ -484,9 +448,6 @@ func (r resourceClusterType) GetSchema(_ context.Context) (tfsdk.Schema, diag.Di
 					Type:        types.Int64Type,
 					Computed:    true,
 					Optional:    true,
-					PlanModifiers: []tfsdk.AttributePlanModifier{
-						tfsdk.UseStateForUnknown(),
-					},
 					Validators: []tfsdk.AttributeValidator{
 						schemavalidator.ConflictsWith(
 							path.MatchRelative().AtParent().AtParent().AtName("cluster_region_info").AtAnyListIndex().AtName("disk_iops"),
@@ -539,46 +500,28 @@ func (r resourceClusterType) GetSchema(_ context.Context) (tfsdk.Schema, diag.Di
 		},
 		"cluster_info": {
 			Computed: true,
-			PlanModifiers: []tfsdk.AttributePlanModifier{
-				tfsdk.UseStateForUnknown(),
-			},
 			Attributes: tfsdk.SingleNestedAttributes(map[string]tfsdk.Attribute{
 				"state": {
 					Type:     types.StringType,
 					Computed: true,
-					PlanModifiers: []tfsdk.AttributePlanModifier{
-						tfsdk.UseStateForUnknown(),
-					},
 				},
 				"software_version": {
 					Type:     types.StringType,
 					Computed: true,
-					PlanModifiers: []tfsdk.AttributePlanModifier{
-						tfsdk.UseStateForUnknown(),
-					},
 				},
 				"created_time": {
 					Type:     types.StringType,
 					Computed: true,
-					PlanModifiers: []tfsdk.AttributePlanModifier{
-						tfsdk.UseStateForUnknown(),
-					},
 				},
 				"updated_time": {
 					Type:     types.StringType,
 					Computed: true,
-					PlanModifiers: []tfsdk.AttributePlanModifier{
-						tfsdk.UseStateForUnknown(),
-					},
 				},
 			}),
 		},
 		"cluster_version": {
 			Type:     types.StringType,
 			Computed: true,
-			PlanModifiers: []tfsdk.AttributePlanModifier{
-				tfsdk.UseStateForUnknown(),
-			},
 		},
 		"database_track": {
 			Description: "The track of the database. Production or Innovation or Preview.",
@@ -622,9 +565,6 @@ func (r resourceClusterType) GetSchema(_ context.Context) (tfsdk.Schema, diag.Di
 				ElemType: types.StringType,
 			},
 			Computed: true,
-			PlanModifiers: []tfsdk.AttributePlanModifier{
-				tfsdk.UseStateForUnknown(),
-			},
 		},
 		"endpoints": {
 			Description: "The endpoints used to connect to the cluster.",
@@ -633,34 +573,19 @@ func (r resourceClusterType) GetSchema(_ context.Context) (tfsdk.Schema, diag.Di
 					Description: "The accessibility type of the endpoint. PUBLIC or PRIVATE.",
 					Type:        types.StringType,
 					Computed:    true,
-					PlanModifiers: []tfsdk.AttributePlanModifier{
-						tfsdk.UseStateForUnknown(),
-					},
-					Optional: true,
 				},
 				"host": {
 					Description: "The host of the endpoint.",
 					Type:        types.StringType,
 					Computed:    true,
-					PlanModifiers: []tfsdk.AttributePlanModifier{
-						tfsdk.UseStateForUnknown(),
-					},
-					Optional: true,
 				},
 				"region": {
 					Description: "The region of the endpoint.",
 					Type:        types.StringType,
 					Computed:    true,
-					PlanModifiers: []tfsdk.AttributePlanModifier{
-						tfsdk.UseStateForUnknown(),
-					},
-					Optional: true,
 				},
 			}),
 			Computed: true,
-			PlanModifiers: []tfsdk.AttributePlanModifier{
-				tfsdk.UseStateForUnknown(),
-			},
 		},
 		"cluster_certificate": {
 			Description: "The certificate used to connect to the cluster.",
@@ -1174,7 +1099,7 @@ func (r resourceCluster) Create(ctx context.Context, req tfsdk.CreateResourceReq
 		return
 	}
 
-	if (!plan.ClusterID.Unknown && !plan.ClusterID.Null) || plan.ClusterID.Value != "" {
+	if !plan.ClusterID.Unknown && !plan.ClusterID.Null && plan.ClusterID.Value != "" {
 		resp.Diagnostics.AddError(
 			"Cluster ID provided for new cluster",
 			"The cluster_id was provided even though a new cluster is being created. Do not include this field in the provider when creating a cluster.",
@@ -1185,10 +1110,10 @@ func (r resourceCluster) Create(ctx context.Context, req tfsdk.CreateResourceReq
 	for _, regionInfo := range plan.ClusterRegionInfo {
 		vpcNamePresent := false
 		vpcIDPresent := false
-		if (!regionInfo.VPCName.Unknown && !regionInfo.VPCName.Null) || regionInfo.VPCName.Value != "" {
+		if !regionInfo.VPCName.Unknown && !regionInfo.VPCName.Null && regionInfo.VPCName.Value != "" {
 			vpcNamePresent = true
 		}
-		if (!regionInfo.VPCID.Unknown && !regionInfo.VPCID.Null) || regionInfo.VPCID.Value != "" {
+		if !regionInfo.VPCID.Unknown && !regionInfo.VPCID.Null && regionInfo.VPCID.Value != "" {
 			vpcIDPresent = true
 		}
 		if vpcNamePresent {
@@ -2177,10 +2102,10 @@ func (r resourceCluster) Update(ctx context.Context, req tfsdk.UpdateResourceReq
 	for _, regionInfo := range plan.ClusterRegionInfo {
 		vpcNamePresent := false
 		vpcIDPresent := false
-		if (!regionInfo.VPCName.Unknown && !regionInfo.VPCName.Null) || regionInfo.VPCName.Value != "" {
+		if !regionInfo.VPCName.Unknown && !regionInfo.VPCName.Null && regionInfo.VPCName.Value != "" {
 			vpcNamePresent = true
 		}
-		if (!regionInfo.VPCID.Unknown && !regionInfo.VPCID.Null) || regionInfo.VPCID.Value != "" {
+		if !regionInfo.VPCID.Unknown && !regionInfo.VPCID.Null && regionInfo.VPCID.Value != "" {
 			vpcIDPresent = true
 		}
 		if vpcNamePresent {
@@ -2410,7 +2335,7 @@ func (r resourceCluster) Update(ctx context.Context, req tfsdk.UpdateResourceReq
 
 	restoreRequired := false
 	backupId := ""
-	if (!plan.RestoreBackupID.Unknown && !plan.RestoreBackupID.Null) || plan.RestoreBackupID.Value != "" {
+	if !plan.RestoreBackupID.Unknown && !plan.RestoreBackupID.Null && plan.RestoreBackupID.Value != "" {
 		if state.RestoreBackupID.Value != plan.RestoreBackupID.Value {
 			restoreRequired = true
 		}
