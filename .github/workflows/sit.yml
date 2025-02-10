@@ -25,8 +25,8 @@ jobs:
             console.log('Triggering github-lint workflow');
             await github.rest.actions.createWorkflowDispatch({
               owner: context.repo.owner,
-              repo: 'yugabyte-cloud',
-              workflow_id: 'github-lint.yaml',
+              repo: 'ybm-cli',
+              workflow_id: 42716103,
               ref: 'main',
               inputs: {
                 provider_branch: '${{ github.event.pull_request.head.ref || github.ref_name }}',
@@ -47,8 +47,8 @@ jobs:
               
               const runs = await github.rest.actions.listWorkflowRuns({
                 owner: context.repo.owner,
-                repo: 'yugabyte-cloud',
-                workflow_id: 'github-lint.yaml',
+                repo: 'ybm-cli',
+                workflow_id: 42716103,
                 branch: 'main',
                 event: 'workflow_dispatch'
               });
