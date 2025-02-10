@@ -1,0 +1,69 @@
+name: YB Managed Terraform Provider SIT
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  sit:
+    name: System Integration Tests
+    permissions:
+      contents: read
+      actions: write      # Permission to trigger workflows
+      id-token: write
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger SIT Workflow
+        uses: actions/github-script@v6
+        with:
+          # Uses the default GITHUB_TOKEN
+          script: |
+            await github.rest.actions.createWorkflowDispatch({
+              owner: context.repo.owner,
+              repo: 'yugabyte-cloud',
+              workflow_id: 'github-lint.yaml',
+              ref: 'main',
+              inputs: {
+                provider_branch: '${{ github.event.pull_request.head.ref || github.ref_name }}',
+                provider_sha: '${{ github.sha }}'
+              }
+            })
+      
+      - name: Wait for SIT Workflow
+        uses: actions/github-script@v6
+        with:
+          script: |
+            const MAX_ATTEMPTS = 60;
+            const POLL_INTERVAL = 30;
+            
+            for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
+              console.log(`Checking workflow status (attempt ${attempt + 1}/${MAX_ATTEMPTS})`);
+              
+              const runs = await github.rest.actions.listWorkflowRuns({
+                owner: context.repo.owner,
+                repo: 'yugabyte-cloud',
+                workflow_id: 'github-lint.yaml',
+                branch: 'main',
+                event: 'workflow_dispatch'
+              });
+              
+              const run = runs.data.workflow_runs.find(r => 
+                r.created_at > '${{ github.event.pull_request.updated_at || github.event.push.updated_at }}'
+              );
+              
+              if (run) {
+                console.log(`Found workflow run: ${run.html_url}`);
+                if (run.status === 'completed') {
+                  if (run.conclusion !== 'success') {
+                    core.setFailed(`SIT workflow failed: ${run.html_url}`);
+                  }
+                  break;
+                }
+              }
+              
+              await new Promise(resolve => setTimeout(resolve, POLL_INTERVAL * 1000));
+            }
