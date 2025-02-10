@@ -20,6 +20,7 @@ jobs:
       - name: Trigger Lint Workflow
         uses: actions/github-script@v6
         with:
+          github-token: ${{ secrets.CROSS_REPO_TOKEN }} 
           script: |
             console.log('Triggering github-lint workflow');
             await github.rest.actions.createWorkflowDispatch({
@@ -36,6 +37,7 @@ jobs:
       - name: Wait for Lint Workflow
         uses: actions/github-script@v6
         with:
+          github-token: ${{ secrets.CROSS_REPO_TOKEN }}  
           script: |
             const MAX_ATTEMPTS = 60;  // 30 minutes
             const POLL_INTERVAL = 30; // 30 seconds
