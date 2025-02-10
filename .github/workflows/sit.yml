@@ -1,4 +1,4 @@
-name: YB Managed Terraform Provider SIT
+name: YB Managed Terraform Provider Lint
 
 on:
   push:
@@ -9,19 +9,19 @@ on:
       - main
 
 jobs:
-  sit:
-    name: System Integration Tests
+  lint:
+    name: Trigger Lint Check
     permissions:
       contents: read
-      actions: write      # Permission to trigger workflows
+      actions: write
       id-token: write
     runs-on: ubuntu-latest
     steps:
-      - name: Trigger SIT Workflow
+      - name: Trigger Lint Workflow
         uses: actions/github-script@v6
         with:
-          # Uses the default GITHUB_TOKEN
           script: |
+            console.log('Triggering github-lint workflow');
             await github.rest.actions.createWorkflowDispatch({
               owner: context.repo.owner,
               repo: 'yugabyte-cloud',
@@ -31,17 +31,17 @@ jobs:
                 provider_branch: '${{ github.event.pull_request.head.ref || github.ref_name }}',
                 provider_sha: '${{ github.sha }}'
               }
-            })
+            });
       
-      - name: Wait for SIT Workflow
+      - name: Wait for Lint Workflow
         uses: actions/github-script@v6
         with:
           script: |
-            const MAX_ATTEMPTS = 60;
-            const POLL_INTERVAL = 30;
+            const MAX_ATTEMPTS = 60;  // 30 minutes
+            const POLL_INTERVAL = 30; // 30 seconds
             
             for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
-              console.log(`Checking workflow status (attempt ${attempt + 1}/${MAX_ATTEMPTS})`);
+              console.log(`Checking lint workflow status (attempt ${attempt + 1}/${MAX_ATTEMPTS})`);
               
               const runs = await github.rest.actions.listWorkflowRuns({
                 owner: context.repo.owner,
@@ -58,11 +58,16 @@ jobs:
               if (run) {
                 console.log(`Found workflow run: ${run.html_url}`);
                 if (run.status === 'completed') {
+                  console.log(`Workflow completed with conclusion: ${run.conclusion}`);
                   if (run.conclusion !== 'success') {
-                    core.setFailed(`SIT workflow failed: ${run.html_url}`);
+                    core.setFailed(`Lint workflow failed: ${run.html_url}`);
                   }
                   break;
+                } else {
+                  console.log(`Current status: ${run.status}`);
                 }
+              } else {
+                console.log('No matching workflow run found yet');
               }
               
               await new Promise(resolve => setTimeout(resolve, POLL_INTERVAL * 1000));
