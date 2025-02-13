@@ -26,7 +26,7 @@ jobs:
             await github.rest.actions.createWorkflowDispatch({
               owner: context.repo.owner,
               repo: 'yugabyte-cloud',
-              workflow_id: 143302887,
+              workflow_id: 35063261,
               ref: 'master',
               inputs: {
                 provider_branch: '${{ github.event.pull_request.head.ref || github.ref_name }}',
@@ -48,7 +48,7 @@ jobs:
               const runs = await github.rest.actions.listWorkflowRuns({
                 owner: context.repo.owner,
                 repo: 'yugabyte-cloud',
-                workflow_id: 143302887,
+                workflow_id: 35063261,
                 branch: 'master',
                 event: 'workflow_dispatch'
               });
