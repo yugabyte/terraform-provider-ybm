@@ -20,13 +20,14 @@ jobs:
       - name: Trigger Lint Workflow
         uses: actions/github-script@v6
         with:
+          github-token: ${{ secrets.TERRAFORM_PROVIDER_TEST_SUITE_TOKEN }}
           script: |
             console.log('Triggering github-lint workflow');
             await github.rest.actions.createWorkflowDispatch({
               owner: context.repo.owner,
-              repo: 'ybm-cli',
-              workflow_id: 42716103,
-              ref: 'main',
+              repo: 'yugabyte-cloud',
+              workflow_id: 143302887,
+              ref: 'master',
               inputs: {
                 provider_branch: '${{ github.event.pull_request.head.ref || github.ref_name }}',
                 provider_sha: '${{ github.sha }}'
@@ -35,7 +36,8 @@ jobs:
       
       - name: Wait for Lint Workflow
         uses: actions/github-script@v6
-        with: 
+        with:
+          github-token: ${{ secrets.TERRAFORM_PROVIDER_TEST_SUITE_TOKEN }}
           script: |
             const MAX_ATTEMPTS = 60;  // 30 minutes
             const POLL_INTERVAL = 30; // 30 seconds
@@ -45,9 +47,9 @@ jobs:
               
               const runs = await github.rest.actions.listWorkflowRuns({
                 owner: context.repo.owner,
-                repo: 'ybm-cli',
-                workflow_id: 42716103,
-                branch: 'main',
+                repo: 'yugabyte-cloud',
+                workflow_id: 143302887,
+                branch: 'master',
                 event: 'workflow_dispatch'
               });
               
