@@ -27,7 +27,7 @@ jobs:
               owner: context.repo.owner,
               repo: 'yugabyte-cloud',
               workflow_id: 35063261,
-              ref: 'master',
+              ref: 'posriniv-tf-test',
               inputs: {
                 provider_branch: '${{ github.event.pull_request.head.ref || github.ref_name }}',
                 provider_sha: '${{ github.sha }}'
@@ -49,7 +49,7 @@ jobs:
                 owner: context.repo.owner,
                 repo: 'yugabyte-cloud',
                 workflow_id: 35063261,
-                branch: 'master',
+                branch: 'posriniv-tf-test',
                 event: 'workflow_dispatch'
               });
               
