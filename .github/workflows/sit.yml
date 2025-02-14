@@ -20,7 +20,7 @@ jobs:
       - name: Trigger Lint Workflow
         uses: actions/github-script@v6
         with:
-          github-token: ${{ secrets.TERRAFORM_PROVIDER_TEST_SUITE_TOKEN_TWO }}
+          github-token: ${{ secrets.TERRAFORM_PROVIDER_TEST_SUITE_TOKEN }}
           script: |
             console.log('Triggering github-lint workflow');
             await github.rest.actions.createWorkflowDispatch({
