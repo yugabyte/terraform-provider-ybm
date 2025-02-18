@@ -27,11 +27,8 @@ jobs:
               owner: context.repo.owner,
               repo: 'yugabyte-cloud',
               workflow_id: 35063261,
-              ref: 'posriniv-tf-test',
-              inputs: {
-                provider_branch: '${{ github.event.pull_request.head.ref || github.ref_name }}',
-                provider_sha: '${{ github.sha }}'
-              }
+              ref: 'master',
+              inputs: {}
             });
       
       - name: Wait for Lint Workflow
@@ -49,7 +46,7 @@ jobs:
                 owner: context.repo.owner,
                 repo: 'yugabyte-cloud',
                 workflow_id: 35063261,
-                branch: 'posriniv-tf-test',
+                branch: 'master',
                 event: 'workflow_dispatch'
               });
               
