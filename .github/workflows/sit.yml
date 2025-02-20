@@ -24,9 +24,17 @@ jobs:
           script: |
             console.log('Triggering github-lint workflow');
 
-            // Get the current branch name
-            const branch = context.ref.replace('refs/heads/', '');
+             // Get the current branch name
+            const branch = context.payload.pull_request ? 
+              context.payload.pull_request.head.ref : 
+              context.ref.replace('refs/heads/', '');
             console.log(`Current branch: ${branch}`);
+            
+            // Create the version object and stringify it properly
+            const cli_tf_version = {
+              cli_version: "Latest RC/Release",
+              tf_version: branch
+            };
             
             await github.rest.actions.createWorkflowDispatch({
               owner: context.repo.owner,
@@ -35,7 +43,7 @@ jobs:
               ref: 'master',
               inputs: {
                 tests: '["sit_tf"]',
-                cli_tf_version: '{"cli_version": "Latest RC/Release", "tf_version": branch}'
+                cli_tf_version: JSON.stringify(cli_tf_version)
               }
             });
       
