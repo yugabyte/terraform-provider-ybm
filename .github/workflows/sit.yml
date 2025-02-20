@@ -1,4 +1,4 @@
-name: YB Managed Terraform Provider Lint
+name: YB Managed Terraform Provider Tests
 
 on:
   push:
@@ -10,7 +10,7 @@ on:
 
 jobs:
   lint:
-    name: Trigger Lint Check
+    name: Trigger Terraform Provider Test Suite
     permissions:
       contents: read
       actions: write
@@ -47,7 +47,7 @@ jobs:
               }
             });
       
-      - name: Wait for Lint Workflow
+      - name: Wait for TF Test Suite Workflow
         uses: actions/github-script@v6
         with:
           github-token: ${{ secrets.TERRAFORM_PROVIDER_TEST_SUITE_TOKEN }}
