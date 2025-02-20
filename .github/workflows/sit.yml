@@ -1,5 +1,4 @@
 name: YB Managed Terraform Provider Tests
-
 on:
   push:
     branches:
@@ -7,9 +6,8 @@ on:
   pull_request:
     branches:
       - main
-
 jobs:
-  lint:
+  test-suite:
     name: Trigger Terraform Provider Test Suite
     permissions:
       contents: read
@@ -17,13 +15,12 @@ jobs:
       id-token: write
     runs-on: ubuntu-latest
     steps:
-      - name: Trigger Lint Workflow
+      - name: Trigger TF Provider Test Suite Workflow
         uses: actions/github-script@v6
         with:
           github-token: ${{ secrets.TERRAFORM_PROVIDER_TEST_SUITE_TOKEN }}
           script: |
-            console.log('Triggering github-lint workflow');
-
+            console.log('Triggering TF provider test suite workflow');
              // Get the current branch name
             const branch = context.payload.pull_request ? 
               context.payload.pull_request.head.ref : 
@@ -56,7 +53,7 @@ jobs:
             const POLL_INTERVAL = 30; // 30 seconds
             
             for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
-              console.log(`Checking lint workflow status (attempt ${attempt + 1}/${MAX_ATTEMPTS})`);
+              console.log(`Checking TF provider test suite workflow status (attempt ${attempt + 1}/${MAX_ATTEMPTS})`);
               
               const runs = await github.rest.actions.listWorkflowRuns({
                 owner: context.repo.owner,
@@ -75,7 +72,7 @@ jobs:
                 if (run.status === 'completed') {
                   console.log(`Workflow completed with conclusion: ${run.conclusion}`);
                   if (run.conclusion !== 'success') {
-                    core.setFailed(`Lint workflow failed: ${run.html_url}`);
+                    core.setFailed(`TF provider test suite workflow failed: ${run.html_url}`);
                   }
                   break;
                 } else {
@@ -83,6 +80,11 @@ jobs:
                 }
               } else {
                 console.log('No matching workflow run found yet');
+              }
+              
+              if (attempt === MAX_ATTEMPTS - 1) {
+                core.setFailed('Timed out waiting for TF provider test suite workflow to complete');
+                break;
               }
               
               await new Promise(resolve => setTimeout(resolve, POLL_INTERVAL * 1000));
