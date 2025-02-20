@@ -23,6 +23,11 @@ jobs:
           github-token: ${{ secrets.TERRAFORM_PROVIDER_TEST_SUITE_TOKEN }}
           script: |
             console.log('Triggering github-lint workflow');
+
+            // Get the current branch name
+            const branch = context.ref.replace('refs/heads/', '');
+            console.log(`Current branch: ${branch}`);
+            
             await github.rest.actions.createWorkflowDispatch({
               owner: context.repo.owner,
               repo: 'yugabyte-cloud',
@@ -30,7 +35,7 @@ jobs:
               ref: 'master',
               inputs: {
                 tests: '["sit_tf"]',
-                cli_tf_version: '{"cli_version": "Latest RC/Release", "tf_version": "main"}'
+                cli_tf_version: '{"cli_version": "Latest RC/Release", "tf_version": branch}'
               }
             });
       
