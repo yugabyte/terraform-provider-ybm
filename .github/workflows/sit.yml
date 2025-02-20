@@ -39,7 +39,7 @@ jobs:
             await github.rest.actions.createWorkflowDispatch({
               owner: context.repo.owner,
               repo: 'yugabyte-cloud',
-              workflow_id: 20807413,
+              workflow_id: 'integration-test.yaml',
               ref: 'master',
               inputs: {
                 tests: '["sit_tf"]',
@@ -52,7 +52,7 @@ jobs:
         with:
           github-token: ${{ secrets.TERRAFORM_PROVIDER_TEST_SUITE_TOKEN }}
           script: |
-            const MAX_ATTEMPTS = 60;  // 30 minutes
+            const MAX_ATTEMPTS = 240;  // 120 minutes
             const POLL_INTERVAL = 30; // 30 seconds
             
             for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
@@ -61,7 +61,7 @@ jobs:
               const runs = await github.rest.actions.listWorkflowRuns({
                 owner: context.repo.owner,
                 repo: 'yugabyte-cloud',
-                workflow_id: 20807413,
+                workflow_id: 'integration-test.yaml',
                 branch: 'master',
                 event: 'workflow_dispatch'
               });
