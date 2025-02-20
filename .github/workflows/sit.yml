@@ -26,9 +26,12 @@ jobs:
             await github.rest.actions.createWorkflowDispatch({
               owner: context.repo.owner,
               repo: 'yugabyte-cloud',
-              workflow_id: 35063261,
+              workflow_id: 20807413,
               ref: 'master',
-              inputs: {}
+              inputs: {
+                tests: '["sit_tf"]',
+                cli_tf_version: '{"cli_version": "Latest RC/Release", "tf_version": "main"}'
+              }
             });
       
       - name: Wait for Lint Workflow
@@ -45,7 +48,7 @@ jobs:
               const runs = await github.rest.actions.listWorkflowRuns({
                 owner: context.repo.owner,
                 repo: 'yugabyte-cloud',
-                workflow_id: 35063261,
+                workflow_id: 20807413,
                 branch: 'master',
                 event: 'workflow_dispatch'
               });
