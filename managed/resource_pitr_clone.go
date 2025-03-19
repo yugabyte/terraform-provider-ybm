@@ -235,15 +235,10 @@ func (r resourcePitrClone) Create(ctx context.Context, req tfsdk.CreateResourceR
 		}
 		cloneSpec.SetCloneNow(*openapiclient.NewDatabaseCloneNowSpec(namespaceId, plan.CloneAs.Value))
 	} else {
-		// We can only clone to PIT if a config is present for the {namespaceName, namespaceType}
 		if (!plan.CloneAtMillis.Unknown && !plan.CloneAtMillis.Null) || plan.CloneAtMillis.Value != 0 {
 			cloneSpec.SetClonePointInTime(*openapiclient.NewDatabaseClonePITSpec(plan.CloneAtMillis.Value, pitrConfigId, plan.CloneAs.Value))
 		} else {
-			resp.Diagnostics.AddError(
-				"Clone time was not provided for cloning a namespace with a pre exsiting PITR config",
-				"The clone_at_millis was not provided even though cloning of a namespace that is assocaited to a pre existing PITR config is being requested. Do specify this field in the provider.",
-			)
-			return
+			cloneSpec.SetCloneNow(*openapiclient.NewDatabaseCloneNowSpec(namespaceId, plan.CloneAs.Value))
 		}
 	}
 
