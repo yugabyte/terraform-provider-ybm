@@ -52,7 +52,7 @@ func (r resourceAllowListType) GetSchema(_ context.Context) (tfsdk.Schema, diag.
 			"allow_list_description": {
 				Description:   "The description of the allow list.",
 				Type:          types.StringType,
-				Required:      true,
+				Optional:      true,
 				PlanModifiers: tfsdk.AttributePlanModifiers{tfsdk.RequiresReplace()},
 			},
 			"cidr_list": {

@@ -24,12 +24,12 @@ resource "ybm_allow_list" "example_allow_list" {
 
 ### Required
 
-- `allow_list_description` (String) The description of the allow list.
 - `allow_list_name` (String) The name of the allow list.
 - `cidr_list` (Set of String) The CIDR list of the allow list.
 
 ### Optional
 
+- `allow_list_description` (String) The description of the allow list.
 - `allow_list_id` (String) The ID of the allow list. Created automatically when an allow list is created. Use this ID to get a specific allow list.
 
 ### Read-Only
