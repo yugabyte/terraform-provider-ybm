@@ -49,9 +49,7 @@ func (r resourcePitrConfigType) GetSchema(_ context.Context) (tfsdk.Schema, diag
 				Description: "The ID of the PITR Config.",
 				Type:        types.StringType,
 				Computed:    true,
-				PlanModifiers: []tfsdk.AttributePlanModifier{
-					tfsdk.UseStateForUnknown(),
-				},
+				Optional:    true,
 			},
 			"namespace_id": {
 				Description: "The ID of the namespace that this PITR Config is associated to.",
