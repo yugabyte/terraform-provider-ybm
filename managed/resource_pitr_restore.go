@@ -44,17 +44,11 @@ func (r resourcePitrRestoreType) GetSchema(_ context.Context) (tfsdk.Schema, dia
 				Description: "The ID of the cluster.",
 				Type:        types.StringType,
 				Required:    true,
-				PlanModifiers: []tfsdk.AttributePlanModifier{
-					ignoreChangesModifier{},
-				},
 			},
 			"pitr_config_id": {
 				Description: "The ID of the PITR config to be used to perform the restore.",
 				Type:        types.StringType,
 				Required:    true,
-				PlanModifiers: []tfsdk.AttributePlanModifier{
-					ignoreChangesModifier{},
-				},
 			},
 			"pitr_restore_id": {
 				Description: "The ID of the restore op via PITR Config.",
@@ -68,9 +62,6 @@ func (r resourcePitrRestoreType) GetSchema(_ context.Context) (tfsdk.Schema, dia
 				Description: "The time in UNIX millis to restore to via PITR Config.",
 				Type:        types.Int64Type,
 				Required:    true,
-				PlanModifiers: []tfsdk.AttributePlanModifier{
-					ignoreChangesModifier{},
-				},
 			},
 			"state": {
 				Description: "The status of the restoration via PITR config.",

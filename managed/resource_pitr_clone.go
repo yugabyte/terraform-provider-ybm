@@ -44,9 +44,6 @@ func (r resourcePitrCloneType) GetSchema(_ context.Context) (tfsdk.Schema, diag.
 				Description: "The ID of the cluster.",
 				Type:        types.StringType,
 				Required:    true,
-				PlanModifiers: []tfsdk.AttributePlanModifier{
-					ignoreChangesModifier{},
-				},
 			},
 			"clone_namespace_id": {
 				Description: "The ID of the namespace clone.",
@@ -60,9 +57,6 @@ func (r resourcePitrCloneType) GetSchema(_ context.Context) (tfsdk.Schema, diag.
 				Description: "The name for new cloned namespace.",
 				Type:        types.StringType,
 				Required:    true,
-				PlanModifiers: []tfsdk.AttributePlanModifier{
-					ignoreChangesModifier{},
-				},
 			},
 			"source_namespace_id": {
 				Description: "The ID of the namespace to be cloned.",
@@ -76,25 +70,16 @@ func (r resourcePitrCloneType) GetSchema(_ context.Context) (tfsdk.Schema, diag.
 				Description: "The source namespace name to be cloned.",
 				Type:        types.StringType,
 				Required:    true,
-				PlanModifiers: []tfsdk.AttributePlanModifier{
-					ignoreChangesModifier{},
-				},
 			},
 			"namespace_type": {
 				Description: "The namespace type.",
 				Type:        types.StringType,
 				Required:    true,
-				PlanModifiers: []tfsdk.AttributePlanModifier{
-					ignoreChangesModifier{},
-				},
 			},
 			"clone_at_millis": {
 				Description: "The time in UNIX millis to clone to via PITR Config.",
 				Type:        types.Int64Type,
 				Optional:    true,
-				PlanModifiers: []tfsdk.AttributePlanModifier{
-					ignoreChangesModifier{},
-				},
 			},
 			"state": {
 				Description: "The status of the namespace cloning.",
