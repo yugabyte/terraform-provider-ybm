@@ -117,6 +117,7 @@ func (r resourcePitrRestore) Create(ctx context.Context, req tfsdk.CreateResourc
 	var plan PitrRestore
 	var accountId, message string
 	var getAccountOK bool
+	diags := req.Plan.Get(ctx, &plan)
 	resp.Diagnostics.Append(getPitrRestorePlan(ctx, req.Plan, &plan)...)
 	if resp.Diagnostics.HasError() {
 		tflog.Debug(ctx, "Error while getting the plan for the PITR Restore")
@@ -191,7 +192,7 @@ func (r resourcePitrRestore) Create(ctx context.Context, req tfsdk.CreateResourc
 	plan.PitrRestoreId = types.String{Value: pitrRestoreResp.Data.Info.GetId()}
 	plan.State = types.String{Value: *&pitrRestoreResp.Data.Info.State}
 
-	diags := resp.State.Set(ctx, plan)
+	diags = resp.State.Set(ctx, plan)
 	resp.Diagnostics.Append(diags...)
 	if resp.Diagnostics.HasError() {
 		return
