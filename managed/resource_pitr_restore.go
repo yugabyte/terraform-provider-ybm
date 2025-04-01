@@ -54,9 +54,7 @@ func (r resourcePitrRestoreType) GetSchema(_ context.Context) (tfsdk.Schema, dia
 				Description: "The ID of the restore op via PITR Config.",
 				Type:        types.StringType,
 				Computed:    true,
-				PlanModifiers: []tfsdk.AttributePlanModifier{
-					tfsdk.UseStateForUnknown(),
-				},
+				Optional:    true,
 			},
 			"restore_at_millis": {
 				Description: "The time in UNIX millis to restore to via PITR Config.",

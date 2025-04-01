@@ -49,9 +49,7 @@ func (r resourcePitrCloneType) GetSchema(_ context.Context) (tfsdk.Schema, diag.
 				Description: "The ID of the namespace clone.",
 				Type:        types.StringType,
 				Computed:    true,
-				PlanModifiers: []tfsdk.AttributePlanModifier{
-					tfsdk.UseStateForUnknown(),
-				},
+				Optional:    true,
 			},
 			"clone_as": {
 				Description: "The name for new cloned namespace.",
