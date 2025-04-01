@@ -44,9 +44,6 @@ func (r resourcePitrConfigType) GetSchema(_ context.Context) (tfsdk.Schema, diag
 				Description: "The ID of the cluster this PITR Config belongs to.",
 				Type:        types.StringType,
 				Required:    true,
-				PlanModifiers: []tfsdk.AttributePlanModifier{
-					ignoreChangesModifier{},
-				},
 			},
 			"pitr_config_id": {
 				Description: "The ID of the PITR Config.",
@@ -68,17 +65,11 @@ func (r resourcePitrConfigType) GetSchema(_ context.Context) (tfsdk.Schema, diag
 				Description: "The namespace name for the PITR Config.",
 				Type:        types.StringType,
 				Required:    true,
-				PlanModifiers: []tfsdk.AttributePlanModifier{
-					ignoreChangesModifier{},
-				},
 			},
 			"namespace_type": {
 				Description: "The namespace type.",
 				Type:        types.StringType,
 				Required:    true,
-				PlanModifiers: []tfsdk.AttributePlanModifier{
-					ignoreChangesModifier{},
-				},
 			},
 			"retention_period_in_days": {
 				Description: "The retention period of the PITR Config.",
