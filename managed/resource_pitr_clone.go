@@ -139,6 +139,7 @@ func (r resourcePitrClone) Create(ctx context.Context, req tfsdk.CreateResourceR
 	var plan PitrClone
 	var accountId, message string
 	var getAccountOK bool
+	diags := req.Plan.Get(ctx, &plan)
 	resp.Diagnostics.Append(getPitrClonePlan(ctx, req.Plan, &plan)...)
 	if resp.Diagnostics.HasError() {
 		tflog.Debug(ctx, "Error while getting the plan for the PITR Clone")
@@ -269,7 +270,7 @@ func (r resourcePitrClone) Create(ctx context.Context, req tfsdk.CreateResourceR
 	plan.SourceNamespaceId = types.String{Value: namespaceId}
 	plan.State = types.String{Value: *&pitrCloneResp.Data.Info.State}
 
-	diags := resp.State.Set(ctx, plan)
+	diags = resp.State.Set(ctx, plan)
 	resp.Diagnostics.Append(diags...)
 	if resp.Diagnostics.HasError() {
 		return

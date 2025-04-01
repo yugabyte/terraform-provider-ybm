@@ -169,6 +169,7 @@ func (r resourcePitrConfig) Create(ctx context.Context, req tfsdk.CreateResource
 	var plan PitrConfig
 	var accountId, message string
 	var getAccountOK bool
+	diags := req.Plan.Get(ctx, &plan)
 	resp.Diagnostics.Append(getPitrConfigPlan(ctx, req.Plan, &plan)...)
 	if resp.Diagnostics.HasError() {
 		tflog.Debug(ctx, "Error while getting the plan for the PITR Configs")
@@ -220,7 +221,12 @@ func (r resourcePitrConfig) Create(ctx context.Context, req tfsdk.CreateResource
 		resp.Diagnostics.AddError("Unable to create PITR config:", msg)
 	}
 
-	createPitrConfigsRequest := createBulkPitrConfigRequest(apiClient, namespaceId, int32(plan.RetentionPeriodInDays.Value))
+	retentionPeriod := int32(plan.RetentionPeriodInDays.Value)
+	if retentionPeriod < 2 || retentionPeriod > 14 {
+		resp.Diagnostics.AddError("Unable to create PITR config:", "Retention period must be between 2 and 14 days")
+	}
+
+	createPitrConfigsRequest := createBulkPitrConfigRequest(apiClient, namespaceId, retentionPeriod)
 
 	pitrConfigsResp, response, err := apiClient.ClusterApi.CreateDatabasePitrConfig(context.Background(), accountId, projectId, clusterId).BulkCreateDatabasePitrConfigSpec(*createPitrConfigsRequest).Execute()
 	if err != nil {
@@ -269,7 +275,7 @@ func (r resourcePitrConfig) Create(ctx context.Context, req tfsdk.CreateResource
 	plan.EarliestRecoveryTimeMillis = types.Int64{Value: pitrConfigsResp.GetData()[0].Info.GetEarliestRecoveryTimeMillis()}
 	plan.LatestRecoveryTimeMillis = types.Int64{Value: pitrConfigsResp.GetData()[0].Info.GetLatestRecoveryTimeMillis()}
 
-	diags := resp.State.Set(ctx, plan)
+	diags = resp.State.Set(ctx, plan)
 	resp.Diagnostics.Append(diags...)
 	if resp.Diagnostics.HasError() {
 		return
@@ -344,8 +350,13 @@ func (r resourcePitrConfig) Update(ctx context.Context, req tfsdk.UpdateResource
 	clusterId := state.ClusterId.Value
 	pitrConfigId := state.PitrConfigId.Value
 
+	retentionPeriod := int32(plan.RetentionPeriodInDays.Value)
+	if retentionPeriod < 2 || retentionPeriod > 14 {
+		resp.Diagnostics.AddError("Unable to update PITR config:", "Retention period must be between 2 and 14 days")
+	}
+
 	// Create edit request with new retention period
-	_, response, err := apiClient.ClusterApi.UpdateDatabasePitrConfig(ctx, accountId, projectId, clusterId, pitrConfigId).UpdateDatabasePitrConfigSpec(*openapiclient.NewUpdateDatabasePitrConfigSpec(int32(plan.RetentionPeriodInDays.Value))).Execute()
+	_, response, err := apiClient.ClusterApi.UpdateDatabasePitrConfig(ctx, accountId, projectId, clusterId, pitrConfigId).UpdateDatabasePitrConfigSpec(*openapiclient.NewUpdateDatabasePitrConfigSpec(retentionPeriod)).Execute()
 	if err != nil {
 		errMsg := getErrorMessage(response, err)
 		resp.Diagnostics.AddError("Unable to edit PITR configuration", errMsg)
