@@ -155,6 +155,31 @@ func getPitrConfigState(ctx context.Context, state tfsdk.State, pitrConfig *Pitr
 	state.GetAttribute(ctx, path.Root("latest_recovery_time_millis"), &pitrConfig.LatestRecoveryTimeMillis)
 }
 
+func resourcePitrConfigRead(accountId string, projectId string, clusterId string, pitrConfigId string, apiClient *openapiclient.APIClient) (pitrConfig PitrConfig, readOK bool, errorMessage string) {
+	pitrConfigResp, response, err := apiClient.ClusterApi.GetDatabasePitrConfig(context.Background(), accountId, projectId, clusterId, pitrConfigId).Execute()
+	if err != nil {
+		if response != nil && response.StatusCode == 404 {
+			return pitrConfig, false, "Delete resource"
+		}
+		errMsg := getErrorMessage(response, err)
+		return pitrConfig, false, errMsg
+	}
+
+	pitrConfig.AccountId.Value = accountId
+	pitrConfig.ProjectId.Value = projectId
+	pitrConfig.ClusterId.Value = clusterId
+	pitrConfig.PitrConfigId.Value = pitrConfigId
+	pitrConfig.NamespaceId.Value = pitrConfigResp.Data.Spec.DatabaseId
+	pitrConfig.NamespaceName.Value = pitrConfigResp.Data.Info.GetDatabaseName()
+	pitrConfig.NamespaceType.Value = string(pitrConfigResp.Data.Info.GetDatabaseType())
+	pitrConfig.RetentionPeriodInDays.Value = int64(pitrConfigResp.Data.Spec.RetentionPeriod)
+	pitrConfig.State.Value = pitrConfigResp.Data.Info.GetState()
+	pitrConfig.EarliestRecoveryTimeMillis.Value = pitrConfigResp.Data.Info.GetEarliestRecoveryTimeMillis()
+	pitrConfig.LatestRecoveryTimeMillis.Value = pitrConfigResp.Data.Info.GetLatestRecoveryTimeMillis()
+
+	return pitrConfig, true, ""
+}
+
 // Create PITR Config
 func (r resourcePitrConfig) Create(ctx context.Context, req tfsdk.CreateResourceRequest, resp *tfsdk.CreateResourceResponse) {
 
@@ -219,11 +244,13 @@ func (r resourcePitrConfig) Create(ctx context.Context, req tfsdk.CreateResource
 	if len(namespaceId) == 0 {
 		msg := "No" + namespaceType + "namespace found with name" + namespaceName
 		resp.Diagnostics.AddError("Unable to create PITR config:", msg)
+		return
 	}
 
 	retentionPeriod := int32(plan.RetentionPeriodInDays.Value)
 	if retentionPeriod < 2 || retentionPeriod > 14 {
 		resp.Diagnostics.AddError("Unable to create PITR config:", "Retention period must be between 2 and 14 days")
+		return
 	}
 
 	createPitrConfigsRequest := createBulkPitrConfigRequest(apiClient, namespaceId, retentionPeriod)
@@ -265,17 +292,18 @@ func (r resourcePitrConfig) Create(ctx context.Context, req tfsdk.CreateResource
 		return
 	}
 
-	// Set the computed fields
-	plan.AccountId = types.String{Value: accountId}
-	plan.ProjectId = types.String{Value: projectId}
-	plan.NamespaceId = types.String{Value: namespaceId}
-	plan.PitrConfigId = types.String{Value: pitrConfigsResp.GetData()[0].Info.GetId()}
-	plan.State = types.String{Value: pitrConfigsResp.GetData()[0].Info.GetState()}
-	plan.State = types.String{Value: pitrConfigsResp.GetData()[0].Info.GetState()}
-	plan.EarliestRecoveryTimeMillis = types.Int64{Value: pitrConfigsResp.GetData()[0].Info.GetEarliestRecoveryTimeMillis()}
-	plan.LatestRecoveryTimeMillis = types.Int64{Value: pitrConfigsResp.GetData()[0].Info.GetLatestRecoveryTimeMillis()}
+	pitrconfig, readOK, message := resourcePitrConfigRead(accountId, projectId, clusterId, pitrConfigsResp.GetData()[0].Info.GetId(), apiClient)
+	if !readOK {
+		resp.Diagnostics.AddError("Unable to read the state of the PITR config after creation", message)
+		if message == "Delete Resource" {
+			resp.State.RemoveResource(ctx)
+		}
+		return
+	}
+	tflog.Debug(ctx, "PITR Config Create: PITR Config on read from API server", map[string]interface{}{
+		"PITR Config": pitrconfig})
 
-	diags = resp.State.Set(ctx, plan)
+	diags = resp.State.Set(ctx, &pitrconfig)
 	resp.Diagnostics.Append(diags...)
 	if resp.Diagnostics.HasError() {
 		return
@@ -293,27 +321,18 @@ func (r resourcePitrConfig) Read(ctx context.Context, req tfsdk.ReadResourceRequ
 	clusterId := state.ClusterId.Value
 	pitrConfigId := state.PitrConfigId.Value
 
-	pitrConfigResp, response, err := apiClient.ClusterApi.GetDatabasePitrConfig(ctx, accountId, projectId, clusterId, pitrConfigId).Execute()
-	if err != nil {
-		if response != nil && response.StatusCode == 404 {
+	pitrconfig, readOK, message := resourcePitrConfigRead(accountId, projectId, clusterId, pitrConfigId, apiClient)
+	if !readOK {
+		if message == "Delete Resource" {
 			resp.State.RemoveResource(ctx)
-			return
 		}
-		errMsg := getErrorMessage(response, err)
-		resp.Diagnostics.AddError("Unable to read PITR configuration", errMsg)
+		resp.Diagnostics.AddError("Unable to read the state of the PITR config ", message)
 		return
 	}
+	tflog.Debug(ctx, "PITR Config on read from API server", map[string]interface{}{
+		"PITR Config": pitrconfig})
 
-	// Update state with the current values
-	state.NamespaceId = types.String{Value: pitrConfigResp.Data.Spec.DatabaseId}
-	state.NamespaceName = types.String{Value: pitrConfigResp.Data.Info.GetDatabaseName()}
-	state.NamespaceType = types.String{Value: string(pitrConfigResp.Data.Info.GetDatabaseType())}
-	state.RetentionPeriodInDays = types.Int64{Value: int64(pitrConfigResp.Data.Spec.GetRetentionPeriod())}
-	state.State = types.String{Value: pitrConfigResp.Data.Info.GetState()}
-	state.EarliestRecoveryTimeMillis = types.Int64{Value: pitrConfigResp.Data.Info.GetEarliestRecoveryTimeMillis()}
-	state.LatestRecoveryTimeMillis = types.Int64{Value: pitrConfigResp.Data.Info.GetLatestRecoveryTimeMillis()}
-
-	diags := resp.State.Set(ctx, &state)
+	diags := resp.State.Set(ctx, &pitrconfig)
 	resp.Diagnostics.Append(diags...)
 	if resp.Diagnostics.HasError() {
 		return
@@ -353,6 +372,7 @@ func (r resourcePitrConfig) Update(ctx context.Context, req tfsdk.UpdateResource
 	retentionPeriod := int32(plan.RetentionPeriodInDays.Value)
 	if retentionPeriod < 2 || retentionPeriod > 14 {
 		resp.Diagnostics.AddError("Unable to update PITR config:", "Retention period must be between 2 and 14 days")
+		return
 	}
 
 	// Create edit request with new retention period
@@ -394,13 +414,18 @@ func (r resourcePitrConfig) Update(ctx context.Context, req tfsdk.UpdateResource
 		return
 	}
 
-	// Set state to planned new state
-	plan.AccountId = state.AccountId
-	plan.ProjectId = state.ProjectId
-	plan.PitrConfigId = state.PitrConfigId
-	plan.NamespaceId = state.NamespaceId
+	pitrconfig, readOK, message := resourcePitrConfigRead(accountId, projectId, clusterId, pitrConfigId, apiClient)
+	if !readOK {
+		if message == "Delete Resource" {
+			resp.State.RemoveResource(ctx)
+		}
+		resp.Diagnostics.AddError("Unable to read the state of the PITR config after update", message)
+		return
+	}
+	tflog.Debug(ctx, "PITR Config Update: PITR Config on read from API server", map[string]interface{}{
+		"PITR Config": pitrconfig})
 
-	diags := resp.State.Set(ctx, plan)
+	diags := resp.State.Set(ctx, &pitrconfig)
 	resp.Diagnostics.Append(diags...)
 	if resp.Diagnostics.HasError() {
 		return

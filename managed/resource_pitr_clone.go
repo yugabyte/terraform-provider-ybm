@@ -188,6 +188,7 @@ func (r resourcePitrClone) Create(ctx context.Context, req tfsdk.CreateResourceR
 	if len(namespaceId) == 0 {
 		msg := "No" + namespaceType + "namespace found with name" + namespaceName
 		resp.Diagnostics.AddError("Unable to clone namespace:", msg)
+		return
 	}
 
 	pitrConfigsResp, response, err := apiClient.ClusterApi.ListClusterPitrConfigs(ctx, accountId, projectId, clusterId).Execute()
@@ -213,7 +214,7 @@ func (r resourcePitrClone) Create(ctx context.Context, req tfsdk.CreateResourceR
 		if (!plan.CloneAtMillis.Unknown && !plan.CloneAtMillis.Null) || plan.CloneAtMillis.Value != 0 {
 			resp.Diagnostics.AddError(
 				"Clone time provided for cloning a namespace without a pre exsiting PITR config",
-				"The clone_at_millis was provided even though cloning of a namespace that is not assocaited to a PITR config is being requested. Do not include this field in the provider.",
+				"The clone_at_millis field was provided, but cloning is being requested for a namespace that is not associated with a PITR configuration. Please remove the clone_at_millis field from the provider.",
 			)
 			return
 		}
