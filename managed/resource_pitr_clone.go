@@ -83,9 +83,6 @@ func (r resourcePitrCloneType) GetSchema(_ context.Context) (tfsdk.Schema, diag.
 				Description: "The status of the namespace cloning.",
 				Type:        types.StringType,
 				Computed:    true,
-				PlanModifiers: []tfsdk.AttributePlanModifier{
-					tfsdk.UseStateForUnknown(),
-				},
 			},
 		},
 	}, nil
@@ -269,7 +266,7 @@ func (r resourcePitrClone) Create(ctx context.Context, req tfsdk.CreateResourceR
 	plan.ProjectId = types.String{Value: projectId}
 	plan.CloneNamespaceId = types.String{Value: pitrCloneResp.Data.Info.Id}
 	plan.SourceNamespaceId = types.String{Value: namespaceId}
-	plan.State = types.String{Value: *&pitrCloneResp.Data.Info.State}
+	plan.State = types.String{Value: "COMPLETED"}
 
 	diags = resp.State.Set(ctx, plan)
 	resp.Diagnostics.Append(diags...)
