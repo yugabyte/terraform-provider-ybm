@@ -65,9 +65,6 @@ func (r resourcePitrRestoreType) GetSchema(_ context.Context) (tfsdk.Schema, dia
 				Description: "The status of the restoration via PITR config.",
 				Type:        types.StringType,
 				Computed:    true,
-				PlanModifiers: []tfsdk.AttributePlanModifier{
-					tfsdk.UseStateForUnknown(),
-				},
 			},
 		},
 	}, nil
@@ -190,7 +187,7 @@ func (r resourcePitrRestore) Create(ctx context.Context, req tfsdk.CreateResourc
 	plan.AccountId = types.String{Value: accountId}
 	plan.ProjectId = types.String{Value: projectId}
 	plan.PitrRestoreId = types.String{Value: pitrRestoreResp.Data.Info.GetId()}
-	plan.State = types.String{Value: *&pitrRestoreResp.Data.Info.State}
+	plan.State = types.String{Value: "COMPLETED"}
 
 	diags = resp.State.Set(ctx, plan)
 	resp.Diagnostics.Append(diags...)

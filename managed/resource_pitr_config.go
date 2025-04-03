@@ -78,25 +78,16 @@ func (r resourcePitrConfigType) GetSchema(_ context.Context) (tfsdk.Schema, diag
 				Description: "The status of the PITR config.",
 				Type:        types.StringType,
 				Computed:    true,
-				PlanModifiers: []tfsdk.AttributePlanModifier{
-					tfsdk.UseStateForUnknown(),
-				},
 			},
 			"earliest_recovery_time_millis": {
 				Description: "The earliest recovery time in milliseconds to which the namespace can be restored.",
 				Type:        types.Int64Type,
 				Computed:    true,
-				PlanModifiers: []tfsdk.AttributePlanModifier{
-					tfsdk.UseStateForUnknown(),
-				},
 			},
 			"latest_recovery_time_millis": {
 				Description: "The latest recovery time in milliseconds to which the namespace can be restored.",
 				Type:        types.Int64Type,
 				Computed:    true,
-				PlanModifiers: []tfsdk.AttributePlanModifier{
-					tfsdk.UseStateForUnknown(),
-				},
 			},
 		},
 	}, nil
