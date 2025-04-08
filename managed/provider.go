@@ -167,13 +167,8 @@ func (p *provider) GetResources(_ context.Context) (map[string]tfsdk.ResourceTyp
 	}
 
 	// Add PITR config resource only if the feature flag is enabled
-	if fflags.IsFeatureFlagEnabled(fflags.PITR) {
+	if fflags.IsFeatureFlagEnabled(fflags.PITR_CONFIG) {
 		resources["ybm_pitr_config"] = resourcePitrConfigType{}
-	}
-
-	// Add PITR restore resource only if the feature flag is enabled
-	if fflags.IsFeatureFlagEnabled(fflags.PITR_RESTORE) {
-		resources["ybm_pitr_restore"] = resourcePitrRestoreType{}
 	}
 
 	// Add PITR clone resource only if the feature flag is enabled

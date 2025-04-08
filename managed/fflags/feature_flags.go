@@ -15,16 +15,14 @@ type FeatureFlag string
 const (
 	CONNECTION_POOLING FeatureFlag = "CONNECTION_POOLING"
 	DR                 FeatureFlag = "DR"
-	PITR               FeatureFlag = "PITR"
-	PITR_RESTORE       FeatureFlag = "PITR_RESTORE"
+	PITR_CONFIG        FeatureFlag = "PITR_CONFIG"
 	PITR_CLONE         FeatureFlag = "PITR_CLONE"
 )
 
 var flagEnabled = map[FeatureFlag]bool{
 	CONNECTION_POOLING: false,
 	DR:                 false,
-	PITR:               false,
-	PITR_RESTORE:       false,
+	PITR_CONFIG:        false,
 	PITR_CLONE:         false,
 }
 

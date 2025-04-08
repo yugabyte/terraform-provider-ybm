@@ -417,16 +417,6 @@ type PitrConfig struct {
 	LatestRecoveryTimeMillis   types.Int64  `tfsdk:"latest_recovery_time_millis"`
 }
 
-type PitrRestore struct {
-	AccountId       types.String `tfsdk:"account_id"`
-	ProjectId       types.String `tfsdk:"project_id"`
-	ClusterId       types.String `tfsdk:"cluster_id"`
-	PitrConfigId    types.String `tfsdk:"pitr_config_id"`
-	PitrRestoreId   types.String `tfsdk:"pitr_restore_id"`
-	RestoreAtMillis types.Int64  `tfsdk:"restore_at_millis"`
-	State           types.String `tfsdk:"state"`
-}
-
 type PitrClone struct {
 	AccountId         types.String `tfsdk:"account_id"`
 	ProjectId         types.String `tfsdk:"project_id"`

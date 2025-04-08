@@ -148,12 +148,6 @@ resource "ybm_read_replicas" "myrr" {
 #   retention_period_in_days = 7
 # }
 
-# resource "ybm_pitr_restore" "sample_pitr_restore" {
-#   cluster_id = ybm_cluster.single_region.cluster_id
-#   pitr_config_id = "e35dbf4d-cfd7-4e17-b9de-7d4ebd56a0e0"
-#   restore_at_millis = "1234567889"
-# }
-
 # resource "ybm_pitr_clone" "sample_pitr_clone_now" {
 #   cluster_id = ybm_cluster.single_region.cluster_id
 #   clone_as = "test-clone-now-db-clone"
