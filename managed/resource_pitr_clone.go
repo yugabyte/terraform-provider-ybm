@@ -183,7 +183,7 @@ func (r resourcePitrClone) Create(ctx context.Context, req tfsdk.CreateResourceR
 		}
 	}
 	if len(namespaceId) == 0 {
-		msg := "No" + namespaceType + "namespace found with name" + namespaceName
+		msg := "No " + namespaceType + " namespace found with name " + namespaceName
 		resp.Diagnostics.AddError("Unable to clone namespace:", msg)
 		return
 	}

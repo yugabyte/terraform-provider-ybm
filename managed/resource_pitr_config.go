@@ -233,7 +233,7 @@ func (r resourcePitrConfig) Create(ctx context.Context, req tfsdk.CreateResource
 		}
 	}
 	if len(namespaceId) == 0 {
-		msg := "No" + namespaceType + "namespace found with name" + namespaceName
+		msg := "No " + namespaceType + " namespace found with name " + namespaceName
 		resp.Diagnostics.AddError("Unable to create PITR config:", msg)
 		return
 	}
