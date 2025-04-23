@@ -15,6 +15,8 @@ import (
 
 	"time"
 
+	"slices"
+
 	"github.com/hashicorp/terraform-plugin-framework-validators/int64validator"
 	"github.com/hashicorp/terraform-plugin-framework-validators/schemavalidator"
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
@@ -664,7 +666,7 @@ func editBackupScheduleV2(ctx context.Context, backupScheduleStruct BackupSchedu
 	return nil
 }
 
-func createClusterSpec(ctx context.Context, apiClient *openapiclient.APIClient, accountId string, projectId string, plan Cluster, clusterExists bool) (clusterSpec *openapiclient.ClusterSpec, clusterSpecOK bool, errorMessage string) {
+func createClusterSpec(ctx context.Context, apiClient *openapiclient.APIClient, accountId string, projectId string, plan Cluster, state Cluster, clusterExists bool) (clusterSpec *openapiclient.ClusterSpec, clusterSpecOK bool, errorMessage string) {
 
 	var diskSizeGb int32
 	var diskSizeOK bool
@@ -690,6 +692,22 @@ func createClusterSpec(ctx context.Context, apiClient *openapiclient.APIClient, 
 	totalNodes := 0
 	clusterType := plan.ClusterType.Value
 	isDefaultSet := false
+	pseInfoMap := make(map[string]openapiclient.PrivateServiceEndpointRegionSpec)
+	if clusterExists {
+		clusterResp, response, err := apiClient.ClusterApi.GetCluster(context.Background(), accountId, projectId, state.ClusterID.Value).Execute()
+		if err != nil {
+			errMsg := getErrorMessage(response, err)
+			return nil, false, errMsg
+		}
+		for _, regionInfo := range clusterResp.Data.Spec.ClusterRegionInfo {
+			if slices.Contains(regionInfo.GetAccessibilityTypes(), openapiclient.ACCESSIBILITYTYPE_PRIVATE_SERVICE_ENDPOINT) {
+				pseInfoMap[regionInfo.PlacementInfo.CloudInfo.GetRegion()] = regionInfo.GetPrivateServiceEndpointInfo()
+			}
+
+		}
+	}
+	tflog.Debug(ctx, fmt.Sprintf("PSE info map is %v", pseInfoMap))
+
 	for _, regionInfo := range plan.ClusterRegionInfo {
 		regionNodes := regionInfo.NumNodes.Value
 		totalNodes += int(regionNodes)
@@ -768,6 +786,13 @@ func createClusterSpec(ctx context.Context, apiClient *openapiclient.APIClient, 
 			if !regionInfo.PublicAccess.IsUnknown() && !regionInfo.PublicAccess.Value {
 				tflog.Debug(ctx, fmt.Sprintf("Cluster %v is in a public VPC and public access is disabled. ", plan.ClusterName.Value))
 				return nil, false, "Cluster is in a public VPC and public access is disabled. Please enable public access."
+			}
+		}
+
+		if clusterExists {
+			if pseEndpointSpec, exists := pseInfoMap[regionInfo.Region.Value]; exists {
+				accessibilityTypes = append(accessibilityTypes, openapiclient.ACCESSIBILITYTYPE_PRIVATE_SERVICE_ENDPOINT)
+				info.SetPrivateServiceEndpointInfo(pseEndpointSpec)
 			}
 		}
 
@@ -1149,7 +1174,7 @@ func (r resourceCluster) Create(ctx context.Context, req tfsdk.CreateResourceReq
 		return
 	}
 
-	clusterSpec, clusterOK, message := createClusterSpec(ctx, apiClient, accountId, projectId, plan, false)
+	clusterSpec, clusterOK, message := createClusterSpec(ctx, apiClient, accountId, projectId, plan, Cluster{}, false)
 	if !clusterOK {
 		resp.Diagnostics.AddError("Unable to create cluster spec", message)
 		return
@@ -2146,7 +2171,7 @@ func (r resourceCluster) Update(ctx context.Context, req tfsdk.UpdateResourceReq
 		return
 	}
 
-	clusterSpec, clusterOK, message := createClusterSpec(ctx, apiClient, accountId, projectId, plan, false)
+	clusterSpec, clusterOK, message := createClusterSpec(ctx, apiClient, accountId, projectId, plan, state, true)
 	if !clusterOK {
 		resp.Diagnostics.AddError("Unable to create cluster specification ", message)
 		return
