@@ -19,12 +19,12 @@ import (
 var ErrFailedTask = errors.New("the task failed")
 
 func getProjectId(ctx context.Context, apiClient *openapiclient.APIClient, accountId string) (projectId string, projectIdOK bool, errorMessage string) {
-	accountResp, resp, err := apiClient.AccountApi.ListAccounts(ctx).Execute()
+	accountResp, resp, err := apiClient.AccountApi.GetCurrentAccount(ctx).Execute()
 	if err != nil {
 		errMsg := getErrorMessage(resp, err)
 		return "", false, errMsg
 	}
-	projectData := accountResp.GetData()[0].Info.GetProjects()
+	projectData := accountResp.Data.Info.GetProjects()
 	if len(projectData) == 0 {
 		return "", false, "The account is not associated with any projects."
 	}
@@ -116,7 +116,7 @@ func getTrackName(ctx context.Context, apiClient *openapiclient.APIClient, accou
 }
 
 func getAccountId(ctx context.Context, apiClient *openapiclient.APIClient) (accountId string, accountIdOK bool, errorMessage string) {
-	accountResp, resp, err := apiClient.AccountApi.ListAccounts(ctx).Execute()
+	accountResp, resp, err := apiClient.AccountApi.GetCurrentAccount(ctx).Execute()
 	if err != nil {
 		errMsg := getErrorMessage(resp, err)
 		if strings.Contains(err.Error(), "is not a valid") {
@@ -127,15 +127,7 @@ func getAccountId(ctx context.Context, apiClient *openapiclient.APIClient) (acco
 			return "", false, errMsg
 		}
 	}
-	accountData := accountResp.GetData()
-	if len(accountData) == 0 {
-		return "", false, "The user is not associated with any accounts."
-	}
-	if len(accountData) > 1 {
-		return "", false, "The user is associated with multiple accounts, please provide an account ID."
-	}
-	accountId = accountData[0].Info.Id
-	return accountId, true, ""
+	return accountResp.Data.Info.Id, true, ""
 }
 
 // Utils functions

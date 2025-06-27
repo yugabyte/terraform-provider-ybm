@@ -36,65 +36,6 @@ func (m *MockProjectApi) EXPECT() *MockProjectApiMockRecorder {
 	return m.recorder
 }
 
-// CreateProject mocks base method.
-func (m *MockProjectApi) CreateProject(arg0 context.Context, arg1 string) openapi.ApiCreateProjectRequest {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "CreateProject", arg0, arg1)
-	ret0, _ := ret[0].(openapi.ApiCreateProjectRequest)
-	return ret0
-}
-
-// CreateProject indicates an expected call of CreateProject.
-func (mr *MockProjectApiMockRecorder) CreateProject(arg0, arg1 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateProject", reflect.TypeOf((*MockProjectApi)(nil).CreateProject), arg0, arg1)
-}
-
-// CreateProjectExecute mocks base method.
-func (m *MockProjectApi) CreateProjectExecute(arg0 openapi.ApiCreateProjectRequest) (openapi.ProjectResponse, *http.Response, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "CreateProjectExecute", arg0)
-	ret0, _ := ret[0].(openapi.ProjectResponse)
-	ret1, _ := ret[1].(*http.Response)
-	ret2, _ := ret[2].(error)
-	return ret0, ret1, ret2
-}
-
-// CreateProjectExecute indicates an expected call of CreateProjectExecute.
-func (mr *MockProjectApiMockRecorder) CreateProjectExecute(arg0 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateProjectExecute", reflect.TypeOf((*MockProjectApi)(nil).CreateProjectExecute), arg0)
-}
-
-// DeleteProject mocks base method.
-func (m *MockProjectApi) DeleteProject(arg0 context.Context, arg1, arg2 string) openapi.ApiDeleteProjectRequest {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "DeleteProject", arg0, arg1, arg2)
-	ret0, _ := ret[0].(openapi.ApiDeleteProjectRequest)
-	return ret0
-}
-
-// DeleteProject indicates an expected call of DeleteProject.
-func (mr *MockProjectApiMockRecorder) DeleteProject(arg0, arg1, arg2 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteProject", reflect.TypeOf((*MockProjectApi)(nil).DeleteProject), arg0, arg1, arg2)
-}
-
-// DeleteProjectExecute mocks base method.
-func (m *MockProjectApi) DeleteProjectExecute(arg0 openapi.ApiDeleteProjectRequest) (*http.Response, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "DeleteProjectExecute", arg0)
-	ret0, _ := ret[0].(*http.Response)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// DeleteProjectExecute indicates an expected call of DeleteProjectExecute.
-func (mr *MockProjectApiMockRecorder) DeleteProjectExecute(arg0 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteProjectExecute", reflect.TypeOf((*MockProjectApi)(nil).DeleteProjectExecute), arg0)
-}
-
 // GetProject mocks base method.
 func (m *MockProjectApi) GetProject(arg0 context.Context, arg1, arg2 string) openapi.ApiGetProjectRequest {
 	m.ctrl.T.Helper()

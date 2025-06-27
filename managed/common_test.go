@@ -15,16 +15,15 @@ import (
 	openapiclient "github.com/yugabyte/yugabytedb-managed-go-client-internal"
 )
 
-func getListAccountsRequest(ctx context.Context, cfg *openapiclient.Configuration, mockAccountApi *mocks.MockAccountApi) *openapiclient.ApiListAccountsRequest {
+func getCurrentAccountRequest(ctx context.Context, cfg *openapiclient.Configuration, mockAccountApi *mocks.MockAccountApi) *openapiclient.ApiGetCurrentAccountRequest {
 	testClient := openapiclient.NewAPIClient(cfg)
-	listAccountsRequest := testClient.AccountApi.ListAccounts(ctx)
-	listAccountsRequest.ApiService = mockAccountApi
-	return &listAccountsRequest
+	accountRequest := testClient.AccountApi.GetCurrentAccount(ctx)
+	accountRequest.ApiService = mockAccountApi
+	return &accountRequest
 }
 
-func getListAccountsResponse(accountID string, projectID string) *openapiclient.AccountListResponse {
-	listAccountsResponse := openapiclient.NewAccountListResponseWithDefaults()
-	accountData := []openapiclient.AccountData{}
+func getCurrentAccountResponse(accountID string, projectID string) *openapiclient.AccountResponse {
+	accountResponse := openapiclient.NewAccountResponseWithDefaults()
 	accountDatum := openapiclient.NewAccountDataWithDefaults()
 	accountDatum.SetInfo(*openapiclient.NewAccountInfoWithDefaults())
 	accountDatum.Info.SetId(accountID)
@@ -34,9 +33,8 @@ func getListAccountsResponse(accountID string, projectID string) *openapiclient.
 	projectDatum.Info.SetId(projectID)
 	projectData = append(projectData, *projectDatum)
 	accountDatum.Info.SetProjects(projectData)
-	accountData = append(accountData, *accountDatum)
-	listAccountsResponse.SetData(accountData)
-	return listAccountsResponse
+	accountResponse.SetData(*accountDatum)
+	return accountResponse
 }
 
 func TestGetProjectID(t *testing.T) {
@@ -73,15 +71,15 @@ func TestGetProjectID(t *testing.T) {
 		expectedError := testCase.ExpectedError
 		t.Run(testCase.TestName, func(t *testing.T) {
 
-			listProjectsRequest := getListAccountsRequest(ctx, cfg, mockAccountApi)
-			listProjectsResponse := getListAccountsResponse(accountID, expectedProjectID)
+			accountRequest := getCurrentAccountRequest(ctx, cfg, mockAccountApi)
+			accountResponse := getCurrentAccountResponse(accountID, expectedProjectID)
 			httpSuccessResponse := &http.Response{
 				Status:     "200 OK",
 				StatusCode: 200,
 			}
 
-			mockAccountApi.EXPECT().ListAccounts(ctx).Return(*listProjectsRequest).Times(1)
-			mockAccountApi.EXPECT().ListAccountsExecute(*listProjectsRequest).Return(*listProjectsResponse, httpSuccessResponse, nil).Times(1)
+			mockAccountApi.EXPECT().GetCurrentAccount(ctx).Return(*accountRequest).Times(1)
+			mockAccountApi.EXPECT().GetCurrentAccountExecute(*accountRequest).Return(*accountResponse, httpSuccessResponse, nil).Times(1)
 
 			gotProjectID, gotStatus, gotError := getProjectId(ctx, apiClient, testCase.AccountID)
 			if gotProjectID != expectedProjectID || gotStatus != expectedStatus || gotError != expectedError {
