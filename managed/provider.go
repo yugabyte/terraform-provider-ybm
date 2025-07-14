@@ -159,6 +159,8 @@ func (p *provider) GetResources(_ context.Context) (map[string]tfsdk.ResourceTyp
 		"ybm_integration":                        resourceIntegrationType{},
 		"ybm_db_query_logging":                   resourceDbQueryLoggingType{},
 		"ybm_db_audit_logging":                   resourceDbAuditLoggingType{},
+		"ybm_pitr_config":                        resourcePitrConfigType{},
+		"ybm_pitr_clone":                         resourcePitrCloneType{},
 	}
 
 	// Add DR config resource only if the feature flag is enabled
