@@ -2044,9 +2044,10 @@ func resourceClusterRead(ctx context.Context, accountId string, projectId string
 
 		// All retries exhausted
 		tflog.Error(context.Background(), fmt.Sprintf("Failed to synchronize allow lists after %d attempts", maxRetries))
-
+		return cluster, false, "Failed to synchronize allow lists after maximum retry attempts"
 	}
-	return cluster, false, "Unable to read cluster data"
+
+	return cluster, true, ""
 }
 
 func getClusterVersion(accountId string, projectId string, clusterId string, apiClient *openapiclient.APIClient) (version int, readOK bool, errorMessage string) {
