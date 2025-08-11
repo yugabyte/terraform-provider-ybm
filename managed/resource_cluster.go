@@ -1677,8 +1677,9 @@ func (r resourceCluster) Read(ctx context.Context, req tfsdk.ReadResourceRequest
 		backUpSchedules = append(backUpSchedules, state.BackupSchedules[0])
 	}
 
-	cluster, readOK, message := resourceClusterRead(ctx, state.AccountID.Value, state.ProjectID.Value, state.ClusterID.Value, backUpSchedules, regions, allowListProvided, allowListIDs, false, r.p.client)
-
+	cluster, readOK, message := resourceClusterRead(ctx, state.AccountID.Value, state.ProjectID.Value, state.ClusterID.Value, backUpSchedules, regions, allowListProvided, allowListIDs, true, r.p.client)
+	tflog.Debug(ctx, "Cluster Read: Allow List IDs read from API server", map[string]interface{}{
+		"Allow List IDs": cluster.ClusterAllowListIDs})
 	// Fetch the cmkSpec information from State (to get unmasked creds)
 	var cmkSpec CMKSpec
 	req.State.GetAttribute(ctx, path.Root("cmk_spec"), &cmkSpec)
@@ -1991,7 +1992,9 @@ func resourceClusterRead(ctx context.Context, accountId string, projectId string
 	cluster.CloudType.Value = string(respClusterRegionInfo[0].PlacementInfo.CloudInfo.GetCode())
 
 	if allowListProvided {
-		for {
+		const maxRetries = 5
+
+		for attempt := 0; attempt < maxRetries; attempt++ {
 			clusterAllowListMappingResp, response, err := apiClient.ClusterApi.ListClusterNetworkAllowLists(context.Background(), accountId, projectId, clusterId).Execute()
 			if err != nil {
 				errMsg := getErrorMessage(response, err)
@@ -2000,7 +2003,7 @@ func resourceClusterRead(ctx context.Context, accountId string, projectId string
 			allowListIDMap := map[string]bool{}
 			var allowListIDs []types.String
 			var allowListStrings []string
-			// This is being to done to preserve order in the list since an order mismatch is treated as state mismatch by Terraform
+			// This is being done to preserve order in the list since an order mismatch is treated as state mismatch by Terraform
 			for _, elem := range clusterAllowListMappingResp.Data {
 				allowListIDMap[elem.Info.Id] = true
 			}
@@ -2010,26 +2013,40 @@ func resourceClusterRead(ctx context.Context, accountId string, projectId string
 						allowListStrings = append(allowListStrings, elem)
 					}
 				}
+				tflog.Debug(context.Background(), fmt.Sprintf("Attempt %d: Input Allow List is %v, Server Allow List is %v", attempt+1, inputAllowListIDs, allowListStrings))
+				//added len(inputAllowListIDs)==0 in if condition so that we can reuse the func resourceClusterRead in data_source_cluster_name.go.
+				if util.AreListsEqual(allowListStrings, inputAllowListIDs) || len(inputAllowListIDs) == 0 {
+					for _, elem := range allowListStrings {
+						allowListIDs = append(allowListIDs, types.String{Value: elem})
+					}
+					cluster.ClusterAllowListIDs = allowListIDs
+					return cluster, true, ""
+				}
 			}
 			if readOnly {
 				for _, elem := range clusterAllowListMappingResp.Data {
 					allowListStrings = append(allowListStrings, elem.Info.Id)
 				}
-			}
-			tflog.Debug(context.Background(), fmt.Sprintf("Input Allow List is %v, Server Allow List is %v", inputAllowListIDs, allowListStrings))
-			//added len(inputAllowListIDs)==0 in if condition so that we can reuse the func resourceClusterRead in data_source_cluster_name.go.
-			if util.AreListsEqual(allowListStrings, inputAllowListIDs) || len(inputAllowListIDs) == 0 {
-				for _, elem := range allowListStrings {
-					allowListIDs = append(allowListIDs, types.String{Value: elem})
+				if len(inputAllowListIDs) != 0 {
+					for _, elem := range allowListStrings {
+						allowListIDs = append(allowListIDs, types.String{Value: elem})
+					}
+					cluster.ClusterAllowListIDs = allowListIDs
 				}
-				cluster.ClusterAllowListIDs = allowListIDs
-				break
+				return cluster, true, ""
 			}
-			time.Sleep(1 * time.Second)
-		}
-	}
 
-	return cluster, true, ""
+			// Don't sleep on the last attempt
+			if attempt < maxRetries-1 {
+				time.Sleep(2 * time.Second)
+			}
+		}
+
+		// All retries exhausted
+		tflog.Error(context.Background(), fmt.Sprintf("Failed to synchronize allow lists after %d attempts", maxRetries))
+
+	}
+	return cluster, false, "Unable to read cluster data"
 }
 
 func getClusterVersion(accountId string, projectId string, clusterId string, apiClient *openapiclient.APIClient) (version int, readOK bool, errorMessage string) {
