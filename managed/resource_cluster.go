@@ -1226,7 +1226,7 @@ func (r resourceCluster) Create(ctx context.Context, req tfsdk.CreateResourceReq
 	clusterId := clusterResp.Data.Info.Id
 	readClusterRetries := 0
 	retryPolicy := retry.NewConstant(10 * time.Second)
-	retryPolicy = retry.WithMaxDuration(3600*time.Second, retryPolicy)
+	retryPolicy = retry.WithMaxDuration(7200*time.Second, retryPolicy)
 	err = retry.Do(ctx, retryPolicy, func(ctx context.Context) error {
 		asState, readInfoOK, message := getTaskState(accountId, projectId, clusterId, openapiclient.ENTITYTYPEENUM_CLUSTER, openapiclient.TASKTYPEENUM_CREATE_CLUSTER, apiClient, ctx)
 		if readInfoOK {
@@ -1253,7 +1253,7 @@ func (r resourceCluster) Create(ctx context.Context, req tfsdk.CreateResourceReq
 
 	// read status, wait for status to be done
 	retryPolicyA := retry.NewConstant(10 * time.Second)
-	retryPolicyA = retry.WithMaxDuration(3600*time.Second, retryPolicyA)
+	retryPolicyA = retry.WithMaxDuration(7200*time.Second, retryPolicyA)
 	readClusterRetries = 0
 	err = retry.Do(ctx, retryPolicyA, func(ctx context.Context) error {
 		clusterState, readInfoOK, message := getClusterState(ctx, accountId, projectId, clusterId, apiClient)
@@ -2230,7 +2230,7 @@ func (r resourceCluster) Update(ctx context.Context, req tfsdk.UpdateResourceReq
 	readClusterRetries := 0
 	checkNewTaskSpawned := true
 	retryPolicy := retry.NewConstant(10 * time.Second)
-	retryPolicy = retry.WithMaxDuration(3600*time.Second, retryPolicy)
+	retryPolicy = retry.WithMaxDuration(7200*time.Second, retryPolicy)
 	err = retry.Do(ctx, retryPolicy, func(ctx context.Context) error {
 		asState, readInfoOK, message := getTaskState(accountId, projectId, clusterId, openapiclient.ENTITYTYPEENUM_CLUSTER, openapiclient.TASKTYPEENUM_EDIT_CLUSTER, apiClient, ctx)
 
@@ -2286,7 +2286,7 @@ func (r resourceCluster) Update(ctx context.Context, req tfsdk.UpdateResourceReq
 	// read status, wait for status to be active
 	readClusterRetries = 0
 	retryPolicyA := retry.NewConstant(10 * time.Second)
-	retryPolicyA = retry.WithMaxDuration(3600*time.Second, retryPolicyA)
+	retryPolicyA = retry.WithMaxDuration(7200*time.Second, retryPolicyA)
 	err = retry.Do(ctx, retryPolicyA, func(ctx context.Context) error {
 		clusterState, readInfoOK, message := getClusterState(ctx, accountId, projectId, clusterId, apiClient)
 		if readInfoOK {
@@ -2479,7 +2479,7 @@ func (r resourceCluster) Delete(ctx context.Context, req tfsdk.DeleteResourceReq
 
 	readClusterRetries := 0
 	retryPolicy := retry.NewConstant(10 * time.Second)
-	retryPolicy = retry.WithMaxDuration(3600*time.Second, retryPolicy)
+	retryPolicy = retry.WithMaxDuration(7200*time.Second, retryPolicy)
 	err = retry.Do(ctx, retryPolicy, func(ctx context.Context) error {
 		asState, readInfoOK, message := getTaskState(accountId, projectId, clusterId, openapiclient.ENTITYTYPEENUM_CLUSTER, openapiclient.TASKTYPEENUM_DELETE_CLUSTER, apiClient, ctx)
 
