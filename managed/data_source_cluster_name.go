@@ -88,6 +88,14 @@ func (r dataClusterNameType) GetSchema(_ context.Context) (tfsdk.Schema, diag.Di
 						Type:     types.BoolType,
 						Computed: true,
 					},
+					"is_preferred": {
+						Type:     types.BoolType,
+						Computed: true,
+					},
+					"is_default": {
+						Type:     types.BoolType,
+						Computed: true,
+					},
 					"backup_replication_gcp_target": {
 						Description: "GCS bucket name for backup replication target. Only configurable when editing existing clusters. For SYNCHRONOUS clusters, all regions must have the same target. For GEO_PARTITIONED clusters, each region can have different targets. Only supported for GCP clusters and PAID tier.",
 						Type:        types.StringType,
@@ -407,6 +415,11 @@ func (r dataClusterNameType) GetSchema(_ context.Context) (tfsdk.Schema, diag.Di
 				Type:        types.StringType,
 				Computed:    true,
 			},
+			"desired_connection_pooling_state": {
+				Description: "The desired connection pooling state of the cluster, Enabled or Disabled. This parameter can be used to enable/disable Connection Pooling",
+				Type:        types.StringType,
+				Computed:    true,
+			},
 			"cluster_endpoints": {
 				Description: "The endpoints used to connect to the cluster by region.",
 				Type: types.MapType{
@@ -533,7 +546,7 @@ func (r dataClusterName) Read(ctx context.Context, req tfsdk.ReadDataSourceReque
 		return
 	}
 
-	diags := resp.State.Set(ctx, &cluster)
+	diags := setClusterState(ctx, &resp.State, &cluster)
 	resp.Diagnostics.Append(diags...)
 	if resp.Diagnostics.HasError() {
 		return
