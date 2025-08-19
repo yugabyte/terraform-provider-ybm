@@ -18,7 +18,7 @@ const (
 )
 
 var flagEnabled = map[FeatureFlag]bool{
-	CONNECTION_POOLING: false,
+	CONNECTION_POOLING: true,
 	DR:                 false,
 }
 
