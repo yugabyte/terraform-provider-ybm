@@ -183,6 +183,11 @@ func (r resourceClusterType) GetSchema(_ context.Context) (tfsdk.Schema, diag.Di
 						),
 					},
 				},
+				"backup_region": {
+					Description: "Indicates whether cluster backup data will be stored in this region.",
+					Type:        types.BoolType,
+					Computed:    true,
+				},
 			}),
 		},
 		"backup_schedules": {
@@ -2011,6 +2016,16 @@ func resourceClusterRead(ctx context.Context, accountId string, projectId string
 				tflog.Info(ctx, fmt.Sprintf("Siddarth no target. Set null %v", cluster.ClusterName))
 			}
 
+			// Handle backup region - get from cluster_region_info_details
+			backupRegion := types.Bool{Value: false}
+			// Find the corresponding region info details to get backup_region
+			for _, regionDetail := range clusterResp.Data.Info.ClusterRegionInfoDetails {
+				if regionDetail.Region == region {
+					backupRegion = types.Bool{Value: regionDetail.BackupRegion}
+					break
+				}
+			}
+
 			regionInfo := RegionInfo{
 				Region:                     types.String{Value: region},
 				NumNodes:                   types.Int64{Value: int64(info.PlacementInfo.GetNumNodes())},
@@ -2023,6 +2038,7 @@ func resourceClusterRead(ctx context.Context, accountId string, projectId string
 				IsPreferred:                types.Bool{Value: info.GetIsAffinitized()},
 				IsDefault:                  types.Bool{Value: info.GetIsDefault()},
 				BackupReplicationGCPTarget: backupReplicationGCPTarget,
+				BackupRegion:               backupRegion,
 			}
 			clusterRegionInfo[destIndex] = regionInfo
 		}

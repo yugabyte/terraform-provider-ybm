@@ -106,6 +106,7 @@ type RegionInfo struct {
 	IsPreferred                types.Bool   `tfsdk:"is_preferred"`
 	IsDefault                  types.Bool   `tfsdk:"is_default"`
 	BackupReplicationGCPTarget types.String `tfsdk:"backup_replication_gcp_target"`
+	BackupRegion               types.Bool   `tfsdk:"backup_region"`
 }
 
 type NodeConfig struct {

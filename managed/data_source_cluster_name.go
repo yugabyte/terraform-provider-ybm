@@ -97,8 +97,13 @@ func (r dataClusterNameType) GetSchema(_ context.Context) (tfsdk.Schema, diag.Di
 						Computed: true,
 					},
 					"backup_replication_gcp_target": {
-						Description: "GCS bucket name for backup replication target. Only configurable when editing existing clusters. For SYNCHRONOUS clusters, all regions must have the same target. For GEO_PARTITIONED clusters, each region can have different targets. Only supported for GCP clusters and PAID tier.",
+						Description: "GCS bucket name set as backup replication target.",
 						Type:        types.StringType,
+						Computed:    true,
+					},
+					"backup_region": {
+						Description: "Indicates whether cluster backup data will be stored in this region.",
+						Type:        types.BoolType,
 						Computed:    true,
 					},
 				}),
