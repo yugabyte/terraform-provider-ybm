@@ -44,6 +44,7 @@ data "ybm_cluster" "example_cluster" {
 - `cmk_spec` (Attributes) KMS Provider Configuration. (see [below for nested schema](#nestedatt--cmk_spec))
 - `credentials` (Attributes) (see [below for nested schema](#nestedatt--credentials))
 - `database_track` (String) The track of the database. Stable or Preview.
+- `desired_connection_pooling_state` (String) The desired connection pooling state of the cluster, Enabled or Disabled.
 - `desired_state` (String) The desired state of the database, Active or Paused. This parameter can be used to pause/resume a cluster.
 - `endpoints` (Attributes List) The endpoints used to connect to the cluster. (see [below for nested schema](#nestedatt--endpoints))
 - `fault_tolerance` (String) The fault tolerance of the cluster.
@@ -82,8 +83,12 @@ Read-Only:
 
 Read-Only:
 
+- `backup_region` (Boolean) Indicates whether cluster backup data will be stored in this region.
+- `backup_replication_gcp_target` (String) GCS bucket name set as backup replication target.
 - `disk_iops` (Number)
 - `disk_size_gb` (Number)
+- `is_default` (Boolean)
+- `is_preferred` (Boolean)
 - `num_cores` (Number)
 - `num_nodes` (Number)
 - `public_access` (Boolean)

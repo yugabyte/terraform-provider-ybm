@@ -421,7 +421,7 @@ func (r dataClusterNameType) GetSchema(_ context.Context) (tfsdk.Schema, diag.Di
 				Computed:    true,
 			},
 			"desired_connection_pooling_state": {
-				Description: "The desired connection pooling state of the cluster, Enabled or Disabled. This parameter can be used to enable/disable Connection Pooling",
+				Description: "The desired connection pooling state of the cluster, Enabled or Disabled.",
 				Type:        types.StringType,
 				Computed:    true,
 			},
