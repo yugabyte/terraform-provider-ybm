@@ -187,10 +187,10 @@ func (mr *MockAccountApiMockRecorder) GetAccountQuotasExecute(arg0 interface{}) 
 }
 
 // GetAccountUser mocks base method.
-func (m *MockAccountApi) GetAccountUser(arg0 context.Context, arg1, arg2 string) openapi.ApiGetAccountUserRequest {
+func (m *MockAccountApi) GetAccountUser(arg0 context.Context, arg1, arg2 string) openapi.ApiGetUserRequest {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetAccountUser", arg0, arg1, arg2)
-	ret0, _ := ret[0].(openapi.ApiGetAccountUserRequest)
+	ret0, _ := ret[0].(openapi.ApiGetUserRequest)
 	return ret0
 }
 
@@ -201,7 +201,7 @@ func (mr *MockAccountApiMockRecorder) GetAccountUser(arg0, arg1, arg2 interface{
 }
 
 // GetAccountUserExecute mocks base method.
-func (m *MockAccountApi) GetAccountUserExecute(arg0 openapi.ApiGetAccountUserRequest) (openapi.UserResponse, *http.Response, error) {
+func (m *MockAccountApi) GetAccountUserExecute(arg0 openapi.ApiGetUserRequest) (openapi.UserResponse, *http.Response, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetAccountUserExecute", arg0)
 	ret0, _ := ret[0].(openapi.UserResponse)

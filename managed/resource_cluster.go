@@ -2005,15 +2005,10 @@ func resourceClusterRead(ctx context.Context, accountId string, projectId string
 			tflog.Debug(ctx, fmt.Sprintf("For region %v, publicAccess = %v", region, publicAccess))
 
 			var backupReplicationGCPTarget types.String
-			tflog.Info(ctx, fmt.Sprintf("Siddarth printing repl target %v : %v , %v", cluster.ClusterName, info.GetBackupReplicationGcpTarget(), info.HasBackupReplicationGcpTarget()))
 			if info.HasBackupReplicationGcpTarget() && len(info.GetBackupReplicationGcpTarget()) > 0 {
-				tflog.Info(ctx, fmt.Sprintf("Siddarth Has target %v", cluster.ClusterName))
 				backupReplicationGCPTarget = types.String{Value: info.GetBackupReplicationGcpTarget()}
-				tflog.Info(ctx, fmt.Sprintf("Siddarth stored target %v", cluster.ClusterName))
 			} else {
-				tflog.Info(ctx, fmt.Sprintf("Siddarth no target %v", cluster.ClusterName))
 				backupReplicationGCPTarget = types.String{Null: true}
-				tflog.Info(ctx, fmt.Sprintf("Siddarth no target. Set null %v", cluster.ClusterName))
 			}
 
 			// Handle backup region - get from cluster_region_info_details
