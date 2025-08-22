@@ -1512,7 +1512,7 @@ func pauseCluster(ctx context.Context, apiClient *openapiclient.APIClient, accou
 
 }
 
-func enableConnectionPooling(ctx context.Context, apiClient *openapiclient.APIClient, accountId string, projectId string, clusterId string) (err error) {
+func enableConnectionPooling(ctx context.Context, apiClient *openapiclient.APIClient, accountId string, projectId string, clusterId string, numNodes int) (err error) {
 	connectionPoolingOpSpec := openapiclient.NewConnectionPoolingOpSpec(openapiclient.CONNECTIONPOOLINGOPENUM_ENABLE)
 	response, err := apiClient.ClusterApi.PerformConnectionPoolingOperation(ctx, accountId, projectId, clusterId).ConnectionPoolingOpSpec(*connectionPoolingOpSpec).Execute()
 
@@ -1528,7 +1528,9 @@ func enableConnectionPooling(ctx context.Context, apiClient *openapiclient.APICl
 	// read status, wait for status to be done
 	readClusterRetries := 0
 	retryPolicy := retry.NewConstant(10 * time.Second)
-	retryPolicy = retry.WithMaxDuration(1200*time.Second, retryPolicy)
+	// Calculate timeout based on number of nodes: 15 minutes per node
+	timeout := time.Duration(15*numNodes) * time.Minute
+	retryPolicy = retry.WithMaxDuration(timeout, retryPolicy)
 	err = retry.Do(ctx, retryPolicy, func(ctx context.Context) error {
 		clusterState, readInfoOK, message := getClusterState(ctx, accountId, projectId, clusterId, apiClient)
 		if readInfoOK {
@@ -1548,7 +1550,7 @@ func enableConnectionPooling(ctx context.Context, apiClient *openapiclient.APICl
 	return nil
 }
 
-func disableConnectionPooling(ctx context.Context, apiClient *openapiclient.APIClient, accountId string, projectId string, clusterId string) (err error) {
+func disableConnectionPooling(ctx context.Context, apiClient *openapiclient.APIClient, accountId string, projectId string, clusterId string, numNodes int) (err error) {
 	connectionPoolingOpSpec := openapiclient.NewConnectionPoolingOpSpec(openapiclient.CONNECTIONPOOLINGOPENUM_DISABLE)
 	response, err := apiClient.ClusterApi.PerformConnectionPoolingOperation(ctx, accountId, projectId, clusterId).ConnectionPoolingOpSpec(*connectionPoolingOpSpec).Execute()
 
@@ -1564,7 +1566,9 @@ func disableConnectionPooling(ctx context.Context, apiClient *openapiclient.APIC
 	// read status, wait for status to be done
 	readClusterRetries := 0
 	retryPolicy := retry.NewConstant(10 * time.Second)
-	retryPolicy = retry.WithMaxDuration(1200*time.Second, retryPolicy)
+	// Calculate timeout based on number of nodes: 15 minutes per node
+	timeout := time.Duration(15*numNodes) * time.Minute
+	retryPolicy = retry.WithMaxDuration(timeout, retryPolicy)
 	err = retry.Do(ctx, retryPolicy, func(ctx context.Context) error {
 		clusterState, readInfoOK, message := getClusterState(ctx, accountId, projectId, clusterId, apiClient)
 		if readInfoOK {
@@ -2184,11 +2188,17 @@ func (r resourceCluster) Update(ctx context.Context, req tfsdk.UpdateResourceReq
 		}
 	}
 
+	// Calculate total number of nodes across all regions for connection pooling timeout
+	totalNodes := 0
+	for _, regionInfo := range plan.ClusterRegionInfo {
+		totalNodes += int(regionInfo.NumNodes.Value)
+	}
+
 	// Disable Connection Pooling if the desired state is set to 'Disabled' and it is enabled currently
 	if fflags.IsFeatureFlagEnabled(fflags.CONNECTION_POOLING) && !state.DesiredConnectionPoolingState.Unknown && strings.EqualFold(state.DesiredConnectionPoolingState.Value, "Enabled") && (plan.DesiredConnectionPoolingState.Unknown || strings.EqualFold(plan.DesiredConnectionPoolingState.Value, "Disabled")) {
 		// Disable Connection Pooling
 		tflog.Info(ctx, fmt.Sprintf("Existing Desired Connection Pooling State in State is %v", state.DesiredConnectionPoolingState.Value))
-		err := disableConnectionPooling(ctx, apiClient, accountId, projectId, clusterId)
+		err := disableConnectionPooling(ctx, apiClient, accountId, projectId, clusterId, totalNodes)
 		if err != nil {
 			resp.Diagnostics.AddError("Disable connection pooling failed: ", err.Error())
 			return
@@ -2462,7 +2472,7 @@ func (r resourceCluster) Update(ctx context.Context, req tfsdk.UpdateResourceReq
 
 	// Enable connection pooling if the desired state is set to 'Enabled'
 	if fflags.IsFeatureFlagEnabled(fflags.CONNECTION_POOLING) && !plan.DesiredConnectionPoolingState.Unknown && strings.EqualFold(plan.DesiredConnectionPoolingState.Value, "Enabled") {
-		err := enableConnectionPooling(ctx, apiClient, accountId, projectId, clusterId)
+		err := enableConnectionPooling(ctx, apiClient, accountId, projectId, clusterId, totalNodes)
 		if err != nil {
 			resp.Diagnostics.AddError("Enabling connection pooling Failed: ", err.Error())
 		}
