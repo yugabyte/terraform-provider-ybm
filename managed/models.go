@@ -95,16 +95,18 @@ type BackupScheduleInfo struct {
 	IncrementalIntervalInMins types.Int64  `tfsdk:"incremental_interval_in_mins"`
 }
 type RegionInfo struct {
-	Region       types.String `tfsdk:"region"`
-	NumNodes     types.Int64  `tfsdk:"num_nodes"`
-	NumCores     types.Int64  `tfsdk:"num_cores"`
-	DiskSizeGb   types.Int64  `tfsdk:"disk_size_gb"`
-	DiskIops     types.Int64  `tfsdk:"disk_iops"`
-	VPCID        types.String `tfsdk:"vpc_id"`
-	VPCName      types.String `tfsdk:"vpc_name"`
-	PublicAccess types.Bool   `tfsdk:"public_access"`
-	IsPreferred  types.Bool   `tfsdk:"is_preferred"`
-	IsDefault    types.Bool   `tfsdk:"is_default"`
+	Region                     types.String `tfsdk:"region"`
+	NumNodes                   types.Int64  `tfsdk:"num_nodes"`
+	NumCores                   types.Int64  `tfsdk:"num_cores"`
+	DiskSizeGb                 types.Int64  `tfsdk:"disk_size_gb"`
+	DiskIops                   types.Int64  `tfsdk:"disk_iops"`
+	VPCID                      types.String `tfsdk:"vpc_id"`
+	VPCName                    types.String `tfsdk:"vpc_name"`
+	PublicAccess               types.Bool   `tfsdk:"public_access"`
+	IsPreferred                types.Bool   `tfsdk:"is_preferred"`
+	IsDefault                  types.Bool   `tfsdk:"is_default"`
+	BackupReplicationGCPTarget types.String `tfsdk:"backup_replication_gcp_target"`
+	BackupRegion               types.Bool   `tfsdk:"backup_region"`
 }
 
 type NodeConfig struct {

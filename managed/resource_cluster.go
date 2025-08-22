@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"regexp"
 	"strconv"
 	"strings"
 
@@ -169,6 +170,23 @@ func (r resourceClusterType) GetSchema(_ context.Context) (tfsdk.Schema, diag.Di
 					PlanModifiers: []tfsdk.AttributePlanModifier{
 						tfsdk.UseStateForUnknown(),
 					},
+				},
+				"backup_replication_gcp_target": {
+					Description: "GCS bucket name for backup replication target. Only configurable when editing existing clusters. For SYNCHRONOUS clusters, all regions must have the same target. For GEO_PARTITIONED clusters, each region can have different targets. Only supported for GCP clusters and PAID tier.",
+					Type:        types.StringType,
+					Optional:    true,
+					Computed:    true,
+					Validators: []tfsdk.AttributeValidator{
+						stringvalidator.RegexMatches(
+							regexp.MustCompile(`^[a-z0-9](?:[a-z0-9._-]*[a-z0-9])?$`),
+							"GCS bucket names must contain only lowercase letters, numbers, hyphens, and underscores, and must start and end with a letter or number",
+						),
+					},
+				},
+				"backup_region": {
+					Description: "Indicates whether cluster backup data will be stored in this region.",
+					Type:        types.BoolType,
+					Computed:    true,
 				},
 			}),
 		},
@@ -816,6 +834,10 @@ func createClusterSpec(ctx context.Context, apiClient *openapiclient.APIClient, 
 			isDefaultSet = true
 		}
 
+		if !regionInfo.BackupReplicationGCPTarget.IsNull() && !regionInfo.BackupReplicationGCPTarget.IsUnknown() && regionInfo.BackupReplicationGCPTarget.Value != "" {
+			info.SetBackupReplicationGcpTarget(regionInfo.BackupReplicationGCPTarget.Value)
+		}
+
 		clusterRegionInfo = append(clusterRegionInfo, info)
 	}
 
@@ -1165,6 +1187,15 @@ func (r resourceCluster) Create(ctx context.Context, req tfsdk.CreateResourceReq
 				resp.Diagnostics.AddError("Invalid disk IOPS in "+regionInfo.Region.Value, err)
 				return
 			}
+		}
+
+		// Validate that backup replication targets are not provided during cluster creation
+		if !regionInfo.BackupReplicationGCPTarget.IsNull() && !regionInfo.BackupReplicationGCPTarget.IsUnknown() && regionInfo.BackupReplicationGCPTarget.Value != "" {
+			resp.Diagnostics.AddError(
+				"Backup replication targets not supported during cluster creation",
+				"Backup replication targets can only be configured when editing existing clusters. Please remove the backup_replication_gcp_target field and try again.",
+			)
+			return
 		}
 	}
 
@@ -1977,17 +2008,36 @@ func resourceClusterRead(ctx context.Context, accountId string, projectId string
 
 			tflog.Debug(ctx, fmt.Sprintf("For region %v, publicAccess = %v", region, publicAccess))
 
+			var backupReplicationGCPTarget types.String
+			if info.HasBackupReplicationGcpTarget() && len(info.GetBackupReplicationGcpTarget()) > 0 {
+				backupReplicationGCPTarget = types.String{Value: info.GetBackupReplicationGcpTarget()}
+			} else {
+				backupReplicationGCPTarget = types.String{Null: true}
+			}
+
+			// Handle backup region - get from cluster_region_info_details
+			backupRegion := types.Bool{Value: false}
+			// Find the corresponding region info details to get backup_region
+			for _, regionDetail := range clusterResp.Data.Info.ClusterRegionInfoDetails {
+				if regionDetail.Region == region {
+					backupRegion = types.Bool{Value: regionDetail.BackupRegion}
+					break
+				}
+			}
+
 			regionInfo := RegionInfo{
-				Region:       types.String{Value: region},
-				NumNodes:     types.Int64{Value: int64(info.PlacementInfo.GetNumNodes())},
-				NumCores:     types.Int64{Value: int64(info.NodeInfo.Get().GetNumCores())},
-				DiskSizeGb:   types.Int64{Value: int64(info.NodeInfo.Get().GetDiskSizeGb())},
-				DiskIops:     types.Int64{Value: int64(info.NodeInfo.Get().GetDiskIops())},
-				VPCID:        types.String{Value: vpcID},
-				VPCName:      types.String{Value: vpcName},
-				PublicAccess: types.Bool{Value: publicAccess},
-				IsPreferred:  types.Bool{Value: info.GetIsAffinitized()},
-				IsDefault:    types.Bool{Value: info.GetIsDefault()},
+				Region:                     types.String{Value: region},
+				NumNodes:                   types.Int64{Value: int64(info.PlacementInfo.GetNumNodes())},
+				NumCores:                   types.Int64{Value: int64(info.NodeInfo.Get().GetNumCores())},
+				DiskSizeGb:                 types.Int64{Value: int64(info.NodeInfo.Get().GetDiskSizeGb())},
+				DiskIops:                   types.Int64{Value: int64(info.NodeInfo.Get().GetDiskIops())},
+				VPCID:                      types.String{Value: vpcID},
+				VPCName:                    types.String{Value: vpcName},
+				PublicAccess:               types.Bool{Value: publicAccess},
+				IsPreferred:                types.Bool{Value: info.GetIsAffinitized()},
+				IsDefault:                  types.Bool{Value: info.GetIsDefault()},
+				BackupReplicationGCPTarget: backupReplicationGCPTarget,
+				BackupRegion:               backupRegion,
 			}
 			clusterRegionInfo[destIndex] = regionInfo
 		}
@@ -2186,6 +2236,11 @@ func (r resourceCluster) Update(ctx context.Context, req tfsdk.UpdateResourceReq
 				return
 			}
 		}
+	}
+
+	if err := validateBackupReplicationTargets(plan.ClusterType.Value, plan.ClusterTier.Value, plan.CloudType.Value, plan.ClusterRegionInfo); err != nil {
+		resp.Diagnostics.AddError("Invalid backup replication configuration", err.Error())
+		return
 	}
 
 	scheduleId := ""
@@ -2523,4 +2578,43 @@ func (r resourceCluster) Delete(ctx context.Context, req tfsdk.DeleteResourceReq
 func (r resourceCluster) ImportState(ctx context.Context, req tfsdk.ImportResourceStateRequest, resp *tfsdk.ImportResourceStateResponse) {
 	// Save the import identifier in the id attribute
 	tfsdk.ResourceImportStatePassthroughID(ctx, path.Root("id"), req, resp)
+}
+
+func validateBackupReplicationTargets(clusterType string, clusterTier string, cloudType string, regionInfos []RegionInfo) error {
+	// Collect all non-empty backup replication targets
+	var regionGcpTargets []string
+	for _, regionInfo := range regionInfos {
+		if !regionInfo.BackupReplicationGCPTarget.IsNull() && !regionInfo.BackupReplicationGCPTarget.IsUnknown() && regionInfo.BackupReplicationGCPTarget.Value != "" {
+			regionGcpTargets = append(regionGcpTargets, regionInfo.BackupReplicationGCPTarget.Value)
+		}
+	}
+
+	if len(regionGcpTargets) == 0 {
+		return nil
+	}
+
+	if clusterTier == "FREE" {
+		return fmt.Errorf("backup replication is not supported for free tier clusters")
+	}
+
+	if cloudType != "GCP" {
+		return fmt.Errorf("backup replication to GCS buckets is only supported for GCP clusters")
+	}
+
+	if len(regionGcpTargets) != len(regionInfos) {
+		return fmt.Errorf("all regions must have backup replication targets")
+	}
+
+	// For SYNCHRONOUS clusters, all regions must have the same target
+	if clusterType == "SYNCHRONOUS" {
+		uniqueTargets := make(map[string]bool)
+		for _, target := range regionGcpTargets {
+			uniqueTargets[target] = true
+		}
+		if len(uniqueTargets) > 1 {
+			return fmt.Errorf("all regions must have the same backup replication targets for synchronous clusters")
+		}
+	}
+
+	return nil
 }
