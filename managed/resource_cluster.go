@@ -1223,6 +1223,12 @@ func (r resourceCluster) Create(ctx context.Context, req tfsdk.CreateResourceReq
 	}
 	createClusterRequest.SetEncryptedDbCredentials(*encryptedCredentials)
 
+	// Add connection pooling feature if enabled
+	if fflags.IsFeatureFlagEnabled(fflags.CONNECTION_POOLING) && !plan.DesiredConnectionPoolingState.Unknown && strings.EqualFold(plan.DesiredConnectionPoolingState.Value, "Enabled") {
+		features := []openapiclient.CreateClusterFeatureEnum{openapiclient.CREATECLUSTERFEATUREENUM_ENABLE_CONNECTION_POOLING}
+		createClusterRequest.SetFeatures(features)
+	}
+
 	var cmkSpec *openapiclient.CMKSpec
 
 	if plan.CMKSpec != nil {
@@ -1398,6 +1404,9 @@ func (r resourceCluster) Create(ctx context.Context, req tfsdk.CreateResourceReq
 			resp.Diagnostics.AddError("Pausing the cluster Failed: ", err.Error())
 		}
 	}
+
+	// Connection pooling is now enabled during cluster creation via features parameter
+	// No need for post-creation enablement call
 
 	cluster, readOK, message := resourceClusterRead(ctx, accountId, projectId, clusterId, backUpSchedules, regions, allowListProvided, allowListIDs, false, apiClient)
 
