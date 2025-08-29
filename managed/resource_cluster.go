@@ -1755,8 +1755,8 @@ func (r resourceCluster) Read(ctx context.Context, req tfsdk.ReadResourceRequest
 	}
 }
 
-func getClusterRegionIndex(region string, readOnly bool, regionIndexMap map[string]int, localIndex int) (index int) {
-	if readOnly {
+func getClusterRegionIndex(region string, regionIndexMap map[string]int, localIndex int) (index int) {
+	if len(regionIndexMap) == 0 {
 		return localIndex
 	}
 	index, ok := regionIndexMap[region]
@@ -1985,7 +1985,7 @@ func resourceClusterRead(ctx context.Context, accountId string, projectId string
 	clusterRegionInfo := make([]RegionInfo, len(respClusterRegionInfo))
 	for localIndex, info := range respClusterRegionInfo {
 		region := info.PlacementInfo.CloudInfo.GetRegion()
-		destIndex := getClusterRegionIndex(region, readOnly, regionIndexMap, localIndex)
+		destIndex := getClusterRegionIndex(region, regionIndexMap, localIndex)
 		if destIndex < len(respClusterRegionInfo) {
 			vpcID := info.PlacementInfo.GetVpcId()
 			vpcName := ""
@@ -2047,9 +2047,8 @@ func resourceClusterRead(ctx context.Context, accountId string, projectId string
 
 	if allowListProvided {
 		const maxRetries = 5
-
 		for attempt := 0; attempt < maxRetries; attempt++ {
-			clusterAllowListMappingResp, response, err := apiClient.ClusterApi.ListClusterNetworkAllowLists(context.Background(), accountId, projectId, clusterId).Execute()
+			clusterAllowListMappingResp, response, err := apiClient.ClusterApi.ListClusterNetworkAllowLists(ctx, accountId, projectId, clusterId).Execute()
 			if err != nil {
 				errMsg := getErrorMessage(response, err)
 				return cluster, false, errMsg
@@ -2067,7 +2066,7 @@ func resourceClusterRead(ctx context.Context, accountId string, projectId string
 						allowListStrings = append(allowListStrings, elem)
 					}
 				}
-				tflog.Debug(context.Background(), fmt.Sprintf("Attempt %d: Input Allow List is %v, Server Allow List is %v", attempt+1, inputAllowListIDs, allowListStrings))
+				tflog.Debug(ctx, fmt.Sprintf("Attempt %d: Input Allow List is %v, Server Allow List is %v", attempt+1, inputAllowListIDs, allowListStrings))
 				//added len(inputAllowListIDs)==0 in if condition so that we can reuse the func resourceClusterRead in data_source_cluster_name.go.
 				if util.AreListsEqual(allowListStrings, inputAllowListIDs) || len(inputAllowListIDs) == 0 {
 					for _, elem := range allowListStrings {
@@ -2092,7 +2091,7 @@ func resourceClusterRead(ctx context.Context, accountId string, projectId string
 
 			// Don't sleep on the last attempt
 			if attempt < maxRetries-1 {
-				time.Sleep(2 * time.Second)
+				time.Sleep(10 * time.Second)
 			}
 		}
 
@@ -2266,7 +2265,7 @@ func (r resourceCluster) Update(ctx context.Context, req tfsdk.UpdateResourceReq
 		return
 	}
 	clusterSpec.ClusterInfo.SetVersion(int32(clusterVersion))
-	_, response, err := apiClient.ClusterApi.EditCluster(context.Background(), accountId, projectId, clusterId).ClusterSpec(*clusterSpec).Execute()
+	_, response, err := apiClient.ClusterApi.EditCluster(ctx, accountId, projectId, clusterId).ClusterSpec(*clusterSpec).Execute()
 	if err != nil {
 		errMsg := getErrorMessage(response, err)
 		if len(errMsg) > 10000 {
