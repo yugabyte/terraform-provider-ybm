@@ -315,7 +315,7 @@ func (r resourceReadReplicas) Create(ctx context.Context, req tfsdk.CreateResour
 		regions = append(regions, readReplica.Region.Value)
 	}
 
-	readReplicas, readOK, message := resourceReadReplicasRead(ctx, accountId, projectId, clusterId, apiClient, regions, false)
+	readReplicas, readOK, message := resourceReadReplicasRead(ctx, accountId, projectId, clusterId, apiClient, regions)
 	if !readOK {
 		resp.Diagnostics.AddError("Unable to read the state of the read replicas", message)
 		return
@@ -341,7 +341,7 @@ func (r resourceReadReplicas) Read(ctx context.Context, req tfsdk.ReadResourceRe
 		regions = append(regions, readReplica.Region.Value)
 	}
 
-	readReplicas, readOK, message := resourceReadReplicasRead(ctx, accountId, projectId, clusterId, r.p.client, regions, false)
+	readReplicas, readOK, message := resourceReadReplicasRead(ctx, accountId, projectId, clusterId, r.p.client, regions)
 	if !readOK {
 		resp.Diagnostics.AddError("Unable to read the state of the read replica", message)
 		return
@@ -354,7 +354,7 @@ func (r resourceReadReplicas) Read(ctx context.Context, req tfsdk.ReadResourceRe
 	}
 }
 
-func resourceReadReplicasRead(ctx context.Context, accountId string, projectId string, clusterId string, apiClient *openapiclient.APIClient, planRegions []string, isReadOnly bool) (readReplicas ReadReplicas, readOK bool, errorMessage string) {
+func resourceReadReplicasRead(ctx context.Context, accountId string, projectId string, clusterId string, apiClient *openapiclient.APIClient, planRegions []string) (readReplicas ReadReplicas, readOK bool, errorMessage string) {
 
 	listReadReplicasResp, response, err := apiClient.ReadReplicaApi.ListReadReplicas(context.Background(), accountId, projectId, clusterId).Execute()
 	if err != nil {
@@ -414,7 +414,7 @@ func resourceReadReplicasRead(ctx context.Context, accountId string, projectId s
 			readReplicaInfo.Endpoint.Value = endpoints[localIndex].GetHost()
 		}
 
-		destIndex := getClusterRegionIndex(readReplicaInfo.Region.Value, isReadOnly, regionIndexMap, localIndex)
+		destIndex := getClusterRegionIndex(readReplicaInfo.Region.Value, regionIndexMap, localIndex)
 		readReplicasInfo[destIndex] = readReplicaInfo
 
 	}
@@ -515,7 +515,7 @@ func (r resourceReadReplicas) Update(ctx context.Context, req tfsdk.UpdateResour
 		regions = append(regions, readReplicaInfo.Region.Value)
 	}
 
-	readReplicas, readOK, message := resourceReadReplicasRead(ctx, accountId, projectId, clusterId, apiClient, regions, false)
+	readReplicas, readOK, message := resourceReadReplicasRead(ctx, accountId, projectId, clusterId, apiClient, regions)
 	if !readOK {
 		resp.Diagnostics.AddError("Unable to read the state of the read replicas", message)
 		return
