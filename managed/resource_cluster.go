@@ -2194,14 +2194,38 @@ func (r resourceCluster) Update(ctx context.Context, req tfsdk.UpdateResourceReq
 		totalNodes += int(regionInfo.NumNodes.Value)
 	}
 
-	// Disable Connection Pooling if the desired state is set to 'Disabled' and it is enabled currently
-	if fflags.IsFeatureFlagEnabled(fflags.CONNECTION_POOLING) && !state.DesiredConnectionPoolingState.Unknown && strings.EqualFold(state.DesiredConnectionPoolingState.Value, "Enabled") && (plan.DesiredConnectionPoolingState.Unknown || strings.EqualFold(plan.DesiredConnectionPoolingState.Value, "Disabled")) {
-		// Disable Connection Pooling
-		tflog.Info(ctx, fmt.Sprintf("Existing Desired Connection Pooling State in State is %v", state.DesiredConnectionPoolingState.Value))
-		err := disableConnectionPooling(ctx, apiClient, accountId, projectId, clusterId, totalNodes)
-		if err != nil {
-			resp.Diagnostics.AddError("Disable connection pooling failed: ", err.Error())
-			return
+	// Handle connection pooling state changes after cluster creation: Enable/Disable Connection Pooling on cluster
+	if fflags.IsFeatureFlagEnabled(fflags.CONNECTION_POOLING) {
+		// Get current state and desired state
+		currentState := ""
+		if !state.DesiredConnectionPoolingState.Unknown && !state.DesiredConnectionPoolingState.Null {
+			currentState = state.DesiredConnectionPoolingState.Value
+		}
+
+		desiredState := ""
+		if !plan.DesiredConnectionPoolingState.Unknown && !plan.DesiredConnectionPoolingState.Null {
+			desiredState = plan.DesiredConnectionPoolingState.Value
+		}
+
+		tflog.Info(ctx, fmt.Sprintf("Connection Pooling State Transition: '%s' -> '%s'", currentState, desiredState))
+
+		// Handle state transitions
+		if strings.EqualFold(currentState, "Enabled") && strings.EqualFold(desiredState, "Disabled") {
+			// Disable Connection Pooling
+			tflog.Info(ctx, "Disabling connection pooling")
+			err := disableConnectionPooling(ctx, apiClient, accountId, projectId, clusterId, totalNodes)
+			if err != nil {
+				resp.Diagnostics.AddError("Disable connection pooling failed: ", err.Error())
+				return
+			}
+		} else if strings.EqualFold(currentState, "Disabled") && strings.EqualFold(desiredState, "Enabled") {
+			// Enable Connection Pooling
+			tflog.Info(ctx, "Enabling connection pooling")
+			err := enableConnectionPooling(ctx, apiClient, accountId, projectId, clusterId, totalNodes)
+			if err != nil {
+				resp.Diagnostics.AddError("Enable connection pooling failed: ", err.Error())
+				return
+			}
 		}
 	}
 
@@ -2470,13 +2494,8 @@ func (r resourceCluster) Update(ctx context.Context, req tfsdk.UpdateResourceReq
 		}
 	}
 
-	// Enable connection pooling if the desired state is set to 'Enabled'
-	if fflags.IsFeatureFlagEnabled(fflags.CONNECTION_POOLING) && !plan.DesiredConnectionPoolingState.Unknown && strings.EqualFold(plan.DesiredConnectionPoolingState.Value, "Enabled") {
-		err := enableConnectionPooling(ctx, apiClient, accountId, projectId, clusterId, totalNodes)
-		if err != nil {
-			resp.Diagnostics.AddError("Enabling connection pooling Failed: ", err.Error())
-		}
-	}
+	// Connection pooling state changes are now handled earlier in the Update function
+	// No additional enable/disable logic needed here
 
 	var regions []string
 	for _, regionInfo := range plan.ClusterRegionInfo {
