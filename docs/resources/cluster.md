@@ -843,6 +843,7 @@ resource "ybm_cluster" "asymmetric_geo_mixed_backup" {
 - `cluster_allow_list_ids` (List of String) List of IDs of the allow lists assigned to the cluster.
 - `cmk_spec` (Attributes) KMS Provider Configuration. (see [below for nested schema](#nestedatt--cmk_spec))
 - `database_track` (String) The track of the database. Production or Innovation or Preview.
+- `desired_connection_pooling_state` (String) The desired connection pooling state of the cluster, Enabled or Disabled. Can be used during or after cluster creation.
 - `desired_state` (String) The desired state of the cluster, Active or Paused. This parameter can be used to pause/resume a cluster.
 - `fault_tolerance` (String) The fault tolerance of the cluster. NONE, NODE, ZONE or REGION.
 - `node_config` (Attributes, Deprecated) (see [below for nested schema](#nestedatt--node_config))

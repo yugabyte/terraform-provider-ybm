@@ -7,7 +7,7 @@ if [ -z "$(which tfplugindocs)" ]; then
   wget ${download_url}                                                                                  
   mkdir tmp                                                                                             
   unzip -o tfplugindocs_${version}_${1}.zip -d tmp/                                                      
-  mv tmp/tfplugindocs /usr/local/bin/                                                                   
+  sudo mv tmp/tfplugindocs /usr/local/bin/                                                                   
   rm -rf tmp                                                                                            
   rm -rf tfplugindocs_${version}_${1}.zip                                                               
 fi 

@@ -28,7 +28,6 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
 	"github.com/sethvargo/go-retry"
-	"github.com/yugabyte/terraform-provider-ybm/managed/fflags"
 	"github.com/yugabyte/terraform-provider-ybm/managed/util"
 	openapiclient "github.com/yugabyte/yugabytedb-managed-go-client-internal"
 )
@@ -562,11 +561,11 @@ func (r resourceClusterType) GetSchema(_ context.Context) (tfsdk.Schema, diag.Di
 			},
 			Validators: []tfsdk.AttributeValidator{
 				// Validate string value must be "Active" or "Paused"
-				stringvalidator.OneOfCaseInsensitive([]string{"Active", "Paused"}...),
+				stringvalidator.OneOf([]string{"Active", "Paused"}...),
 			},
 		},
 		"desired_connection_pooling_state": {
-			Description: "The desired connection pooling state of the cluster, Enabled or Disabled. This parameter can be used to enable/disable Connection Pooling",
+			Description: "The desired connection pooling state of the cluster, Enabled or Disabled. Can be used during or after cluster creation.",
 			Type:        types.StringType,
 			Optional:    true,
 			Computed:    true,
@@ -575,7 +574,7 @@ func (r resourceClusterType) GetSchema(_ context.Context) (tfsdk.Schema, diag.Di
 			},
 			Validators: []tfsdk.AttributeValidator{
 				// Validate string value must be "Enabled" or "Disabled"
-				stringvalidator.OneOfCaseInsensitive([]string{"Enabled", "Disabled"}...),
+				stringvalidator.OneOf([]string{"Enabled", "Disabled"}...),
 			},
 		},
 		"cluster_endpoints": {
@@ -618,11 +617,6 @@ func (r resourceClusterType) GetSchema(_ context.Context) (tfsdk.Schema, diag.Di
 				tfsdk.UseStateForUnknown(),
 			},
 		},
-	}
-	// Remove once feature flag is enabled
-	// TODO: Think of a more scalable solution
-	if !fflags.IsFeatureFlagEnabled(fflags.CONNECTION_POOLING) {
-		delete(attributes, "desired_connection_pooling_state")
 	}
 
 	return tfsdk.Schema{
@@ -902,9 +896,7 @@ func getPlan(ctx context.Context, plan tfsdk.Plan, cluster *Cluster) diag.Diagno
 	diags.Append(plan.GetAttribute(ctx, path.Root("restore_backup_id"), &cluster.RestoreBackupID)...)
 	diags.Append(plan.GetAttribute(ctx, path.Root("database_track"), &cluster.DatabaseTrack)...)
 	diags.Append(plan.GetAttribute(ctx, path.Root("desired_state"), &cluster.DesiredState)...)
-	if fflags.IsFeatureFlagEnabled(fflags.CONNECTION_POOLING) {
-		diags.Append(plan.GetAttribute(ctx, path.Root("desired_connection_pooling_state"), &cluster.DesiredConnectionPoolingState)...)
-	}
+	diags.Append(plan.GetAttribute(ctx, path.Root("desired_connection_pooling_state"), &cluster.DesiredConnectionPoolingState)...)
 
 	var nodeConfig *NodeConfig
 	plan.GetAttribute(ctx, path.Root("node_config"), &nodeConfig)
@@ -925,9 +917,7 @@ func getIDsFromState(ctx context.Context, state tfsdk.State, cluster *Cluster) {
 	state.GetAttribute(ctx, path.Root("project_id"), &cluster.ProjectID)
 	state.GetAttribute(ctx, path.Root("cluster_id"), &cluster.ClusterID)
 	state.GetAttribute(ctx, path.Root("desired_state"), &cluster.DesiredState)
-	if fflags.IsFeatureFlagEnabled(fflags.CONNECTION_POOLING) {
-		state.GetAttribute(ctx, path.Root("desired_connection_pooling_state"), &cluster.DesiredConnectionPoolingState)
-	}
+	state.GetAttribute(ctx, path.Root("desired_connection_pooling_state"), &cluster.DesiredConnectionPoolingState)
 	state.GetAttribute(ctx, path.Root("cluster_allow_list_ids"), &cluster.ClusterAllowListIDs)
 	state.GetAttribute(ctx, path.Root("cluster_region_info"), &cluster.ClusterRegionInfo)
 	state.GetAttribute(ctx, path.Root("backup_schedules"), &cluster.BackupSchedules)
@@ -949,65 +939,6 @@ func validateCredentials(credentials Credentials) bool {
 
 	return false
 
-}
-
-// This function is needed to fix deserialization into TF state when connection pooling is removed from schema
-func setClusterState(ctx context.Context, state *tfsdk.State, cluster *Cluster) diag.Diagnostics {
-	// Create temporary struct without DesiredConnectionPoolingState field
-	if fflags.IsFeatureFlagEnabled(fflags.CONNECTION_POOLING) {
-		return state.Set(ctx, cluster)
-	}
-	tempState := struct {
-		AccountID           types.String         `tfsdk:"account_id"`
-		ProjectID           types.String         `tfsdk:"project_id"`
-		ClusterID           types.String         `tfsdk:"cluster_id"`
-		ClusterName         types.String         `tfsdk:"cluster_name"`
-		CloudType           types.String         `tfsdk:"cloud_type"`
-		ClusterType         types.String         `tfsdk:"cluster_type"`
-		FaultTolerance      types.String         `tfsdk:"fault_tolerance"`
-		NumFaultsToTolerate types.Int64          `tfsdk:"num_faults_to_tolerate"`
-		ClusterRegionInfo   []RegionInfo         `tfsdk:"cluster_region_info"`
-		DatabaseTrack       types.String         `tfsdk:"database_track"`
-		DesiredState        types.String         `tfsdk:"desired_state"`
-		ClusterTier         types.String         `tfsdk:"cluster_tier"`
-		ClusterAllowListIDs []types.String       `tfsdk:"cluster_allow_list_ids"`
-		RestoreBackupID     types.String         `tfsdk:"restore_backup_id"`
-		NodeConfig          *NodeConfig          `tfsdk:"node_config"`
-		Credentials         Credentials          `tfsdk:"credentials"`
-		ClusterInfo         ClusterInfo          `tfsdk:"cluster_info"`
-		ClusterVersion      types.String         `tfsdk:"cluster_version"`
-		BackupSchedules     []BackupScheduleInfo `tfsdk:"backup_schedules"`
-		ClusterEndpoints    types.Map            `tfsdk:"cluster_endpoints"`
-		ClusterEndpointsV2  []ClusterEndpoint    `tfsdk:"endpoints"`
-		ClusterCertificate  types.String         `tfsdk:"cluster_certificate"`
-		CMKSpec             *CMKSpec             `tfsdk:"cmk_spec"`
-	}{
-		AccountID:           cluster.AccountID,
-		ProjectID:           cluster.ProjectID,
-		ClusterID:           cluster.ClusterID,
-		ClusterName:         cluster.ClusterName,
-		CloudType:           cluster.CloudType,
-		ClusterType:         cluster.ClusterType,
-		FaultTolerance:      cluster.FaultTolerance,
-		NumFaultsToTolerate: cluster.NumFaultsToTolerate,
-		ClusterRegionInfo:   cluster.ClusterRegionInfo,
-		DatabaseTrack:       cluster.DatabaseTrack,
-		DesiredState:        cluster.DesiredState,
-		ClusterTier:         cluster.ClusterTier,
-		ClusterAllowListIDs: cluster.ClusterAllowListIDs,
-		RestoreBackupID:     cluster.RestoreBackupID,
-		NodeConfig:          cluster.NodeConfig,
-		Credentials:         cluster.Credentials,
-		ClusterInfo:         cluster.ClusterInfo,
-		ClusterVersion:      cluster.ClusterVersion,
-		BackupSchedules:     cluster.BackupSchedules,
-		ClusterEndpoints:    cluster.ClusterEndpoints,
-		ClusterEndpointsV2:  cluster.ClusterEndpointsV2,
-		ClusterCertificate:  cluster.ClusterCertificate,
-		CMKSpec:             cluster.CMKSpec,
-	}
-
-	return state.Set(ctx, &tempState)
 }
 
 func validateOnlyOneCMKSpec(plan *Cluster) error {
@@ -1223,8 +1154,8 @@ func (r resourceCluster) Create(ctx context.Context, req tfsdk.CreateResourceReq
 	}
 	createClusterRequest.SetEncryptedDbCredentials(*encryptedCredentials)
 
-	// Add connection pooling feature if enabled
-	if fflags.IsFeatureFlagEnabled(fflags.CONNECTION_POOLING) && !plan.DesiredConnectionPoolingState.Unknown && strings.EqualFold(plan.DesiredConnectionPoolingState.Value, "Enabled") {
+	// Connection Pooling
+	if !plan.DesiredConnectionPoolingState.Unknown && strings.EqualFold(plan.DesiredConnectionPoolingState.Value, "Enabled") {
 		features := []openapiclient.CreateClusterFeatureEnum{openapiclient.CREATECLUSTERFEATUREENUM_ENABLE_CONNECTION_POOLING}
 		createClusterRequest.SetFeatures(features)
 	}
@@ -1321,7 +1252,7 @@ func (r resourceCluster) Create(ctx context.Context, req tfsdk.CreateResourceReq
 	}
 
 	var backUpSchedules []BackupScheduleInfo
-	if plan.BackupSchedules != nil && len(plan.BackupSchedules) > 0 {
+	if len(plan.BackupSchedules) > 0 {
 		if len(plan.BackupSchedules) > 1 {
 			resp.Diagnostics.AddError("Could not create custom backup schedule", "More than one schedules were passed")
 			return
@@ -1462,10 +1393,10 @@ func (r resourceCluster) Create(ctx context.Context, req tfsdk.CreateResourceReq
 		cluster.RestoreBackupID.Null = true
 	}
 
-	if fflags.IsFeatureFlagEnabled(fflags.CONNECTION_POOLING) && (strings.EqualFold(plan.DesiredConnectionPoolingState.Value, "Enabled") || strings.EqualFold(plan.DesiredConnectionPoolingState.Value, "Disabled")) {
+	if strings.EqualFold(plan.DesiredConnectionPoolingState.Value, "Enabled") || strings.EqualFold(plan.DesiredConnectionPoolingState.Value, "Disabled") {
 		cluster.DesiredConnectionPoolingState.Value = plan.DesiredConnectionPoolingState.Value
 	}
-	diags := setClusterState(ctx, &resp.State, &cluster)
+	diags := resp.State.Set(ctx, &cluster)
 	resp.Diagnostics.Append(diags...)
 	if resp.Diagnostics.HasError() {
 		return
@@ -1717,7 +1648,7 @@ func (r resourceCluster) Read(ctx context.Context, req tfsdk.ReadResourceRequest
 	}
 
 	var backUpSchedules []BackupScheduleInfo
-	if state.BackupSchedules != nil && len(state.BackupSchedules) > 0 {
+	if len(state.BackupSchedules) > 0 {
 		backUpSchedules = append(backUpSchedules, state.BackupSchedules[0])
 	}
 
@@ -1757,7 +1688,7 @@ func (r resourceCluster) Read(ctx context.Context, req tfsdk.ReadResourceRequest
 	if !state.RestoreBackupID.Null {
 		req.State.GetAttribute(ctx, path.Root("restore_backup_id"), &cluster.RestoreBackupID)
 	}
-	diags := setClusterState(ctx, &resp.State, &cluster)
+	diags := resp.State.Set(ctx, &cluster)
 	resp.Diagnostics.Append(diags...)
 	if resp.Diagnostics.HasError() {
 		return
@@ -1907,12 +1838,11 @@ func resourceClusterRead(ctx context.Context, accountId string, projectId string
 		desiredState = "Paused"
 	}
 	cluster.DesiredState.Value = desiredState
-	if fflags.IsFeatureFlagEnabled(fflags.CONNECTION_POOLING) {
-		if clusterResp.Data.Info.GetIsConnectionPoolingEnabled() {
-			cluster.DesiredConnectionPoolingState.Value = "Enabled"
-		} else {
-			cluster.DesiredConnectionPoolingState.Value = "Disabled"
-		}
+
+	if clusterResp.Data.Info.GetIsConnectionPoolingEnabled() {
+		cluster.DesiredConnectionPoolingState.Value = "Enabled"
+	} else {
+		cluster.DesiredConnectionPoolingState.Value = "Disabled"
 	}
 
 	cluster.ClusterType.Value = string(*clusterResp.Data.Spec.ClusterInfo.ClusterType)
@@ -2203,7 +2133,7 @@ func (r resourceCluster) Update(ctx context.Context, req tfsdk.UpdateResourceReq
 	}
 
 	// Disable Connection Pooling if the desired state is set to 'Disabled' and it is enabled currently
-	if fflags.IsFeatureFlagEnabled(fflags.CONNECTION_POOLING) && !state.DesiredConnectionPoolingState.Unknown && strings.EqualFold(state.DesiredConnectionPoolingState.Value, "Enabled") && (plan.DesiredConnectionPoolingState.Unknown || strings.EqualFold(plan.DesiredConnectionPoolingState.Value, "Disabled")) {
+	if !state.DesiredConnectionPoolingState.Unknown && strings.EqualFold(state.DesiredConnectionPoolingState.Value, "Enabled") && (plan.DesiredConnectionPoolingState.Unknown || strings.EqualFold(plan.DesiredConnectionPoolingState.Value, "Disabled")) {
 		// Disable Connection Pooling
 		tflog.Info(ctx, fmt.Sprintf("Existing Desired Connection Pooling State in State is %v", state.DesiredConnectionPoolingState.Value))
 		err := disableConnectionPooling(ctx, apiClient, accountId, projectId, clusterId, totalNodes)
@@ -2378,7 +2308,7 @@ func (r resourceCluster) Update(ctx context.Context, req tfsdk.UpdateResourceReq
 	}
 
 	var backUpSchedules []BackupScheduleInfo
-	if plan.BackupSchedules != nil && len(plan.BackupSchedules) > 0 {
+	if len(plan.BackupSchedules) > 0 {
 		if len(plan.BackupSchedules) > 1 {
 			resp.Diagnostics.AddError("Could not create custom backup schedule", "More than one schedules were passed")
 			return
@@ -2479,7 +2409,7 @@ func (r resourceCluster) Update(ctx context.Context, req tfsdk.UpdateResourceReq
 	}
 
 	// Enable connection pooling if the desired state is set to 'Enabled'
-	if fflags.IsFeatureFlagEnabled(fflags.CONNECTION_POOLING) && !plan.DesiredConnectionPoolingState.Unknown && strings.EqualFold(plan.DesiredConnectionPoolingState.Value, "Enabled") {
+	if !plan.DesiredConnectionPoolingState.Unknown && strings.EqualFold(plan.DesiredConnectionPoolingState.Value, "Enabled") {
 		err := enableConnectionPooling(ctx, apiClient, accountId, projectId, clusterId, totalNodes)
 		if err != nil {
 			resp.Diagnostics.AddError("Enabling connection pooling Failed: ", err.Error())
@@ -2524,10 +2454,10 @@ func (r resourceCluster) Update(ctx context.Context, req tfsdk.UpdateResourceReq
 		cluster.RestoreBackupID.Null = true
 	}
 
-	if fflags.IsFeatureFlagEnabled(fflags.CONNECTION_POOLING) && (strings.EqualFold(plan.DesiredConnectionPoolingState.Value, "Enabled") || strings.EqualFold(plan.DesiredConnectionPoolingState.Value, "Disabled")) {
+	if strings.EqualFold(plan.DesiredConnectionPoolingState.Value, "Enabled") || strings.EqualFold(plan.DesiredConnectionPoolingState.Value, "Disabled") {
 		cluster.DesiredConnectionPoolingState.Value = plan.DesiredConnectionPoolingState.Value
 	}
-	diags := setClusterState(ctx, &resp.State, &cluster)
+	diags := resp.State.Set(ctx, &cluster)
 	resp.Diagnostics.Append(diags...)
 	if resp.Diagnostics.HasError() {
 		return
