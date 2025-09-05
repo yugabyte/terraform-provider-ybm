@@ -13,13 +13,11 @@ import (
 type FeatureFlag string
 
 const (
-	CONNECTION_POOLING FeatureFlag = "CONNECTION_POOLING"
-	DR                 FeatureFlag = "DR"
+	DR FeatureFlag = "DR"
 )
 
 var flagEnabled = map[FeatureFlag]bool{
-	CONNECTION_POOLING: false,
-	DR:                 false,
+	DR: false,
 }
 
 func (f FeatureFlag) String() string {
