@@ -2204,16 +2204,29 @@ func (r resourceCluster) Update(ctx context.Context, req tfsdk.UpdateResourceReq
 		return
 	}
 	clusterSpec.ClusterInfo.SetVersion(int32(clusterVersion))
-	_, response, err := apiClient.ClusterApi.EditCluster(ctx, accountId, projectId, clusterId).ClusterSpec(*clusterSpec).Execute()
-	if err != nil {
-		errMsg := getErrorMessage(response, err)
-		if len(errMsg) > 10000 {
-			resp.Diagnostics.AddError("Unable to edit cluster. NOTE: The length of the HTML output indicates your authentication token may be out of date. A truncated response follows: ",
-				errMsg[:10000])
+	maxRetries := 5
+	var response *http.Response
+
+	for true {
+		_, response, err = apiClient.ClusterApi.EditCluster(ctx, accountId, projectId, clusterId).ClusterSpec(*clusterSpec).Execute()
+		if err != nil {
+			// Retry on 503s
+			if response != nil && response.StatusCode == 503 && maxRetries > 0 {
+				maxRetries--
+				tflog.Warn(ctx, "Received 503 Service Unavailable. Retrying after 10 sec...")
+				time.Sleep(10 * time.Second)
+				continue
+			}
+			errMsg := getErrorMessage(response, err)
+			if len(errMsg) > 10000 {
+				resp.Diagnostics.AddError("Unable to edit cluster. NOTE: The length of the HTML output indicates your authentication token may be out of date. A truncated response follows: ",
+					errMsg[:10000])
+				return
+			}
+			resp.Diagnostics.AddError("Unable to edit cluster ", errMsg)
 			return
 		}
-		resp.Diagnostics.AddError("Unable to edit cluster ", errMsg)
-		return
+		break
 	}
 
 	// The following code has a pitfall:
@@ -2233,7 +2246,8 @@ func (r resourceCluster) Update(ctx context.Context, req tfsdk.UpdateResourceReq
 	readClusterRetries := 0
 	checkNewTaskSpawned := true
 	retryPolicy := retry.NewConstant(10 * time.Second)
-	retryPolicy = retry.WithMaxDuration(3600*time.Second, retryPolicy)
+	editTimeout := time.Duration(20*totalNodes) * time.Minute // 20 minutes per node
+	retryPolicy = retry.WithMaxDuration(editTimeout, retryPolicy)
 	err = retry.Do(ctx, retryPolicy, func(ctx context.Context) error {
 		asState, readInfoOK, message := getTaskState(accountId, projectId, clusterId, openapiclient.ENTITYTYPEENUM_CLUSTER, openapiclient.TASKTYPEENUM_EDIT_CLUSTER, apiClient, ctx)
 
