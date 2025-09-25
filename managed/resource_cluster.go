@@ -2246,7 +2246,7 @@ func (r resourceCluster) Update(ctx context.Context, req tfsdk.UpdateResourceReq
 	readClusterRetries := 0
 	checkNewTaskSpawned := true
 	retryPolicy := retry.NewConstant(10 * time.Second)
-	editTimeout := time.Duration(20*totalNodes) * time.Minute // 20 minutes per node
+	editTimeout := time.Duration(max(60, 30*totalNodes)) * time.Minute // 30 minutes per node, Min. 60 minutes
 	retryPolicy = retry.WithMaxDuration(editTimeout, retryPolicy)
 	err = retry.Do(ctx, retryPolicy, func(ctx context.Context) error {
 		asState, readInfoOK, message := getTaskState(accountId, projectId, clusterId, openapiclient.ENTITYTYPEENUM_CLUSTER, openapiclient.TASKTYPEENUM_EDIT_CLUSTER, apiClient, ctx)
@@ -2303,7 +2303,7 @@ func (r resourceCluster) Update(ctx context.Context, req tfsdk.UpdateResourceReq
 	// read status, wait for status to be active
 	readClusterRetries = 0
 	retryPolicyA := retry.NewConstant(10 * time.Second)
-	retryPolicyA = retry.WithMaxDuration(3600*time.Second, retryPolicyA)
+	retryPolicyA = retry.WithMaxDuration(editTimeout, retryPolicyA)
 	err = retry.Do(ctx, retryPolicyA, func(ctx context.Context) error {
 		clusterState, readInfoOK, message := getClusterState(ctx, accountId, projectId, clusterId, apiClient)
 		if readInfoOK {
