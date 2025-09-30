@@ -174,7 +174,9 @@ func (r resourceClusterType) GetSchema(_ context.Context) (tfsdk.Schema, diag.Di
 					Description: "GCS bucket name for backup replication target. Only configurable when editing existing clusters. For SYNCHRONOUS clusters, all regions must have the same target. For GEO_PARTITIONED clusters, each region can have different targets. Only supported for GCP clusters and PAID tier.",
 					Type:        types.StringType,
 					Optional:    true,
-					Computed:    true,
+					PlanModifiers: []tfsdk.AttributePlanModifier{
+						tfsdk.UseStateForUnknown(),
+					},
 					Validators: []tfsdk.AttributeValidator{
 						stringvalidator.RegexMatches(
 							regexp.MustCompile(`^[a-z0-9](?:[a-z0-9._-]*[a-z0-9])?$`),
