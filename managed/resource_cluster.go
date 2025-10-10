@@ -140,11 +140,20 @@ func (r resourceClusterType) GetSchema(_ context.Context) (tfsdk.Schema, diag.Di
 					Validators: []tfsdk.AttributeValidator{
 						schemavalidator.ConflictsWith(path.MatchRelative().AtParent().AtName("vpc_name")),
 					},
+					PlanModifiers: []tfsdk.AttributePlanModifier{
+						tfsdk.UseStateForUnknown(),
+					},
 				},
 				"vpc_name": {
 					Type:     types.StringType,
 					Optional: true,
 					Computed: true,
+					Validators: []tfsdk.AttributeValidator{
+						schemavalidator.ConflictsWith(path.MatchRelative().AtParent().AtName("vpc_id")),
+					},
+					PlanModifiers: []tfsdk.AttributePlanModifier{
+						tfsdk.UseStateForUnknown(),
+					},
 				},
 				"public_access": {
 					Type:     types.BoolType,
@@ -423,6 +432,9 @@ func (r resourceClusterType) GetSchema(_ context.Context) (tfsdk.Schema, diag.Di
 			Optional:    true,
 			Computed:    true,
 			Validators:  []tfsdk.AttributeValidator{stringvalidator.OneOf("NONE", "NODE", "ZONE", "REGION")},
+			PlanModifiers: []tfsdk.AttributePlanModifier{
+				tfsdk.UseStateForUnknown(),
+			},
 		},
 		"num_faults_to_tolerate": {
 			Description: "The number of domain faults the cluster can tolerate. 0 for NONE, 1 for ZONE and [1-3] for NODE and REGION",
@@ -430,6 +442,9 @@ func (r resourceClusterType) GetSchema(_ context.Context) (tfsdk.Schema, diag.Di
 			Optional:    true,
 			Computed:    true,
 			Validators:  []tfsdk.AttributeValidator{int64validator.OneOf(0, 1, 2, 3)},
+			PlanModifiers: []tfsdk.AttributePlanModifier{
+				tfsdk.UseStateForUnknown(),
+			},
 		},
 		"cluster_allow_list_ids": {
 			Description: "List of IDs of the allow lists assigned to the cluster.",
@@ -479,10 +494,10 @@ func (r resourceClusterType) GetSchema(_ context.Context) (tfsdk.Schema, diag.Di
 			DeprecationMessage: "Remove this attribute's configuration as it's no longer in use and the attribute will be removed in the next major version of the provider. Please use cluster_region_info to specify node config instead.",
 		},
 		"credentials": {
-			Description: `Credentials to be used by the database. Please provide 'username' and 'password' 
+			Description: `Credentials to be used by the database. Required only at the time of creation. Please provide 'username' and 'password' 
 (which would be used in common for both YSQL and YCQL) OR all of 'ysql_username',
 'ysql_password', 'ycql_username' and 'ycql_password' but not a mix of both.`,
-			Required: true,
+			Optional: true,
 			Attributes: tfsdk.SingleNestedAttributes(map[string]tfsdk.Attribute{
 				"username": {
 					Description: "The username to be used for both YSQL and YCQL.",
@@ -533,6 +548,9 @@ func (r resourceClusterType) GetSchema(_ context.Context) (tfsdk.Schema, diag.Di
 				"created_time": {
 					Type:     types.StringType,
 					Computed: true,
+					PlanModifiers: []tfsdk.AttributePlanModifier{
+						tfsdk.UseStateForUnknown(),
+					},
 				},
 				"updated_time": {
 					Type:     types.StringType,
@@ -906,7 +924,12 @@ func getPlan(ctx context.Context, plan tfsdk.Plan, cluster *Cluster) diag.Diagno
 		diags.Append(plan.GetAttribute(ctx, path.Root("node_config"), &cluster.NodeConfig)...)
 	}
 
-	diags.Append(plan.GetAttribute(ctx, path.Root("credentials"), &cluster.Credentials)...)
+	var credentials *Credentials
+	plan.GetAttribute(ctx, path.Root("credentials"), &credentials)
+	if credentials != nil {
+		diags.Append(plan.GetAttribute(ctx, path.Root("credentials"), &cluster.Credentials)...)
+	}
+
 	diags.Append(plan.GetAttribute(ctx, path.Root("backup_schedules"), &cluster.BackupSchedules)...)
 	diags.Append(plan.GetAttribute(ctx, path.Root("cmk_spec"), &cluster.CMKSpec)...)
 
@@ -923,9 +946,17 @@ func getIDsFromState(ctx context.Context, state tfsdk.State, cluster *Cluster) {
 	state.GetAttribute(ctx, path.Root("cluster_allow_list_ids"), &cluster.ClusterAllowListIDs)
 	state.GetAttribute(ctx, path.Root("cluster_region_info"), &cluster.ClusterRegionInfo)
 	state.GetAttribute(ctx, path.Root("backup_schedules"), &cluster.BackupSchedules)
+	state.GetAttribute(ctx, path.Root("credentials"), &cluster.Credentials)
 }
 
-func validateCredentials(credentials Credentials) bool {
+func validateCredentials(credentials *Credentials, isCreateCluster bool) bool {
+
+	if isCreateCluster && (credentials == nil) {
+		return false
+	}
+	if !isCreateCluster && (credentials == nil) {
+		return true
+	}
 
 	commonCredentialsProvided := !credentials.Username.IsNull() && !credentials.Password.IsNull()
 	commonCredentialsNotProvided := credentials.Username.IsNull() && credentials.Password.IsNull()
@@ -1053,7 +1084,7 @@ func (r resourceCluster) Create(ctx context.Context, req tfsdk.CreateResourceReq
 		return
 	}
 
-	if !validateCredentials(plan.Credentials) {
+	if !validateCredentials(plan.Credentials, true /* isCreateCluster*/) {
 		resp.Diagnostics.AddError("Invalid credentials", `Please provide 'username' and 'password' 
 (which would be used in common for both YSQL and YCQL) OR all of 'ysql_username',
 'ysql_password', 'ycql_username' and 'ycql_password' but not a mix of both.`)
@@ -1091,24 +1122,6 @@ func (r resourceCluster) Create(ctx context.Context, req tfsdk.CreateResourceReq
 	}
 
 	for _, regionInfo := range plan.ClusterRegionInfo {
-		vpcNamePresent := false
-		vpcIDPresent := false
-		if !regionInfo.VPCName.Unknown && !regionInfo.VPCName.Null && regionInfo.VPCName.Value != "" {
-			vpcNamePresent = true
-		}
-		if !regionInfo.VPCID.Unknown && !regionInfo.VPCID.Null && regionInfo.VPCID.Value != "" {
-			vpcIDPresent = true
-		}
-		if vpcNamePresent {
-			if vpcIDPresent {
-				resp.Diagnostics.AddError(
-					"Specify VPC name or VPC ID",
-					"To select a vpc, use either vpc_name or vpc_id. Don't provide both.",
-				)
-				return
-			}
-		}
-
 		if !regionInfo.DiskSizeGb.IsUnknown() && !util.IsDiskSizeValid(plan.ClusterTier.Value, regionInfo.DiskSizeGb.Value) {
 			resp.Diagnostics.AddError("Invalid disk size in "+regionInfo.Region.Value, "The disk size for a paid cluster must be at least 50 GB.")
 			return
@@ -1341,7 +1354,7 @@ func (r resourceCluster) Create(ctx context.Context, req tfsdk.CreateResourceReq
 	// Connection pooling is now enabled during cluster creation via features parameter
 	// No need for post-creation enablement call
 
-	cluster, readOK, message := resourceClusterRead(ctx, accountId, projectId, clusterId, backUpSchedules, regions, allowListProvided, allowListIDs, false, apiClient)
+	cluster, readOK, message := resourceClusterRead(ctx, clusterId, backUpSchedules, regions, allowListProvided, allowListIDs, false, apiClient)
 
 	// Update the State file with the unmasked creds for AWS (secret key,access) and GCP (client id,private key)
 	if plan.CMKSpec != nil {
@@ -1371,21 +1384,26 @@ func (r resourceCluster) Create(ctx context.Context, req tfsdk.CreateResourceReq
 	}
 
 	// set credentials for cluster (not returned by read api)
-	if plan.Credentials.Username.IsNull() {
-		cluster.Credentials.YSQLUsername.Value = plan.Credentials.YSQLUsername.Value
-		cluster.Credentials.YSQLPassword.Value = plan.Credentials.YSQLPassword.Value
-		cluster.Credentials.YCQLUsername.Value = plan.Credentials.YCQLUsername.Value
-		cluster.Credentials.YCQLPassword.Value = plan.Credentials.YCQLPassword.Value
-		cluster.Credentials.Username.Null = true
-		cluster.Credentials.Password.Null = true
+	clusterCreds := *(plan.Credentials)
+	if clusterCreds.Username.IsNull() {
+		cluster.Credentials = &Credentials{
+			YSQLUsername: types.String{Value: clusterCreds.YSQLUsername.Value},
+			YSQLPassword: types.String{Value: clusterCreds.YSQLPassword.Value},
+			YCQLUsername: types.String{Value: clusterCreds.YCQLUsername.Value},
+			YCQLPassword: types.String{Value: clusterCreds.YCQLPassword.Value},
+			Username:     types.String{Null: true},
+			Password:     types.String{Null: true},
+		}
 	} else {
 		// common credentials have been used
-		cluster.Credentials.Username.Value = plan.Credentials.Username.Value
-		cluster.Credentials.Password.Value = plan.Credentials.Password.Value
-		cluster.Credentials.YSQLUsername.Null = true
-		cluster.Credentials.YSQLPassword.Null = true
-		cluster.Credentials.YCQLUsername.Null = true
-		cluster.Credentials.YCQLPassword.Null = true
+		cluster.Credentials = &Credentials{
+			Username:     types.String{Value: clusterCreds.Username.Value},
+			Password:     types.String{Value: clusterCreds.Password.Value},
+			YSQLUsername: types.String{Null: true},
+			YSQLPassword: types.String{Null: true},
+			YCQLUsername: types.String{Null: true},
+			YCQLPassword: types.String{Null: true},
+		}
 	}
 
 	// set restore backup id for cluster (not returned by read api)
@@ -1654,7 +1672,7 @@ func (r resourceCluster) Read(ctx context.Context, req tfsdk.ReadResourceRequest
 		backUpSchedules = append(backUpSchedules, state.BackupSchedules[0])
 	}
 
-	cluster, readOK, message := resourceClusterRead(ctx, state.AccountID.Value, state.ProjectID.Value, state.ClusterID.Value, backUpSchedules, regions, allowListProvided, allowListIDs, true, r.p.client)
+	cluster, readOK, message := resourceClusterRead(ctx, state.ClusterID.Value, backUpSchedules, regions, allowListProvided, allowListIDs, true, r.p.client)
 	tflog.Debug(ctx, "Cluster Read: Allow List IDs read from API server", map[string]interface{}{
 		"Allow List IDs": cluster.ClusterAllowListIDs})
 	// Fetch the cmkSpec information from State (to get unmasked creds)
@@ -1666,13 +1684,19 @@ func (r resourceCluster) Read(ctx context.Context, req tfsdk.ReadResourceRequest
 		providerType := cluster.CMKSpec.ProviderType.Value
 		switch providerType {
 		case "AWS":
-			cluster.CMKSpec.AWSCMKSpec.SecretKey.Value = cmkSpec.AWSCMKSpec.SecretKey.Value
-			cluster.CMKSpec.AWSCMKSpec.AccessKey.Value = cmkSpec.AWSCMKSpec.AccessKey.Value
+			if cmkSpec.AWSCMKSpec != nil { // cmkSpec.AWSCMKSpec is nil at the time of import
+				cluster.CMKSpec.AWSCMKSpec.SecretKey.Value = cmkSpec.AWSCMKSpec.SecretKey.Value
+				cluster.CMKSpec.AWSCMKSpec.AccessKey.Value = cmkSpec.AWSCMKSpec.AccessKey.Value
+			}
 		case "GCP":
-			cluster.CMKSpec.GCPCMKSpec.GcpServiceAccount.ClientId.Value = cmkSpec.GCPCMKSpec.GcpServiceAccount.ClientId.Value
-			cluster.CMKSpec.GCPCMKSpec.GcpServiceAccount.PrivateKey.Value = cmkSpec.GCPCMKSpec.GcpServiceAccount.PrivateKey.Value
+			if cmkSpec.GCPCMKSpec != nil {
+				cluster.CMKSpec.GCPCMKSpec.GcpServiceAccount.ClientId.Value = cmkSpec.GCPCMKSpec.GcpServiceAccount.ClientId.Value
+				cluster.CMKSpec.GCPCMKSpec.GcpServiceAccount.PrivateKey.Value = cmkSpec.GCPCMKSpec.GcpServiceAccount.PrivateKey.Value
+			}
 		case "AZURE":
-			cluster.CMKSpec.AzureCMKSpec.ClientSecret = types.String{Value: cmkSpec.AzureCMKSpec.ClientSecret.Value}
+			if cmkSpec.AzureCMKSpec != nil {
+				cluster.CMKSpec.AzureCMKSpec.ClientSecret = types.String{Value: cmkSpec.AzureCMKSpec.ClientSecret.Value}
+			}
 		}
 	}
 
@@ -1733,7 +1757,23 @@ func readBackupScheduleInfoV2(ctx context.Context, apiClient *openapiclient.APIC
 	return backupScheduleInfo, nil, nil
 }
 
-func resourceClusterRead(ctx context.Context, accountId string, projectId string, clusterId string, backUpSchedules []BackupScheduleInfo, regions []string, allowListProvided bool, inputAllowListIDs []string, readOnly bool, apiClient *openapiclient.APIClient) (cluster Cluster, readOK bool, errorMessage string) {
+func resourceClusterRead(ctx context.Context, clusterId string, backUpSchedules []BackupScheduleInfo, regions []string, allowListProvided bool, inputAllowListIDs []string, readOnly bool, apiClient *openapiclient.APIClient) (cluster Cluster, readOK bool, errorMessage string) {
+	var accountId, projectId, message string
+	var getAccountOK, getProjectOK bool
+
+	accountId, getAccountOK, message = getAccountId(context.Background(), apiClient)
+	if !getAccountOK {
+		return cluster, false, fmt.Sprintf("unable to get account ID %s", message)
+	}
+
+	projectId, getProjectOK, message = getProjectId(context.Background(), apiClient, accountId)
+	if !getProjectOK {
+		return cluster, false, fmt.Sprintf("unable to get project ID %s", message)
+	}
+
+	cluster.AccountID.Value = accountId
+	cluster.ProjectID.Value = projectId
+
 	clusterResp, response, err := apiClient.ClusterApi.GetCluster(context.Background(), accountId, projectId, clusterId).Execute()
 	if err != nil {
 		errMsg := getErrorMessage(response, err)
@@ -2117,6 +2157,16 @@ func (r resourceCluster) Update(ctx context.Context, req tfsdk.UpdateResourceReq
 	projectId := state.ProjectID.Value
 	clusterId := state.ClusterID.Value
 
+	// Credentials can not be modified after creation.
+	if plan.Credentials != nil {
+		if state.Credentials == nil || *(state.Credentials) != *(plan.Credentials) {
+			resp.Diagnostics.AddError(
+				"Credentials cannot be modified after creation",
+				"Database credentials can be set only at the time of creation and cannot be modified after creation.")
+			return
+		}
+	}
+
 	// Resume the cluster if the desired state is set to 'Active' and it is paused currently
 	if strings.EqualFold(state.DesiredState.Value, "Paused") && (plan.DesiredState.Unknown || strings.EqualFold(plan.DesiredState.Value, "Active")) {
 		// Resume the cluster
@@ -2146,24 +2196,6 @@ func (r resourceCluster) Update(ctx context.Context, req tfsdk.UpdateResourceReq
 	}
 
 	for _, regionInfo := range plan.ClusterRegionInfo {
-		vpcNamePresent := false
-		vpcIDPresent := false
-		if !regionInfo.VPCName.Unknown && !regionInfo.VPCName.Null && regionInfo.VPCName.Value != "" {
-			vpcNamePresent = true
-		}
-		if !regionInfo.VPCID.Unknown && !regionInfo.VPCID.Null && regionInfo.VPCID.Value != "" {
-			vpcIDPresent = true
-		}
-		if vpcNamePresent {
-			if vpcIDPresent {
-				resp.Diagnostics.AddError(
-					"Specify VPC name or VPC ID",
-					"To select a vpc, use either vpc_name or vpc_id. Don't provide both.",
-				)
-				return
-			}
-		}
-
 		if !regionInfo.DiskSizeGb.IsUnknown() && !util.IsDiskSizeValid(plan.ClusterTier.Value, regionInfo.DiskSizeGb.Value) {
 			resp.Diagnostics.AddError("Invalid disk size in "+regionInfo.Region.Value, "The disk size for a paid cluster must be at least 50 GB.")
 			return
@@ -2437,7 +2469,7 @@ func (r resourceCluster) Update(ctx context.Context, req tfsdk.UpdateResourceReq
 		regions = append(regions, regionInfo.Region.Value)
 	}
 
-	cluster, readOK, message := resourceClusterRead(ctx, accountId, projectId, clusterId, backUpSchedules, regions, allowListProvided, allowListIDs, false, apiClient)
+	cluster, readOK, message := resourceClusterRead(ctx, clusterId, backUpSchedules, regions, allowListProvided, allowListIDs, false, apiClient)
 	if !readOK {
 		resp.Diagnostics.AddError("Unable to read the state of the cluster ", message)
 		return
@@ -2461,8 +2493,15 @@ func (r resourceCluster) Update(ctx context.Context, req tfsdk.UpdateResourceReq
 		}
 	}
 
-	// set credentials for cluster (not returned by read api)
-	req.State.GetAttribute(ctx, path.Root("credentials"), &cluster.Credentials)
+	// Set credentials
+	if plan.Credentials == nil {
+		// Cluster imported or credentials removed after creation
+		cluster.Credentials = nil
+	} else {
+		// set credentials for cluster (not returned by read api)
+		req.State.GetAttribute(ctx, path.Root("credentials"), &cluster.Credentials)
+	}
+
 	// set restore backup id for cluster (not returned by read api)
 	if restoreRequired {
 		cluster.RestoreBackupID.Value = plan.RestoreBackupID.Value
@@ -2530,8 +2569,8 @@ func (r resourceCluster) Delete(ctx context.Context, req tfsdk.DeleteResourceReq
 
 // ImportState Import resource
 func (r resourceCluster) ImportState(ctx context.Context, req tfsdk.ImportResourceStateRequest, resp *tfsdk.ImportResourceStateResponse) {
-	// Save the import identifier in the id attribute
-	tfsdk.ResourceImportStatePassthroughID(ctx, path.Root("id"), req, resp)
+	// Save the import identifier in the cluster_id attribute
+	tfsdk.ResourceImportStatePassthroughID(ctx, path.Root("cluster_id"), req, resp)
 }
 
 func validateBackupReplicationTargets(clusterType string, clusterTier string, cloudType string, regionInfos []RegionInfo) error {
