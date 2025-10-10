@@ -68,8 +68,10 @@ Optional:
 
 Import is supported using the following syntax:
 
+The [`terraform import` command](https://developer.hashicorp.com/terraform/cli/commands/import) can be used, for example:
+
 ```shell
-# Database Query logging config can be imported using the cluster id. 
+# DB query logging config can be imported using the cluster id. 
 
 # Example:
 terraform import ybm_db_query_logging.my_query_logging_config cluster_id
