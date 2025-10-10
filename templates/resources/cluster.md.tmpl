@@ -57,3 +57,13 @@ To edit a GCP Cluster with backup replication
 
 
 {{ .SchemaMarkdown | trimspace }}
+
+{{- if .HasImport }}
+
+## Import
+
+Import is supported using the following syntax:
+
+{{ codefile "shell" "examples/resources/ybm_cluster/import.sh" }}
+
+{{- end }}

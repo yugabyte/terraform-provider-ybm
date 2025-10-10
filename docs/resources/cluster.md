@@ -832,9 +832,6 @@ resource "ybm_cluster" "asymmetric_geo_mixed_backup" {
 - `cluster_region_info` (Attributes List) (see [below for nested schema](#nestedatt--cluster_region_info))
 - `cluster_tier` (String) FREE (Sandbox) or PAID (Dedicated).
 - `cluster_type` (String) The type of the cluster. SYNCHRONOUS or GEO_PARTITIONED
-- `credentials` (Attributes) Credentials to be used by the database. Please provide 'username' and 'password' 
-(which would be used in common for both YSQL and YCQL) OR all of 'ysql_username',
-'ysql_password', 'ycql_username' and 'ycql_password' but not a mix of both. (see [below for nested schema](#nestedatt--credentials))
 
 ### Optional
 
@@ -842,6 +839,9 @@ resource "ybm_cluster" "asymmetric_geo_mixed_backup" {
 - `cloud_type` (String) The cloud provider where the cluster is deployed: AWS, AZURE or GCP.
 - `cluster_allow_list_ids` (List of String) List of IDs of the allow lists assigned to the cluster.
 - `cmk_spec` (Attributes) KMS Provider Configuration. (see [below for nested schema](#nestedatt--cmk_spec))
+- `credentials` (Attributes) Credentials to be used by the database. Required only at the time of creation. Please provide 'username' and 'password' 
+(which would be used in common for both YSQL and YCQL) OR all of 'ysql_username',
+'ysql_password', 'ycql_username' and 'ycql_password' but not a mix of both. (see [below for nested schema](#nestedatt--credentials))
 - `database_track` (String) The track of the database. Production or Innovation or Preview.
 - `desired_connection_pooling_state` (String) The desired connection pooling state of the cluster, Enabled or Disabled. Can be used during or after cluster creation.
 - `desired_state` (String) The desired state of the cluster, Active or Paused. This parameter can be used to pause/resume a cluster.
@@ -884,19 +884,6 @@ Optional:
 Read-Only:
 
 - `backup_region` (Boolean) Indicates whether cluster backup data will be stored in this region.
-
-
-<a id="nestedatt--credentials"></a>
-### Nested Schema for `credentials`
-
-Optional:
-
-- `password` (String, Sensitive) The password to be used for both YSQL and YCQL. Note that this will be stored in the state file.
-- `username` (String) The username to be used for both YSQL and YCQL.
-- `ycql_password` (String, Sensitive) YCQL password for the database. Note that this will be stored in the state file.
-- `ycql_username` (String) YCQL username for the database.
-- `ysql_password` (String, Sensitive) YSQL password for the database. Note that this will be stored in the state file.
-- `ysql_username` (String) YSQL username for the database.
 
 
 <a id="nestedatt--backup_schedules"></a>
@@ -983,6 +970,19 @@ Optional:
 
 
 
+<a id="nestedatt--credentials"></a>
+### Nested Schema for `credentials`
+
+Optional:
+
+- `password` (String, Sensitive) The password to be used for both YSQL and YCQL. Note that this will be stored in the state file.
+- `username` (String) The username to be used for both YSQL and YCQL.
+- `ycql_password` (String, Sensitive) YCQL password for the database. Note that this will be stored in the state file.
+- `ycql_username` (String) YCQL username for the database.
+- `ysql_password` (String, Sensitive) YSQL password for the database. Note that this will be stored in the state file.
+- `ysql_username` (String) YSQL username for the database.
+
+
 <a id="nestedatt--node_config"></a>
 ### Nested Schema for `node_config`
 
@@ -1012,3 +1012,14 @@ Optional:
 - `accessibility_type` (String) The accessibility type of the endpoint. PUBLIC or PRIVATE.
 - `host` (String) The host of the endpoint.
 - `region` (String) The region of the endpoint.
+
+## Import
+
+Import is supported using the following syntax:
+
+```shell
+# Cluster can be imported using the cluster id. 
+
+# Example:
+terraform import ybm_cluster.my_cluster_resource cluster_id
+```

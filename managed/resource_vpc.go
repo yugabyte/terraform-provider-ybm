@@ -406,7 +406,7 @@ func (r resourceVPC) Delete(ctx context.Context, req tfsdk.DeleteResourceRequest
 
 // Import vpc
 func (r resourceVPC) ImportState(ctx context.Context, req tfsdk.ImportResourceStateRequest, resp *tfsdk.ImportResourceStateResponse) {
-	// Save the import identifier in the id attribute
+	// Save the import identifier in the vpc_id attribute
 	resp.State.SetAttribute(ctx, path.Root("vpc_id"), req.ID)
 }
 

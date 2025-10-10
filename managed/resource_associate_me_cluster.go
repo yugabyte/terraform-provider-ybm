@@ -278,6 +278,7 @@ func (r resourceAssociateMetricsExporterCluster) Update(ctx context.Context, req
 
 // Import API Key
 func (r resourceAssociateMetricsExporterCluster) ImportState(ctx context.Context, req tfsdk.ImportResourceStateRequest, resp *tfsdk.ImportResourceStateResponse) {
+	// Requires https://yugabyte.atlassian.net/browse/CLOUDGA-22221
 	resp.Diagnostics.AddError("Import is not currently supported", "")
 }
 

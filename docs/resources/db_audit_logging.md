@@ -68,3 +68,16 @@ Optional:
 - `log_parameter` (Boolean) Include the parameters that were passed with the statement in the logs. Defaults to 'false' if not specified
 - `log_relation` (Boolean) Create separate log entries for each relation (TABLE, VIEW, and so on) referenced in a SELECT or DML statement. Defaults to 'false' if not specified
 - `log_statement_once` (Boolean) Enable this setting to only include statement text and parameters for the first entry for a statement or sub-statement combination. Defaults to 'false' if not specified
+
+## Import
+
+Import is supported using the following syntax:
+
+The [`terraform import` command](https://developer.hashicorp.com/terraform/cli/commands/import) can be used, for example:
+
+```shell
+# DB audit logging config can be imported using the cluster id. 
+
+# Example:
+terraform import ybm_db_audit_logging.my_audit_logging_config cluster_id
+```

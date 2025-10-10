@@ -544,7 +544,7 @@ func (r dataClusterName) Read(ctx context.Context, req tfsdk.ReadDataSourceReque
 		ScheduleID: types.String{Value: scheduleId},
 	}
 	backUpSchedule = append(backUpSchedule, backUpInfo)
-	cluster, readOK, message := resourceClusterRead(ctx, accountId, projectId, clusterId, backUpSchedule, make([]string, 0), true, make([]string, 0), true, apiClient)
+	cluster, readOK, message := resourceClusterRead(ctx, clusterId, backUpSchedule, make([]string, 0), true, make([]string, 0), true, apiClient)
 
 	if !readOK {
 		resp.Diagnostics.AddError("Unable to read the state of the cluster", message)

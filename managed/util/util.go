@@ -32,9 +32,13 @@ func IsDiskSizeValid(clusterTier string, diskSize int64) bool {
 func IsDiskIopsValid(cloudType string, clusterTier string, diskIops int64) (bool, string) {
 	err := ""
 	if cloudType != "AWS" {
-		err = "Custom Disk IOPS is only supported for AWS"
-		return false, err
+		if diskIops != 0 {
+			err = "Custom Disk IOPS is only supported for AWS"
+			return false, err
+		}
+		return true, err // diskIops = 0 is a default value in stateFile for cloud != AWS
 	}
+
 	if clusterTier != "PAID" {
 		if diskIops != 3000 {
 			err = "Custom Disk IOPS is only supported for PAID tier"

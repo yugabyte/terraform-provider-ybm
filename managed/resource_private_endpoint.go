@@ -476,7 +476,7 @@ func (r resourcePrivateEndpoint) ImportState(ctx context.Context, req tfsdk.Impo
 		)
 		return
 	}
-	// Save the import identifier in the id attribute
+	// Save the import identifier in the endpoint_id & cluster_id attribute
 	resp.State.SetAttribute(ctx, path.Root("endpoint_id"), idParts[0])
 	resp.State.SetAttribute(ctx, path.Root("cluster_id"), idParts[1])
 }

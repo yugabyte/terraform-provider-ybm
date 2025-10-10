@@ -14,3 +14,13 @@ description: |-
 {{ tffile "examples/resources/ybm_read_replicas/resource.tf" }}
 
 {{ .SchemaMarkdown | trimspace }}
+
+{{- if .HasImport }}
+
+## Import
+
+Import is supported using the following syntax:
+
+{{ codefile "shell" "examples/resources/ybm_read_replicas/import.sh" }}
+
+{{- end }}
