@@ -143,20 +143,8 @@ func (r dataSourceDbAuditLogging) Read(ctx context.Context, req tfsdk.ReadDataSo
 
 	apiClient := r.p.client
 
-	accountId, getAccountOK, message := getAccountId(ctx, apiClient)
-	if !getAccountOK {
-		resp.Diagnostics.AddError("Unable to get account ID", message)
-		return
-	}
-
-	projectId, getProjectOK, message := getProjectId(ctx, apiClient, accountId)
-	if !getProjectOK {
-		resp.Diagnostics.AddError("Unable to get the project ID ", message)
-		return
-	}
-
 	clusterId := dbAuditLoggingConfig.ClusterID.Value
-	dbAuditLoggingConfig, readOK, err := resourceDbAuditLoggingRead(ctx, accountId, projectId, clusterId, apiClient)
+	dbAuditLoggingConfig, readOK, err := resourceDbAuditLoggingRead(ctx, clusterId, apiClient)
 	if !readOK {
 		resp.Diagnostics.AddError(fmt.Sprintf("Unable to read the state of Db Audit logging on cluster %s ", clusterId), err.Error())
 		return
