@@ -7,6 +7,7 @@ package managed
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 
 	"time"
@@ -33,11 +34,17 @@ func (r resourceReadReplicasType) GetSchema(ctx context.Context) (tfsdk.Schema, 
 				Description: "The ID of the account this read replica belongs to.",
 				Type:        types.StringType,
 				Computed:    true,
+				PlanModifiers: []tfsdk.AttributePlanModifier{
+					tfsdk.UseStateForUnknown(),
+				},
 			},
 			"project_id": {
 				Description: "The ID of the project this read replica belongs to.",
 				Type:        types.StringType,
 				Computed:    true,
+				PlanModifiers: []tfsdk.AttributePlanModifier{
+					tfsdk.UseStateForUnknown(),
+				},
 			},
 			"read_replicas_info": {
 				Required:    true,
@@ -49,6 +56,9 @@ func (r resourceReadReplicasType) GetSchema(ctx context.Context) (tfsdk.Schema, 
 						Optional:    true,
 						Computed:    true,
 						Validators:  []tfsdk.AttributeValidator{stringvalidator.OneOf("AWS", "GCP", "AZURE")},
+						PlanModifiers: []tfsdk.AttributePlanModifier{
+							tfsdk.UseStateForUnknown(),
+						},
 					},
 					"num_nodes": {
 						Description: "The number of nodes of the read replica.",
@@ -70,6 +80,12 @@ func (r resourceReadReplicasType) GetSchema(ctx context.Context) (tfsdk.Schema, 
 						Type:        types.StringType,
 						Optional:    true,
 						Computed:    true,
+						Validators: []tfsdk.AttributeValidator{
+							schemavalidator.ConflictsWith(path.MatchRelative().AtParent().AtName("vpc_name")),
+						},
+						PlanModifiers: []tfsdk.AttributePlanModifier{
+							tfsdk.UseStateForUnknown(),
+						},
 					},
 					"vpc_name": {
 						Description: "The name of the VPC where the read replica is deployed.",
@@ -81,12 +97,18 @@ func (r resourceReadReplicasType) GetSchema(ctx context.Context) (tfsdk.Schema, 
 								path.MatchRelative().AtParent().AtName("vpc_id"),
 							),
 						},
+						PlanModifiers: []tfsdk.AttributePlanModifier{
+							tfsdk.UseStateForUnknown(),
+						},
 					},
 					"multi_zone": {
 						Description: "Set whether to spread the nodes in this region across zones. Defaults to true.",
 						Optional:    true,
 						Type:        types.BoolType,
 						Computed:    true,
+						PlanModifiers: []tfsdk.AttributePlanModifier{
+							tfsdk.UseStateForUnknown(),
+						},
 					},
 					"node_config": {
 						Required:    true,
@@ -104,6 +126,9 @@ func (r resourceReadReplicasType) GetSchema(ctx context.Context) (tfsdk.Schema, 
 								Type:     types.Int64Type,
 								Optional: true,
 								Computed: true,
+								PlanModifiers: []tfsdk.AttributePlanModifier{
+									tfsdk.UseStateForUnknown(),
+								},
 							},
 						}),
 					},
@@ -111,6 +136,9 @@ func (r resourceReadReplicasType) GetSchema(ctx context.Context) (tfsdk.Schema, 
 						Description: "The endpoint of the read replica. Created automatically when a read replica is created.",
 						Type:        types.StringType,
 						Computed:    true,
+						PlanModifiers: []tfsdk.AttributePlanModifier{
+							tfsdk.UseStateForUnknown(),
+						},
 					},
 				}),
 			},
@@ -153,7 +181,7 @@ func createReadReplicasSpec(ctx context.Context, apiClient *openapiclient.APICli
 			memoryMb,
 			int32(readReplica.NodeConfig.DiskSizeGb.Value),
 		)
-		if !(readReplica.NodeConfig.DiskIops.IsUnknown() || readReplica.NodeConfig.DiskIops.IsNull()) {
+		if !(readReplica.NodeConfig.DiskIops.IsUnknown() || readReplica.NodeConfig.DiskIops.IsNull()) && int32(readReplica.NodeConfig.DiskIops.Value) > 0 {
 			clusterNodeInfo.SetDiskIops(int32(readReplica.NodeConfig.DiskIops.Value))
 		}
 
@@ -251,25 +279,6 @@ func (r resourceReadReplicas) Create(ctx context.Context, req tfsdk.CreateResour
 		return
 	}
 
-	for _, rrInfo := range plan.ReadReplicasInfo {
-		vpcNamePresent := false
-		vpcIDPresent := false
-		if (!rrInfo.VPCName.Unknown && !rrInfo.VPCName.Null) || rrInfo.VPCName.Value != "" {
-			vpcNamePresent = true
-		}
-		if (!rrInfo.VPCID.Unknown && !rrInfo.VPCID.Null) || rrInfo.VPCID.Value != "" {
-			vpcIDPresent = true
-		}
-		if vpcNamePresent == vpcIDPresent {
-			resp.Diagnostics.AddError(
-				"Specify VPC name or VPC ID",
-				"To select a vpc, use either vpc_name or vpc_id. Don't provide both.",
-			)
-			return
-		}
-
-	}
-
 	clusterId := plan.PrimaryClusterID.Value
 
 	readReplicasSpec, readReplicasOK, message := createReadReplicasSpec(ctx, apiClient, accountId, projectId, plan)
@@ -315,7 +324,7 @@ func (r resourceReadReplicas) Create(ctx context.Context, req tfsdk.CreateResour
 		regions = append(regions, readReplica.Region.Value)
 	}
 
-	readReplicas, readOK, message := resourceReadReplicasRead(ctx, accountId, projectId, clusterId, apiClient, regions)
+	readReplicas, readOK, message := resourceReadReplicasRead(ctx, clusterId, apiClient, regions)
 	if !readOK {
 		resp.Diagnostics.AddError("Unable to read the state of the read replicas", message)
 		return
@@ -332,8 +341,6 @@ func (r resourceReadReplicas) Create(ctx context.Context, req tfsdk.CreateResour
 func (r resourceReadReplicas) Read(ctx context.Context, req tfsdk.ReadResourceRequest, resp *tfsdk.ReadResourceResponse) {
 	var state ReadReplicas
 	getIDsFromReadReplicasState(ctx, req.State, &state)
-	accountId := state.AccountID.Value
-	projectId := state.ProjectID.Value
 	clusterId := state.PrimaryClusterID.Value
 
 	regions := []string{}
@@ -341,7 +348,7 @@ func (r resourceReadReplicas) Read(ctx context.Context, req tfsdk.ReadResourceRe
 		regions = append(regions, readReplica.Region.Value)
 	}
 
-	readReplicas, readOK, message := resourceReadReplicasRead(ctx, accountId, projectId, clusterId, r.p.client, regions)
+	readReplicas, readOK, message := resourceReadReplicasRead(ctx, clusterId, r.p.client, regions)
 	if !readOK {
 		resp.Diagnostics.AddError("Unable to read the state of the read replica", message)
 		return
@@ -354,7 +361,20 @@ func (r resourceReadReplicas) Read(ctx context.Context, req tfsdk.ReadResourceRe
 	}
 }
 
-func resourceReadReplicasRead(ctx context.Context, accountId string, projectId string, clusterId string, apiClient *openapiclient.APIClient, planRegions []string) (readReplicas ReadReplicas, readOK bool, errorMessage string) {
+func resourceReadReplicasRead(ctx context.Context, clusterId string, apiClient *openapiclient.APIClient, planRegions []string) (readReplicas ReadReplicas, readOK bool, errorMessage string) {
+
+	var accountId, projectId, message string
+	var getAccountOK, getProjectOK bool
+
+	accountId, getAccountOK, message = getAccountId(context.Background(), apiClient)
+	if !getAccountOK {
+		return readReplicas, false, fmt.Sprintf("unable to get account ID %s", message)
+	}
+
+	projectId, getProjectOK, message = getProjectId(context.Background(), apiClient, accountId)
+	if !getProjectOK {
+		return readReplicas, false, fmt.Sprintf("unable to get project ID %s", message)
+	}
 
 	listReadReplicasResp, response, err := apiClient.ReadReplicaApi.ListReadReplicas(context.Background(), accountId, projectId, clusterId).Execute()
 	if err != nil {
@@ -449,25 +469,6 @@ func (r resourceReadReplicas) Update(ctx context.Context, req tfsdk.UpdateResour
 
 	apiClient := r.p.client
 
-	for _, rrInfo := range plan.ReadReplicasInfo {
-		vpcNamePresent := false
-		vpcIDPresent := false
-		if (!rrInfo.VPCName.Unknown && !rrInfo.VPCName.Null) || rrInfo.VPCName.Value != "" {
-			vpcNamePresent = true
-		}
-		if (!rrInfo.VPCID.Unknown && !rrInfo.VPCID.Null) || rrInfo.VPCID.Value != "" {
-			vpcIDPresent = true
-		}
-		if vpcNamePresent == vpcIDPresent {
-			resp.Diagnostics.AddError(
-				"Specify VPC name or VPC ID",
-				"To select a vpc, use either vpc_name or vpc_id. Don't provide both.",
-			)
-			return
-		}
-
-	}
-
 	readReplicasSpec, readReplicasOK, message := createReadReplicasSpec(ctx, apiClient, accountId, projectId, plan)
 	if !readReplicasOK {
 		resp.Diagnostics.AddError("Unable to create read replicas spec", message)
@@ -515,7 +516,7 @@ func (r resourceReadReplicas) Update(ctx context.Context, req tfsdk.UpdateResour
 		regions = append(regions, readReplicaInfo.Region.Value)
 	}
 
-	readReplicas, readOK, message := resourceReadReplicasRead(ctx, accountId, projectId, clusterId, apiClient, regions)
+	readReplicas, readOK, message := resourceReadReplicasRead(ctx, clusterId, apiClient, regions)
 	if !readOK {
 		resp.Diagnostics.AddError("Unable to read the state of the read replicas", message)
 		return
@@ -570,6 +571,6 @@ func (r resourceReadReplicas) Delete(ctx context.Context, req tfsdk.DeleteResour
 
 // Import a read replica
 func (r resourceReadReplicas) ImportState(ctx context.Context, req tfsdk.ImportResourceStateRequest, resp *tfsdk.ImportResourceStateResponse) {
-	// Save the import identifier in the id attribute
-	tfsdk.ResourceImportStatePassthroughID(ctx, path.Root("id"), req, resp)
+	// Save the import identifier in the primary_cluster_id attribute
+	tfsdk.ResourceImportStatePassthroughID(ctx, path.Root("primary_cluster_id"), req, resp)
 }
