@@ -369,6 +369,11 @@ type SumoLogicSpec struct {
 	InstallationToken types.String `tfsdk:"installation_token"`
 }
 
+type NewRelicSpec struct {
+	Endpoint   types.String `tfsdk:"endpoint"`
+	LicenseKey types.String `tfsdk:"license_key"`
+}
+
 type AwsS3Spec struct {
 	BucketName        types.String `tfsdk:"bucket_name"`
 	Region            types.String `tfsdk:"region"`
@@ -398,6 +403,10 @@ func (s SumoLogicSpec) EncryptedKey(key string) string {
 		return util.ObfuscateString(s.InstallationToken.Value)
 	}
 	return ""
+}
+
+func (d NewRelicSpec) EncryptedKey() string {
+	return util.ObfuscateString(d.LicenseKey.Value)
 }
 
 func (a AwsS3Spec) EncryptedKey(key string) string {
@@ -457,6 +466,7 @@ type TelemetryProvider struct {
 	GrafanaSpec         *GrafanaSpec         `tfsdk:"grafana_spec"`
 	SumoLogicSpec       *SumoLogicSpec       `tfsdk:"sumologic_spec"`
 	GoogleCloudSpec     *GCPServiceAccount   `tfsdk:"googlecloud_spec"`
+	NewRelicSpec        *NewRelicSpec        `tfsdk:"newrelic_spec"`
 	AwsS3Spec           *AwsS3Spec           `tfsdk:"aws_s3_spec"`
 	IsValid             types.Bool           `tfsdk:"is_valid"`
 }

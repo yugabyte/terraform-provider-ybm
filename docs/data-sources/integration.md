@@ -33,6 +33,7 @@ data "ybm_integration" "example_name" {
 - `googlecloud_spec` (Attributes) The specifications of a Google Cloud integration. (see [below for nested schema](#nestedatt--googlecloud_spec))
 - `grafana_spec` (Attributes) The specifications of a Grafana integration. (see [below for nested schema](#nestedatt--grafana_spec))
 - `is_valid` (Boolean) Signifies whether the integration configuration is valid or not
+- `newrelic_spec` (Attributes) The specifications of a Newrelic integration. (see [below for nested schema](#nestedatt--newrelic_spec))
 - `project_id` (String) The ID of the project this integration belongs to.
 - `prometheus_spec` (Attributes) The specifications of a Prometheus integration. (see [below for nested schema](#nestedatt--prometheus_spec))
 - `sumologic_spec` (Attributes) The specifications of a Sumo Logic integration. (see [below for nested schema](#nestedatt--sumologic_spec))
@@ -89,6 +90,15 @@ Read-Only:
 - `instance_id` (String) Grafana InstanceID.
 - `org_slug` (String) Grafana OrgSlug.
 - `zone` (String) Grafana Zone.
+
+
+<a id="nestedatt--newrelic_spec"></a>
+### Nested Schema for `newrelic_spec`
+
+Required:
+
+- `endpoint` (String) Newrelic Endpoint URL
+- `license_key` (String, Sensitive) Newrelic License Key
 
 
 <a id="nestedatt--prometheus_spec"></a>
