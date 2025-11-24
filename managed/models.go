@@ -302,6 +302,11 @@ type SumoLogicSpec struct {
 	InstallationToken types.String `tfsdk:"installation_token"`
 }
 
+type NewRelicSpec struct {
+	Endpoint   types.String `tfsdk:"endpoint"`
+	LicenseKey types.String `tfsdk:"license_key"`
+}
+
 func (d DataDogSpec) EncryptedKey() string {
 	return util.ObfuscateString(d.ApiKey.Value)
 }
@@ -321,6 +326,10 @@ func (s SumoLogicSpec) EncryptedKey(key string) string {
 		return util.ObfuscateString(s.InstallationToken.Value)
 	}
 	return ""
+}
+
+func (d NewRelicSpec) EncryptedKey() string {
+	return util.ObfuscateString(d.LicenseKey.Value)
 }
 
 type AssociateMetricsExporterCluster struct {
@@ -370,6 +379,7 @@ type TelemetryProvider struct {
 	GrafanaSpec         *GrafanaSpec         `tfsdk:"grafana_spec"`
 	SumoLogicSpec       *SumoLogicSpec       `tfsdk:"sumologic_spec"`
 	GoogleCloudSpec     *GCPServiceAccount   `tfsdk:"googlecloud_spec"`
+	NewRelicSpec        *NewRelicSpec        `tfsdk:"newrelic_spec"`
 	IsValid             types.Bool           `tfsdk:"is_valid"`
 }
 
