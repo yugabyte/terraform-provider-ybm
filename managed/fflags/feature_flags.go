@@ -13,11 +13,13 @@ import (
 type FeatureFlag string
 
 const (
-	DR FeatureFlag = "DR"
+	DR                   FeatureFlag = "DR"
+	GCPBackupReplication FeatureFlag = "GCP_BACKUP_REPLICATION"
 )
 
 var flagEnabled = map[FeatureFlag]bool{
-	DR: false,
+	DR:                   false,
+	GCPBackupReplication: true,
 }
 
 func (f FeatureFlag) String() string {
