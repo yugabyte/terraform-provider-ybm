@@ -51,9 +51,22 @@ To create an Azure Cluster , VPC and service endpoint all together
 
 {{ tffile "examples/resources/ybm_cluster/single-region-azure-vpc-pse.tf" }}
 
-To edit a GCP Cluster with backup replication
 
-{{ tffile "examples/resources/ybm_cluster/cluster-edit-backup-replication.tf" }}
+To create a single region SYNCHRONOUS cluster with backup replication
+
+{{ tffile "examples/resources/ybm_cluster/single-region-backup-replication.tf" }}
+
+To create a multi-region SYNCHRONOUS cluster with backup replication
+
+{{ tffile "examples/resources/ybm_cluster/multi-region-sync-backup-replication.tf" }}
+
+To create a GEO_PARTITIONED cluster with region-specific backup replication (each region can have its own backup target)
+
+{{ tffile "examples/resources/ybm_cluster/geo-partitioned-backup-replication.tf" }}
+
+To enable or disable backup replication on a cluster
+
+{{ tffile "examples/resources/ybm_cluster/backup-replication-enable-disable.tf" }}
 
 
 {{ .SchemaMarkdown | trimspace }}

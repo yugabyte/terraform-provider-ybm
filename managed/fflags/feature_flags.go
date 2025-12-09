@@ -19,7 +19,7 @@ const (
 
 var flagEnabled = map[FeatureFlag]bool{
 	DR:                   false,
-	GCPBackupReplication: true,
+	GCPBackupReplication: false,
 }
 
 func (f FeatureFlag) String() string {

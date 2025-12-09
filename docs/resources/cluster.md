@@ -595,37 +595,53 @@ resource "ybm_private_service_endpoint" "npsenonok-region" {
 }
 ```
 
-To edit a GCP Cluster with backup replication
+
+To create a single region SYNCHRONOUS cluster with backup replication
 
 ```terraform
-variable "password" {
+variable "ysql_password" {
   type        = string
-  description = "YSQL and YCQL Password."
+  description = "YSQL Password."
   sensitive   = true
 }
 
-# Comprehensive Backup Replication Examples
-# This file demonstrates different backup replication strategies for various cluster types
+variable "ycql_password" {
+  type        = string
+  description = "YCQL Password."
+  sensitive   = true
+}
 
-# 1. Single Region Cluster with Backup Replication
+# Single Region SYNCHRONOUS Cluster with Backup Replication
+# This example shows how to configure backup replication for a single-region cluster
 resource "ybm_cluster" "single_region_backup_replication" {
   cluster_name = "single-region-backup-replication"
   cloud_type   = "GCP"
   cluster_type = "SYNCHRONOUS"
+  cluster_tier = "PAID"
+
   cluster_region_info = [
     {
-      region                        = "us-west1"
-      num_nodes                     = 1
-      num_cores                     = 2
-      disk_size_gb                  = 50
-      vpc_id                        = "example-vpc-id"
-      public_access                 = true
-      backup_replication_gcp_target = "single-region-backup-bucket"
+      region    = "us-west1"
+      num_nodes = 3
+      vpc_id    = "example-vpc-id"
+      num_cores = 2
     }
   ]
-  cluster_tier           = "PAID"
+
   cluster_allow_list_ids = ["example-allow-list-id"]
-  fault_tolerance        = "NONE"
+  fault_tolerance        = "ZONE"
+
+  # Backup replication configuration
+  backup_replication_spec = {
+    gcp_spec = {
+      enabled = true
+      sync_cluster_spec = {
+        replication_config = {
+          target = "my-backup-bucket"
+        }
+      }
+    }
+  }
 
   backup_schedules = [
     {
@@ -636,49 +652,73 @@ resource "ybm_cluster" "single_region_backup_replication" {
   ]
 
   credentials = {
-    username = "example_user"
-    password = var.password
+    ysql_username = "example_ysql_user"
+    ysql_password = var.ysql_password
+    ycql_username = "example_ycql_user"
+    ycql_password = var.ycql_password
   }
 }
+```
 
-# 2. Multi-Region SYNCHRONOUS Cluster with Centralized Backup
-# All regions backup to the same GCS bucket
-resource "ybm_cluster" "multi_region_sync_centralized_backup" {
-  cluster_name = "multi-region-sync-centralized-backup"
+To create a multi-region SYNCHRONOUS cluster with backup replication
+
+```terraform
+variable "ysql_password" {
+  type        = string
+  description = "YSQL Password."
+  sensitive   = true
+}
+
+variable "ycql_password" {
+  type        = string
+  description = "YCQL Password."
+  sensitive   = true
+}
+
+# Multi-Region SYNCHRONOUS Cluster with Backup Replication
+# For SYNCHRONOUS clusters, a backup region is automatically assigned
+resource "ybm_cluster" "multi_region_sync_backup_replication" {
+  cluster_name = "multi-region-sync-backup-replication"
   cloud_type   = "GCP"
   cluster_type = "SYNCHRONOUS"
+  cluster_tier = "PAID"
+
   cluster_region_info = [
     {
-      region                        = "us-west1"
-      num_nodes                     = 1
-      num_cores                     = 2
-      disk_size_gb                  = 50
-      vpc_id                        = "example-vpc-id-1"
-      public_access                 = true
-      backup_replication_gcp_target = "central-backup-bucket" # Same for all regions
+      region    = "us-west1"
+      num_nodes = 1
+      vpc_id    = "example-vpc-id-1"
+      num_cores = 2
     },
     {
-      region                        = "us-central1"
-      num_nodes                     = 1
-      num_cores                     = 2
-      disk_size_gb                  = 50
-      vpc_id                        = "example-vpc-id-2"
-      public_access                 = true
-      backup_replication_gcp_target = "central-backup-bucket" # Same for all regions
+      region    = "us-central1"
+      num_nodes = 1
+      vpc_id    = "example-vpc-id-2"
+      num_cores = 2
     },
     {
-      region                        = "us-east1"
-      num_nodes                     = 1
-      num_cores                     = 2
-      disk_size_gb                  = 50
-      vpc_id                        = "example-vpc-id-3"
-      public_access                 = true
-      backup_replication_gcp_target = "central-backup-bucket" # Same for all regions
+      region    = "us-east1"
+      num_nodes = 1
+      vpc_id    = "example-vpc-id-3"
+      num_cores = 2
     }
   ]
-  cluster_tier           = "PAID"
+
   cluster_allow_list_ids = ["example-allow-list-id"]
   fault_tolerance        = "REGION"
+
+  # Backup replication configuration
+  # For SYNCHRONOUS clusters, all regions backup to the same GCS bucket present in the "backup region"
+  backup_replication_spec = {
+    gcp_spec = {
+      enabled = true
+      sync_cluster_spec = {
+        replication_config = {
+          target = "centralized-backup-bucket"
+        }
+      }
+    }
+  }
 
   backup_schedules = [
     {
@@ -689,49 +729,84 @@ resource "ybm_cluster" "multi_region_sync_centralized_backup" {
   ]
 
   credentials = {
-    username = "example_user"
-    password = var.password
+    ysql_username = "example_ysql_user"
+    ysql_password = var.ysql_password
+    ycql_username = "example_ycql_user"
+    ycql_password = var.ycql_password
   }
 }
+```
 
-# 3. Multi-Region GEO_PARTITIONED Cluster with Region-Specific Backup
-# Each region can have different backup targets for compliance or performance reasons
-resource "ybm_cluster" "multi_region_geo_region_specific_backup" {
-  cluster_name = "multi-region-geo-region-specific-backup"
+To create a GEO_PARTITIONED cluster with region-specific backup replication (each region can have its own backup target)
+
+```terraform
+variable "ysql_password" {
+  type        = string
+  description = "YSQL Password."
+  sensitive   = true
+}
+
+variable "ycql_password" {
+  type        = string
+  description = "YCQL Password."
+  sensitive   = true
+}
+
+# GEO_PARTITIONED Cluster with Region-Specific Backup Replication
+# Each region can have its own backup replication target
+resource "ybm_cluster" "geo_partitioned_backup_replication" {
+  cluster_name = "geo-partitioned-backup-replication"
   cloud_type   = "GCP"
   cluster_type = "GEO_PARTITIONED"
+  cluster_tier = "PAID"
+
   cluster_region_info = [
     {
-      region                        = "us-west1"
-      num_nodes                     = 1
-      num_cores                     = 2
-      disk_size_gb                  = 50
-      vpc_id                        = "example-vpc-id-1"
-      public_access                 = true
-      backup_replication_gcp_target = "us-west-backup-bucket" # Region-specific
+      region    = "us-west1"
+      num_nodes = 1
+      vpc_id    = "example-vpc-id-1"
+      num_cores = 2
     },
     {
-      region                        = "asia-east1"
-      num_nodes                     = 1
-      num_cores                     = 2
-      disk_size_gb                  = 50
-      vpc_id                        = "example-vpc-id-2"
-      public_access                 = true
-      backup_replication_gcp_target = "asia-east-backup-bucket" # Region-specific
+      region    = "asia-east1"
+      num_nodes = 1
+      vpc_id    = "example-vpc-id-2"
+      num_cores = 2
     },
     {
-      region                        = "europe-central2"
-      num_nodes                     = 1
-      num_cores                     = 2
-      disk_size_gb                  = 50
-      vpc_id                        = "example-vpc-id-3"
-      public_access                 = true
-      backup_replication_gcp_target = "europe-central-backup-bucket" # Region-specific
+      region    = "europe-central2"
+      num_nodes = 1
+      vpc_id    = "example-vpc-id-3"
+      num_cores = 2
     }
   ]
-  cluster_tier           = "PAID"
+
   cluster_allow_list_ids = ["example-allow-list-id"]
   fault_tolerance        = "REGION"
+
+  # Backup replication configuration
+  # For GEO_PARTITIONED clusters, each region can have its own backup target
+  backup_replication_spec = {
+    gcp_spec = {
+      enabled = true
+      geo_partitioned_cluster_spec = {
+        replication_configs = [
+          {
+            desired_region = "us-west1"
+            target         = "us-west-backup-bucket"
+          },
+          {
+            desired_region = "asia-east1"
+            target         = "asia-east-backup-bucket"
+          },
+          {
+            desired_region = "europe-central2"
+            target         = "europe-central-backup-bucket"
+          }
+        ]
+      }
+    }
+  }
 
   backup_schedules = [
     {
@@ -742,49 +817,55 @@ resource "ybm_cluster" "multi_region_geo_region_specific_backup" {
   ]
 
   credentials = {
-    username = "example_user"
-    password = var.password
+    ysql_username = "example_ysql_user"
+    ysql_password = var.ysql_password
+    ycql_username = "example_ycql_user"
+    ycql_password = var.ycql_password
   }
 }
+```
 
-# 4. Asymmetric GEO_PARTITIONED Cluster with Mixed Backup Strategy
-# Some regions share backup targets, others have unique targets
-resource "ybm_cluster" "asymmetric_geo_mixed_backup" {
-  cluster_name = "asymmetric-geo-mixed-backup"
+To enable or disable backup replication on a cluster
+
+```terraform
+variable "ysql_password" {
+  type        = string
+  description = "YSQL Password."
+  sensitive   = true
+}
+
+variable "ycql_password" {
+  type        = string
+  description = "YCQL Password."
+  sensitive   = true
+}
+
+# Example: Cluster with Backup Replication Initially Disabled
+# You can enable backup replication later by setting enabled = true
+resource "ybm_cluster" "cluster_with_backup_replication_disabled" {
+  cluster_name = "cluster-backup-replication-disabled"
   cloud_type   = "GCP"
-  cluster_type = "GEO_PARTITIONED"
+  cluster_type = "SYNCHRONOUS"
+  cluster_tier = "PAID"
+
   cluster_region_info = [
     {
-      region                        = "us-west1"
-      num_nodes                     = 1
-      num_cores                     = 2
-      disk_size_gb                  = 50
-      vpc_id                        = "example-vpc-id-1"
-      public_access                 = true
-      backup_replication_gcp_target = "us-west-backup-bucket"
-    },
-    {
-      region                        = "us-central1"
-      num_nodes                     = 1
-      num_cores                     = 4
-      disk_size_gb                  = 100
-      vpc_id                        = "example-vpc-id-2"
-      public_access                 = true
-      backup_replication_gcp_target = "us-central-backup-bucket"
-    },
-    {
-      region                        = "us-east1"
-      num_nodes                     = 1
-      num_cores                     = 4
-      disk_size_gb                  = 100
-      vpc_id                        = "example-vpc-id-3"
-      public_access                 = true
-      backup_replication_gcp_target = "us-central-backup-bucket" # Same as us-central1
+      region    = "us-west1"
+      num_nodes = 3
+      vpc_id    = "example-vpc-id"
+      num_cores = 2
     }
   ]
-  cluster_tier           = "PAID"
+
   cluster_allow_list_ids = ["example-allow-list-id"]
-  fault_tolerance        = "REGION"
+  fault_tolerance        = "ZONE"
+
+  # Backup replication is disabled
+  backup_replication_spec = {
+    gcp_spec = {
+      enabled = false
+    }
+  }
 
   backup_schedules = [
     {
@@ -795,31 +876,100 @@ resource "ybm_cluster" "asymmetric_geo_mixed_backup" {
   ]
 
   credentials = {
-    username = "example_user"
-    password = var.password
+    ysql_username = "example_ysql_user"
+    ysql_password = var.ysql_password
+    ycql_username = "example_ycql_user"
+    ycql_password = var.ycql_password
   }
 }
 
-# Important Notes:
-# 
-# 1. backup_replication_gcp_target can ONLY be set when editing existing clusters
-#    - It will be ignored during initial cluster creation
-#    - To add backup replication, first create the cluster, then update the configuration
-#
-# 2. Cluster Type Rules:
-#    - SYNCHRONOUS: All regions MUST have the same backup_replication_gcp_target
-#    - GEO_PARTITIONED: Each region can have different backup_replication_gcp_target values. This allows for region-specific backup strategies and compliance requirements
-#
-# 3. Requirements:
-#    - Only supported for GCP clusters
-#    - Only supported for PAID tier clusters
-#    - All regions must have backup_replication_gcp_target if any are provided
-#
-# 4. Use Cases:
-#    - Centralized backup strategy (SYNCHRONOUS clusters)
-#    - Region-specific compliance requirements (GEO_PARTITIONED clusters)
-#    - Performance optimization by keeping backups close to data
-#    - Disaster recovery planning with multiple backup locations
+# Example: Enable Backup Replication Later
+# To enable backup replication, update the configuration:
+# 1. Set enabled = true
+# 2. Provide the sync_cluster_spec or geo_partitioned_cluster_spec with target bucket
+resource "ybm_cluster" "cluster_with_backup_replication_enabled" {
+  cluster_name = "cluster-backup-replication-enabled"
+  cloud_type   = "GCP"
+  cluster_type = "SYNCHRONOUS"
+  cluster_tier = "PAID"
+
+  cluster_region_info = [
+    {
+      region    = "us-west1"
+      num_nodes = 3
+      vpc_id    = "example-vpc-id"
+      num_cores = 2
+    }
+  ]
+
+  cluster_allow_list_ids = ["example-allow-list-id"]
+  fault_tolerance        = "ZONE"
+
+  # Backup replication is enabled with target bucket
+  backup_replication_spec = {
+    gcp_spec = {
+      enabled = true
+      sync_cluster_spec = {
+        replication_config = {
+          target = "my-backup-bucket"
+        }
+      }
+    }
+  }
+
+  backup_schedules = [
+    {
+      state                    = "ACTIVE"
+      retention_period_in_days = 30
+      time_interval_in_days    = 7
+    }
+  ]
+
+  credentials = {
+    ysql_username = "example_ysql_user"
+    ysql_password = var.ysql_password
+    ycql_username = "example_ycql_user"
+    ycql_password = var.ycql_password
+  }
+}
+
+# Example: Cluster without backup_replication_spec block
+# If you don't specify backup_replication_spec, backup replication will not be configured
+resource "ybm_cluster" "cluster_without_backup_replication" {
+  cluster_name = "cluster-without-backup-replication"
+  cloud_type   = "GCP"
+  cluster_type = "SYNCHRONOUS"
+  cluster_tier = "PAID"
+
+  cluster_region_info = [
+    {
+      region    = "us-west1"
+      num_nodes = 3
+      vpc_id    = "example-vpc-id"
+      num_cores = 2
+    }
+  ]
+
+  cluster_allow_list_ids = ["example-allow-list-id"]
+  fault_tolerance        = "ZONE"
+
+  # No backup_replication_spec block - backup replication is not configured
+
+  backup_schedules = [
+    {
+      state                    = "ACTIVE"
+      retention_period_in_days = 30
+      time_interval_in_days    = 7
+    }
+  ]
+
+  credentials = {
+    ysql_username = "example_ysql_user"
+    ysql_password = var.ysql_password
+    ycql_username = "example_ycql_user"
+    ycql_password = var.ycql_password
+  }
+}
 ```
 
 
@@ -835,6 +985,7 @@ resource "ybm_cluster" "asymmetric_geo_mixed_backup" {
 
 ### Optional
 
+- `backup_replication_spec` (Attributes) Configuration for backup replication. Enables replication of cluster backups to offsite buckets. (see [below for nested schema](#nestedatt--backup_replication_spec))
 - `backup_schedules` (Attributes List) (see [below for nested schema](#nestedatt--backup_schedules))
 - `cloud_type` (String) The cloud provider where the cluster is deployed: AWS, AZURE or GCP.
 - `cluster_allow_list_ids` (List of String) List of IDs of the allow lists assigned to the cluster.
@@ -871,7 +1022,6 @@ Required:
 
 Optional:
 
-- `backup_replication_gcp_target` (String) GCS bucket name for backup replication target. Only configurable when editing existing clusters. For SYNCHRONOUS clusters, all regions must have the same target. For GEO_PARTITIONED clusters, each region can have different targets. Only supported for GCP clusters and PAID tier.
 - `disk_iops` (Number) Disk IOPS of the nodes of the region.
 - `disk_size_gb` (Number) Disk size of the nodes of the region.
 - `is_default` (Boolean)
@@ -884,6 +1034,151 @@ Optional:
 Read-Only:
 
 - `backup_region` (Boolean) Indicates whether cluster backup data will be stored in this region.
+- `backup_replication_gcp_target` (String) GCS bucket name for backup replication target
+
+
+<a id="nestedatt--backup_replication_spec"></a>
+### Nested Schema for `backup_replication_spec`
+
+Optional:
+
+- `gcp_spec` (Attributes) GCP-specific backup replication configuration. (see [below for nested schema](#nestedatt--backup_replication_spec--gcp_spec))
+
+<a id="nestedatt--backup_replication_spec--gcp_spec"></a>
+### Nested Schema for `backup_replication_spec.gcp_spec`
+
+Optional:
+
+- `enabled` (Boolean) Whether GCP backup replication is enabled for this cluster.
+- `geo_partitioned_cluster_spec` (Attributes) Backup replication configuration for GEO_PARTITIONED clusters. (see [below for nested schema](#nestedatt--backup_replication_spec--gcp_spec--geo_partitioned_cluster_spec))
+- `sync_cluster_spec` (Attributes) Backup replication configuration for SYNCHRONOUS clusters. (see [below for nested schema](#nestedatt--backup_replication_spec--gcp_spec--sync_cluster_spec))
+
+<a id="nestedatt--backup_replication_spec--gcp_spec--geo_partitioned_cluster_spec"></a>
+### Nested Schema for `backup_replication_spec.gcp_spec.geo_partitioned_cluster_spec`
+
+Optional:
+
+- `replication_configs` (Attributes List) List of replication configurations, one for each region in the geo-partitioned cluster. (see [below for nested schema](#nestedatt--backup_replication_spec--gcp_spec--geo_partitioned_cluster_spec--replication_configs))
+
+Read-Only:
+
+- `configs_set_for_expiry` (Attributes List) List of replication configurations that are set to expire. (see [below for nested schema](#nestedatt--backup_replication_spec--gcp_spec--geo_partitioned_cluster_spec--configs_set_for_expiry))
+
+<a id="nestedatt--backup_replication_spec--gcp_spec--geo_partitioned_cluster_spec--replication_configs"></a>
+### Nested Schema for `backup_replication_spec.gcp_spec.geo_partitioned_cluster_spec.replication_configs`
+
+Required:
+
+- `desired_region` (String) The region name for this replication configuration. Must match one of the cluster's regions.
+- `target` (String) The GCS bucket name where backups for this region will be replicated.
+
+Read-Only:
+
+- `config_state` (String) The current state of the replication configuration (e.g., ENABLED, DISABLED etc.).
+- `expiry_on` (String) Timestamp when this replication configuration expires, if applicable.
+- `id` (String) Unique identifier for the replication configuration.
+- `latest_transfer_operation_details` (Attributes) Details about the most recent backup transfer operation. (see [below for nested schema](#nestedatt--backup_replication_spec--gcp_spec--geo_partitioned_cluster_spec--replication_configs--latest_transfer_operation_details))
+- `next_transfer_operation_time` (String) Timestamp of the next scheduled backup transfer operation.
+
+<a id="nestedatt--backup_replication_spec--gcp_spec--geo_partitioned_cluster_spec--replication_configs--latest_transfer_operation_details"></a>
+### Nested Schema for `backup_replication_spec.gcp_spec.geo_partitioned_cluster_spec.replication_configs.latest_transfer_operation_details`
+
+Read-Only:
+
+- `end_time` (String) End time of the latest transfer operation.
+- `start_time` (String) Start time of the latest transfer operation.
+- `status` (String) Status of the latest transfer operation (e.g., SUCCESS, FAILED, IN_PROGRESS).
+
+
+
+<a id="nestedatt--backup_replication_spec--gcp_spec--geo_partitioned_cluster_spec--configs_set_for_expiry"></a>
+### Nested Schema for `backup_replication_spec.gcp_spec.geo_partitioned_cluster_spec.configs_set_for_expiry`
+
+Read-Only:
+
+- `config_state` (String) The current state of the replication configuration (e.g., ACTIVE, PENDING, ERROR).
+- `expiry_on` (String) Timestamp when this replication configuration expires.
+- `id` (String) Unique identifier for the replication configuration.
+- `latest_transfer_operation_details` (Attributes) Details about the most recent backup transfer operation. (see [below for nested schema](#nestedatt--backup_replication_spec--gcp_spec--geo_partitioned_cluster_spec--configs_set_for_expiry--latest_transfer_operation_details))
+- `next_transfer_operation_time` (String) Timestamp of the next scheduled backup transfer operation.
+- `region` (String) The region associated with this replication configuration.
+- `target` (String) The GCS bucket name for this replication configuration.
+
+<a id="nestedatt--backup_replication_spec--gcp_spec--geo_partitioned_cluster_spec--configs_set_for_expiry--latest_transfer_operation_details"></a>
+### Nested Schema for `backup_replication_spec.gcp_spec.geo_partitioned_cluster_spec.configs_set_for_expiry.latest_transfer_operation_details`
+
+Read-Only:
+
+- `end_time` (String) End time of the latest transfer operation.
+- `start_time` (String) Start time of the latest transfer operation.
+- `status` (String) Status of the latest transfer operation (e.g., SUCCESS, FAILED, IN_PROGRESS).
+
+
+
+
+<a id="nestedatt--backup_replication_spec--gcp_spec--sync_cluster_spec"></a>
+### Nested Schema for `backup_replication_spec.gcp_spec.sync_cluster_spec`
+
+Required:
+
+- `replication_config` (Attributes) Replication configuration specifying the target GCS bucket and status information. (see [below for nested schema](#nestedatt--backup_replication_spec--gcp_spec--sync_cluster_spec--replication_config))
+
+Read-Only:
+
+- `configs_set_for_expiry` (Attributes List) List of replication configurations that are set to expire. (see [below for nested schema](#nestedatt--backup_replication_spec--gcp_spec--sync_cluster_spec--configs_set_for_expiry))
+
+<a id="nestedatt--backup_replication_spec--gcp_spec--sync_cluster_spec--replication_config"></a>
+### Nested Schema for `backup_replication_spec.gcp_spec.sync_cluster_spec.replication_config`
+
+Required:
+
+- `target` (String) The GCS bucket name where backups will be replicated
+
+Read-Only:
+
+- `assigned_region` (String) The desginated backup region from where the backups will be replicated
+- `config_state` (String) The current state of the replication configuration (e.g., ENABLED, DISABLED etc.).
+- `expiry_on` (String) Timestamp when this replication configuration expires, if applicable.
+- `id` (String) Unique identifier for the replication configuration.
+- `latest_transfer_operation_details` (Attributes) Details about the most recent backup transfer operation. (see [below for nested schema](#nestedatt--backup_replication_spec--gcp_spec--sync_cluster_spec--replication_config--latest_transfer_operation_details))
+- `next_transfer_operation_time` (String) Timestamp of the next scheduled backup transfer operation.
+
+<a id="nestedatt--backup_replication_spec--gcp_spec--sync_cluster_spec--replication_config--latest_transfer_operation_details"></a>
+### Nested Schema for `backup_replication_spec.gcp_spec.sync_cluster_spec.replication_config.latest_transfer_operation_details`
+
+Read-Only:
+
+- `end_time` (String) End time of the latest transfer operation.
+- `start_time` (String) Start time of the latest transfer operation.
+- `status` (String) Status of the latest transfer operation (e.g., SUCCESS, FAILED, IN_PROGRESS).
+
+
+
+<a id="nestedatt--backup_replication_spec--gcp_spec--sync_cluster_spec--configs_set_for_expiry"></a>
+### Nested Schema for `backup_replication_spec.gcp_spec.sync_cluster_spec.configs_set_for_expiry`
+
+Read-Only:
+
+- `config_state` (String) The current state of the replication configuration (e.g., ENABLED, DISABLED etc.).
+- `expiry_on` (String) Timestamp when this replication configuration expires.
+- `id` (String) Unique identifier for the replication configuration.
+- `latest_transfer_operation_details` (Attributes) Details about the most recent backup transfer operation. (see [below for nested schema](#nestedatt--backup_replication_spec--gcp_spec--sync_cluster_spec--configs_set_for_expiry--latest_transfer_operation_details))
+- `next_transfer_operation_time` (String) Timestamp of the next scheduled backup transfer operation.
+- `region` (String) The region associated with this replication configuration.
+- `target` (String) The GCS bucket name for this replication configuration
+
+<a id="nestedatt--backup_replication_spec--gcp_spec--sync_cluster_spec--configs_set_for_expiry--latest_transfer_operation_details"></a>
+### Nested Schema for `backup_replication_spec.gcp_spec.sync_cluster_spec.configs_set_for_expiry.latest_transfer_operation_details`
+
+Read-Only:
+
+- `end_time` (String) End time of the latest transfer operation.
+- `start_time` (String) Start time of the latest transfer operation.
+- `status` (String) Status of the latest transfer operation (e.g., SUCCESS, FAILED, IN_PROGRESS).
+
+
+
+
 
 
 <a id="nestedatt--backup_schedules"></a>

@@ -1118,10 +1118,6 @@ func createClusterSpec(ctx context.Context, apiClient *openapiclient.APIClient, 
 			isDefaultSet = true
 		}
 
-		// if !regionInfo.BackupReplicationGCPTarget.IsNull() && !regionInfo.BackupReplicationGCPTarget.IsUnknown() && regionInfo.BackupReplicationGCPTarget.Value != "" {
-		// 	info.SetBackupReplicationGcpTarget(regionInfo.BackupReplicationGCPTarget.Value)
-		// }
-
 		clusterRegionInfo = append(clusterRegionInfo, info)
 	}
 
@@ -2672,11 +2668,6 @@ func (r resourceCluster) Update(ctx context.Context, req tfsdk.UpdateResourceReq
 			}
 		}
 	}
-
-	// if err := validateBackupReplicationTargets(plan.ClusterType.Value, plan.ClusterTier.Value, plan.CloudType.Value, plan.ClusterRegionInfo); err != nil {
-	// 	resp.Diagnostics.AddError("Invalid backup replication configuration", err.Error())
-	// 	return
-	// }
 
 	scheduleId := ""
 	backupDescription := ""
