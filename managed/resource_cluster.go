@@ -202,6 +202,12 @@ func (r resourceClusterType) GetSchema(_ context.Context) (tfsdk.Schema, diag.Di
 					Description: "GCP-specific backup replication configuration.",
 					Optional:    true,
 					Computed:    true,
+					Validators: []tfsdk.AttributeValidator{
+						schemavalidator.AlsoRequires(
+							path.MatchRoot("cloud_type"),
+						),
+					},
+
 					Attributes: tfsdk.SingleNestedAttributes(map[string]tfsdk.Attribute{
 						"enabled": {
 							Description: "Whether GCP backup replication is enabled for this cluster.",
@@ -216,6 +222,11 @@ func (r resourceClusterType) GetSchema(_ context.Context) (tfsdk.Schema, diag.Di
 							Description: "Backup replication configuration for SYNCHRONOUS clusters.",
 							Optional:    true,
 							Computed:    true,
+							Validators: []tfsdk.AttributeValidator{
+								schemavalidator.ConflictsWith(
+									path.MatchRelative().AtParent().AtName("geo_partitioned_cluster_spec"),
+								),
+							},
 							Attributes: tfsdk.SingleNestedAttributes(map[string]tfsdk.Attribute{
 								"replication_config": {
 									Description: "Replication configuration specifying the target GCS bucket and status information.",
@@ -349,6 +360,11 @@ func (r resourceClusterType) GetSchema(_ context.Context) (tfsdk.Schema, diag.Di
 							Description: "Backup replication configuration for GEO_PARTITIONED clusters.",
 							Optional:    true,
 							Computed:    true,
+							Validators: []tfsdk.AttributeValidator{
+								schemavalidator.ConflictsWith(
+									path.MatchRelative().AtParent().AtName("sync_cluster_spec"),
+								),
+							},
 							Attributes: tfsdk.SingleNestedAttributes(map[string]tfsdk.Attribute{
 								"replication_configs": {
 									Description: "List of replication configurations, one for each region in the geo-partitioned cluster.",
@@ -3083,16 +3099,10 @@ func validateGcpBackupReplicationPlan(plan Cluster) error {
 		return nil
 	}
 
-	if plan.CloudType.Null || plan.CloudType.Unknown || plan.CloudType.Value == "" {
-		return fmt.Errorf("cloud_type must be set to GCP when using backup_replication_spec")
-	}
 	if plan.CloudType.Value != "GCP" {
 		return fmt.Errorf("backup_replication_spec is supported only for GCP clusters")
 	}
 
-	if plan.ClusterTier.Null || plan.ClusterTier.Unknown || plan.ClusterTier.Value == "" {
-		return fmt.Errorf("cluster_tier must be set when using backup_replication_spec")
-	}
 	if strings.EqualFold(plan.ClusterTier.Value, "FREE") {
 		return fmt.Errorf("backup_replication_spec is not supported for free tier clusters")
 	}
@@ -3102,23 +3112,14 @@ func validateGcpBackupReplicationPlan(plan Cluster) error {
 	geoSpec := gcpSpec.GeoPartitionedClusterSpec
 
 	if boolValue(gcpSpec.Enabled) {
-		if plan.ClusterType.Null || plan.ClusterType.Unknown || plan.ClusterType.Value == "" {
-			return fmt.Errorf("cluster_type must be provided when enabling backup replication")
-		}
 		switch plan.ClusterType.Value {
 		case "SYNCHRONOUS":
 			if syncSpec == nil || syncSpec.ReplicationConfig == nil {
 				return fmt.Errorf("sync_cluster_spec.replication_config must be provided for synchronous clusters")
 			}
-			if geoSpec != nil {
-				return fmt.Errorf("geo_partitioned_cluster_spec must not be set for synchronous clusters")
-			}
 		case "GEO_PARTITIONED":
 			if geoSpec == nil || len(geoSpec.ReplicationConfigs) == 0 {
 				return fmt.Errorf("geo_partitioned_cluster_spec.replication_configs must be provided for geo partitioned clusters")
-			}
-			if syncSpec != nil {
-				return fmt.Errorf("sync_cluster_spec must not be set for geo partitioned clusters")
 			}
 			clusterRegions := make(map[string]struct{})
 			for _, region := range plan.ClusterRegionInfo {
