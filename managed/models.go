@@ -10,30 +10,31 @@ import (
 )
 
 type Cluster struct {
-	AccountID                     types.String         `tfsdk:"account_id"`
-	ProjectID                     types.String         `tfsdk:"project_id"`
-	ClusterID                     types.String         `tfsdk:"cluster_id"`
-	ClusterName                   types.String         `tfsdk:"cluster_name"`
-	CloudType                     types.String         `tfsdk:"cloud_type"`
-	ClusterType                   types.String         `tfsdk:"cluster_type"`
-	FaultTolerance                types.String         `tfsdk:"fault_tolerance"`
-	NumFaultsToTolerate           types.Int64          `tfsdk:"num_faults_to_tolerate"`
-	ClusterRegionInfo             []RegionInfo         `tfsdk:"cluster_region_info"`
-	DatabaseTrack                 types.String         `tfsdk:"database_track"`
-	DesiredState                  types.String         `tfsdk:"desired_state"`
-	DesiredConnectionPoolingState types.String         `tfsdk:"desired_connection_pooling_state"`
-	ClusterTier                   types.String         `tfsdk:"cluster_tier"`
-	ClusterAllowListIDs           []types.String       `tfsdk:"cluster_allow_list_ids"`
-	RestoreBackupID               types.String         `tfsdk:"restore_backup_id"`
-	NodeConfig                    *NodeConfig          `tfsdk:"node_config"`
-	Credentials                   *Credentials         `tfsdk:"credentials"`
-	ClusterInfo                   ClusterInfo          `tfsdk:"cluster_info"`
-	ClusterVersion                types.String         `tfsdk:"cluster_version"`
-	BackupSchedules               []BackupScheduleInfo `tfsdk:"backup_schedules"`
-	ClusterEndpoints              types.Map            `tfsdk:"cluster_endpoints"`
-	ClusterEndpointsV2            []ClusterEndpoint    `tfsdk:"endpoints"`
-	ClusterCertificate            types.String         `tfsdk:"cluster_certificate"`
-	CMKSpec                       *CMKSpec             `tfsdk:"cmk_spec"`
+	AccountID                     types.String           `tfsdk:"account_id"`
+	ProjectID                     types.String           `tfsdk:"project_id"`
+	ClusterID                     types.String           `tfsdk:"cluster_id"`
+	ClusterName                   types.String           `tfsdk:"cluster_name"`
+	CloudType                     types.String           `tfsdk:"cloud_type"`
+	ClusterType                   types.String           `tfsdk:"cluster_type"`
+	FaultTolerance                types.String           `tfsdk:"fault_tolerance"`
+	NumFaultsToTolerate           types.Int64            `tfsdk:"num_faults_to_tolerate"`
+	ClusterRegionInfo             []RegionInfo           `tfsdk:"cluster_region_info"`
+	DatabaseTrack                 types.String           `tfsdk:"database_track"`
+	DesiredState                  types.String           `tfsdk:"desired_state"`
+	DesiredConnectionPoolingState types.String           `tfsdk:"desired_connection_pooling_state"`
+	ClusterTier                   types.String           `tfsdk:"cluster_tier"`
+	ClusterAllowListIDs           []types.String         `tfsdk:"cluster_allow_list_ids"`
+	RestoreBackupID               types.String           `tfsdk:"restore_backup_id"`
+	NodeConfig                    *NodeConfig            `tfsdk:"node_config"`
+	Credentials                   *Credentials           `tfsdk:"credentials"`
+	ClusterInfo                   ClusterInfo            `tfsdk:"cluster_info"`
+	ClusterVersion                types.String           `tfsdk:"cluster_version"`
+	BackupSchedules               []BackupScheduleInfo   `tfsdk:"backup_schedules"`
+	ClusterEndpoints              types.Map              `tfsdk:"cluster_endpoints"`
+	ClusterEndpointsV2            []ClusterEndpoint      `tfsdk:"endpoints"`
+	ClusterCertificate            types.String           `tfsdk:"cluster_certificate"`
+	CMKSpec                       *CMKSpec               `tfsdk:"cmk_spec"`
+	BackupReplicationSpec         *BackupReplicationSpec `tfsdk:"backup_replication_spec"`
 }
 
 type ClusterEndpoint struct {
@@ -107,6 +108,72 @@ type RegionInfo struct {
 	IsDefault                  types.Bool   `tfsdk:"is_default"`
 	BackupReplicationGCPTarget types.String `tfsdk:"backup_replication_gcp_target"`
 	BackupRegion               types.Bool   `tfsdk:"backup_region"`
+}
+
+type BackupReplicationSpec struct {
+	GCPSpec *GcpBackupReplicationSpec `tfsdk:"gcp_spec"`
+}
+
+type GcpBackupReplicationSpec struct {
+	Enabled                   types.Bool                           `tfsdk:"enabled"`
+	SyncClusterSpec           *SyncClusterGcpBackupReplicationSpec `tfsdk:"sync_cluster_spec"`
+	GeoPartitionedClusterSpec *GeoClusterGcpBackupReplicationSpec  `tfsdk:"geo_partitioned_cluster_spec"`
+}
+
+type SyncClusterGcpBackupReplicationSpec struct {
+	ReplicationConfig   *SyncClusterGcpReplicationConfig   `tfsdk:"replication_config"`
+	ConfigsSetForExpiry []GcpBackupReplicationExpiryConfig `tfsdk:"configs_set_for_expiry"`
+}
+
+type GeoClusterGcpBackupReplicationSpec struct {
+	ReplicationConfigs  []GeoClusterGcpReplicationConfig   `tfsdk:"replication_configs"`
+	ConfigsSetForExpiry []GcpBackupReplicationExpiryConfig `tfsdk:"configs_set_for_expiry"`
+}
+
+type GcpBackupReplicationBaseConfig struct {
+	Target                         types.String                                        `tfsdk:"target"`
+	ConfigState                    types.String                                        `tfsdk:"config_state"`
+	ID                             types.String                                        `tfsdk:"id"`
+	NextTransferOperationTime      types.String                                        `tfsdk:"next_transfer_operation_time"`
+	LatestTransferOperationDetails *GcpBackupReplicationLatestTransferOperationDetails `tfsdk:"latest_transfer_operation_details"`
+	ExpiryOn                       types.String                                        `tfsdk:"expiry_on"`
+}
+
+type SyncClusterGcpReplicationConfig struct {
+	AssignedRegion                 types.String                                        `tfsdk:"assigned_region"`
+	Target                         types.String                                        `tfsdk:"target"`
+	ConfigState                    types.String                                        `tfsdk:"config_state"`
+	ID                             types.String                                        `tfsdk:"id"`
+	NextTransferOperationTime      types.String                                        `tfsdk:"next_transfer_operation_time"`
+	LatestTransferOperationDetails *GcpBackupReplicationLatestTransferOperationDetails `tfsdk:"latest_transfer_operation_details"`
+	ExpiryOn                       types.String                                        `tfsdk:"expiry_on"`
+}
+
+// For geo_partitioned_cluster_spec - includes desired_region
+type GeoClusterGcpReplicationConfig struct {
+	DesiredRegion                  types.String                                        `tfsdk:"desired_region"`
+	Target                         types.String                                        `tfsdk:"target"`
+	ConfigState                    types.String                                        `tfsdk:"config_state"`
+	ID                             types.String                                        `tfsdk:"id"`
+	NextTransferOperationTime      types.String                                        `tfsdk:"next_transfer_operation_time"`
+	LatestTransferOperationDetails *GcpBackupReplicationLatestTransferOperationDetails `tfsdk:"latest_transfer_operation_details"`
+	ExpiryOn                       types.String                                        `tfsdk:"expiry_on"`
+}
+
+type GcpBackupReplicationLatestTransferOperationDetails struct {
+	StartTime types.String `tfsdk:"start_time"`
+	EndTime   types.String `tfsdk:"end_time"`
+	Status    types.String `tfsdk:"status"`
+}
+
+type GcpBackupReplicationExpiryConfig struct {
+	Region                         types.String                                        `tfsdk:"region"`
+	Target                         types.String                                        `tfsdk:"target"`
+	ConfigState                    types.String                                        `tfsdk:"config_state"`
+	ID                             types.String                                        `tfsdk:"id"`
+	NextTransferOperationTime      types.String                                        `tfsdk:"next_transfer_operation_time"`
+	LatestTransferOperationDetails *GcpBackupReplicationLatestTransferOperationDetails `tfsdk:"latest_transfer_operation_details"`
+	ExpiryOn                       types.String                                        `tfsdk:"expiry_on"`
 }
 
 type NodeConfig struct {

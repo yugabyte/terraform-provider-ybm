@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"slices"
+	"sort"
 
 	"github.com/hashicorp/terraform-plugin-framework-validators/int64validator"
 	"github.com/hashicorp/terraform-plugin-framework-validators/schemavalidator"
@@ -28,6 +29,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
 	"github.com/sethvargo/go-retry"
+	"github.com/yugabyte/terraform-provider-ybm/managed/fflags"
 	"github.com/yugabyte/terraform-provider-ybm/managed/util"
 	openapiclient "github.com/yugabyte/yugabytedb-managed-go-client-internal"
 )
@@ -180,23 +182,308 @@ func (r resourceClusterType) GetSchema(_ context.Context) (tfsdk.Schema, diag.Di
 					},
 				},
 				"backup_replication_gcp_target": {
-					Description: "GCS bucket name for backup replication target. Only configurable when editing existing clusters. For SYNCHRONOUS clusters, all regions must have the same target. For GEO_PARTITIONED clusters, each region can have different targets. Only supported for GCP clusters and PAID tier.",
+					Description: "GCS bucket name for backup replication target",
 					Type:        types.StringType,
-					Optional:    true,
-					PlanModifiers: []tfsdk.AttributePlanModifier{
-						tfsdk.UseStateForUnknown(),
-					},
-					Validators: []tfsdk.AttributeValidator{
-						stringvalidator.RegexMatches(
-							regexp.MustCompile(`^[a-z0-9](?:[a-z0-9._-]*[a-z0-9])?$`),
-							"GCS bucket names must contain only lowercase letters, numbers, hyphens, and underscores, and must start and end with a letter or number",
-						),
-					},
+					Computed:    true,
 				},
 				"backup_region": {
 					Description: "Indicates whether cluster backup data will be stored in this region.",
 					Type:        types.BoolType,
 					Computed:    true,
+				},
+			}),
+		},
+		"backup_replication_spec": {
+			Description: "Configuration for backup replication. Enables replication of cluster backups to offsite buckets.",
+			Optional:    true,
+			Computed:    true,
+			Attributes: tfsdk.SingleNestedAttributes(map[string]tfsdk.Attribute{
+				"gcp_spec": {
+					Description: "GCP-specific backup replication configuration.",
+					Optional:    true,
+					Computed:    true,
+					Validators: []tfsdk.AttributeValidator{
+						schemavalidator.AlsoRequires(
+							path.MatchRoot("cloud_type"),
+						),
+					},
+
+					Attributes: tfsdk.SingleNestedAttributes(map[string]tfsdk.Attribute{
+						"enabled": {
+							Description: "Whether GCP backup replication is enabled for this cluster.",
+							Type:        types.BoolType,
+							Optional:    true,
+							Computed:    true,
+							PlanModifiers: []tfsdk.AttributePlanModifier{
+								tfsdk.UseStateForUnknown(),
+							},
+						},
+						"sync_cluster_spec": {
+							Description: "Backup replication configuration for SYNCHRONOUS clusters.",
+							Optional:    true,
+							Computed:    true,
+							Validators: []tfsdk.AttributeValidator{
+								schemavalidator.ConflictsWith(
+									path.MatchRelative().AtParent().AtName("geo_partitioned_cluster_spec"),
+								),
+							},
+							Attributes: tfsdk.SingleNestedAttributes(map[string]tfsdk.Attribute{
+								"replication_config": {
+									Description: "Replication configuration specifying the target GCS bucket and status information.",
+									Required:    true,
+									Attributes: tfsdk.SingleNestedAttributes(map[string]tfsdk.Attribute{
+										"target": {
+											Description: "The GCS bucket name where backups will be replicated",
+											Type:        types.StringType,
+											Required:    true,
+											Validators: []tfsdk.AttributeValidator{
+												stringvalidator.RegexMatches(
+													regexp.MustCompile(`^[a-z0-9](?:[a-z0-9._-]*[a-z0-9])?$`),
+													"GCS bucket names must contain only lowercase letters, numbers, hyphens, and underscores, and must start and end with a letter or number",
+												),
+											},
+										},
+										"assigned_region": {
+											Description: "The desginated backup region from where the backups will be replicated",
+											Type:        types.StringType,
+											Computed:    true,
+										},
+										"config_state": {
+											Description: "The current state of the replication configuration (e.g., ENABLED, DISABLED etc.).",
+											Type:        types.StringType,
+											Computed:    true,
+										},
+										"id": {
+											Description: "Unique identifier for the replication configuration.",
+											Type:        types.StringType,
+											Computed:    true,
+										},
+										"next_transfer_operation_time": {
+											Description: "Timestamp of the next scheduled backup transfer operation.",
+											Type:        types.StringType,
+											Computed:    true,
+										},
+										"latest_transfer_operation_details": {
+											Description: "Details about the most recent backup transfer operation.",
+											Computed:    true,
+											Attributes: tfsdk.SingleNestedAttributes(map[string]tfsdk.Attribute{
+												"start_time": {
+													Description: "Start time of the latest transfer operation.",
+													Type:        types.StringType,
+													Computed:    true,
+												},
+												"end_time": {
+													Description: "End time of the latest transfer operation.",
+													Type:        types.StringType,
+													Computed:    true,
+												},
+												"status": {
+													Description: "Status of the latest transfer operation (e.g., SUCCESS, FAILED, IN_PROGRESS).",
+													Type:        types.StringType,
+													Computed:    true,
+												},
+											}),
+										},
+										"expiry_on": {
+											Description: "Timestamp when this replication configuration expires, if applicable.",
+											Type:        types.StringType,
+											Computed:    true,
+										},
+									}),
+								},
+								"configs_set_for_expiry": {
+									Description: "List of replication configurations that are set to expire.",
+									Computed:    true,
+									Attributes: tfsdk.ListNestedAttributes(map[string]tfsdk.Attribute{
+										"region": {
+											Description: "The region associated with this replication configuration.",
+											Type:        types.StringType,
+											Computed:    true,
+										},
+										"target": {
+											Description: "The GCS bucket name for this replication configuration",
+											Type:        types.StringType,
+											Computed:    true,
+											Validators: []tfsdk.AttributeValidator{
+												stringvalidator.RegexMatches(
+													regexp.MustCompile(`^[a-z0-9](?:[a-z0-9._-]*[a-z0-9])?$`),
+													"GCS bucket names must contain only lowercase letters, numbers, hyphens, and underscores, and must start and end with a letter or number",
+												),
+											},
+										},
+										"config_state": {
+											Description: "The current state of the replication configuration (e.g., ENABLED, DISABLED etc.).",
+											Type:        types.StringType,
+											Computed:    true,
+										},
+										"id": {
+											Description: "Unique identifier for the replication configuration.",
+											Type:        types.StringType,
+											Computed:    true,
+										},
+										"next_transfer_operation_time": {
+											Description: "Timestamp of the next scheduled backup transfer operation.",
+											Type:        types.StringType,
+											Computed:    true,
+										},
+										"latest_transfer_operation_details": {
+											Description: "Details about the most recent backup transfer operation.",
+											Computed:    true,
+											Attributes: tfsdk.SingleNestedAttributes(map[string]tfsdk.Attribute{
+												"start_time": {
+													Description: "Start time of the latest transfer operation.",
+													Type:        types.StringType,
+													Computed:    true,
+												},
+												"end_time": {
+													Description: "End time of the latest transfer operation.",
+													Type:        types.StringType,
+													Computed:    true,
+												},
+												"status": {
+													Description: "Status of the latest transfer operation (e.g., SUCCESS, FAILED, IN_PROGRESS).",
+													Type:        types.StringType,
+													Computed:    true,
+												},
+											}),
+										},
+										"expiry_on": {
+											Description: "Timestamp when this replication configuration expires.",
+											Type:        types.StringType,
+											Computed:    true,
+										},
+									}),
+								},
+							}),
+						},
+						"geo_partitioned_cluster_spec": {
+							Description: "Backup replication configuration for GEO_PARTITIONED clusters.",
+							Optional:    true,
+							Computed:    true,
+							Validators: []tfsdk.AttributeValidator{
+								schemavalidator.ConflictsWith(
+									path.MatchRelative().AtParent().AtName("sync_cluster_spec"),
+								),
+							},
+							Attributes: tfsdk.SingleNestedAttributes(map[string]tfsdk.Attribute{
+								"replication_configs": {
+									Description: "List of replication configurations, one for each region in the geo-partitioned cluster.",
+									Optional:    true,
+									Computed:    true,
+									Attributes: tfsdk.ListNestedAttributes(map[string]tfsdk.Attribute{
+										"desired_region": {
+											Description: "The region name for this replication configuration. Must match one of the cluster's regions.",
+											Type:        types.StringType,
+											Required:    true,
+										},
+										"target": {
+											Description: "The GCS bucket name where backups for this region will be replicated.",
+											Type:        types.StringType,
+											Required:    true,
+										},
+										"config_state": {
+											Description: "The current state of the replication configuration (e.g., ENABLED, DISABLED etc.).",
+											Type:        types.StringType,
+											Computed:    true,
+										},
+										"id": {
+											Description: "Unique identifier for the replication configuration.",
+											Type:        types.StringType,
+											Computed:    true,
+										},
+										"next_transfer_operation_time": {
+											Description: "Timestamp of the next scheduled backup transfer operation.",
+											Type:        types.StringType,
+											Computed:    true,
+										},
+										"latest_transfer_operation_details": {
+											Description: "Details about the most recent backup transfer operation.",
+											Computed:    true,
+											Attributes: tfsdk.SingleNestedAttributes(map[string]tfsdk.Attribute{
+												"start_time": {
+													Description: "Start time of the latest transfer operation.",
+													Type:        types.StringType,
+													Computed:    true,
+												},
+												"end_time": {
+													Description: "End time of the latest transfer operation.",
+													Type:        types.StringType,
+													Computed:    true,
+												},
+												"status": {
+													Description: "Status of the latest transfer operation (e.g., SUCCESS, FAILED, IN_PROGRESS).",
+													Type:        types.StringType,
+													Computed:    true,
+												},
+											}),
+										},
+										"expiry_on": {
+											Description: "Timestamp when this replication configuration expires, if applicable.",
+											Type:        types.StringType,
+											Computed:    true,
+										},
+									}),
+								},
+								"configs_set_for_expiry": {
+									Description: "List of replication configurations that are set to expire.",
+									Computed:    true,
+									Attributes: tfsdk.ListNestedAttributes(map[string]tfsdk.Attribute{
+										"region": {
+											Description: "The region associated with this replication configuration.",
+											Type:        types.StringType,
+											Computed:    true,
+										},
+										"target": {
+											Description: "The GCS bucket name for this replication configuration.",
+											Type:        types.StringType,
+											Computed:    true,
+										},
+										"config_state": {
+											Description: "The current state of the replication configuration (e.g., ACTIVE, PENDING, ERROR).",
+											Type:        types.StringType,
+											Computed:    true,
+										},
+										"id": {
+											Description: "Unique identifier for the replication configuration.",
+											Type:        types.StringType,
+											Computed:    true,
+										},
+										"next_transfer_operation_time": {
+											Description: "Timestamp of the next scheduled backup transfer operation.",
+											Type:        types.StringType,
+											Computed:    true,
+										},
+										"latest_transfer_operation_details": {
+											Description: "Details about the most recent backup transfer operation.",
+											Computed:    true,
+											Attributes: tfsdk.SingleNestedAttributes(map[string]tfsdk.Attribute{
+												"start_time": {
+													Description: "Start time of the latest transfer operation.",
+													Type:        types.StringType,
+													Computed:    true,
+												},
+												"end_time": {
+													Description: "End time of the latest transfer operation.",
+													Type:        types.StringType,
+													Computed:    true,
+												},
+												"status": {
+													Description: "Status of the latest transfer operation (e.g., SUCCESS, FAILED, IN_PROGRESS).",
+													Type:        types.StringType,
+													Computed:    true,
+												},
+											}),
+										},
+										"expiry_on": {
+											Description: "Timestamp when this replication configuration expires.",
+											Type:        types.StringType,
+											Computed:    true,
+										},
+									}),
+								},
+							}),
+						},
+					}),
 				},
 			}),
 		},
@@ -699,7 +986,6 @@ func editBackupScheduleV2(ctx context.Context, backupScheduleStruct BackupSchedu
 }
 
 func createClusterSpec(ctx context.Context, apiClient *openapiclient.APIClient, accountId string, projectId string, plan Cluster, state Cluster, clusterExists bool) (clusterSpec *openapiclient.ClusterSpec, clusterSpecOK bool, errorMessage string) {
-
 	var diskSizeGb int32
 	var diskSizeOK bool
 	var memoryMb int32
@@ -848,11 +1134,13 @@ func createClusterSpec(ctx context.Context, apiClient *openapiclient.APIClient, 
 			isDefaultSet = true
 		}
 
-		if !regionInfo.BackupReplicationGCPTarget.IsNull() && !regionInfo.BackupReplicationGCPTarget.IsUnknown() && regionInfo.BackupReplicationGCPTarget.Value != "" {
-			info.SetBackupReplicationGcpTarget(regionInfo.BackupReplicationGCPTarget.Value)
-		}
-
 		clusterRegionInfo = append(clusterRegionInfo, info)
+	}
+
+	if clusterExists {
+		if err := setBackupReplicationTargetsInEditClusterSpec(plan, clusterRegionInfo); err != nil {
+			return nil, false, err.Error()
+		}
 	}
 
 	// This is to pass in the region information to fetch memory and disk size
@@ -897,6 +1185,53 @@ func createClusterSpec(ctx context.Context, apiClient *openapiclient.APIClient, 
 	return clusterSpec, true, ""
 }
 
+func setBackupReplicationTargetsInEditClusterSpec(
+	plan Cluster,
+	clusterRegionInfo []openapiclient.ClusterRegionInfo,
+) error {
+
+	spec := plan.BackupReplicationSpec
+	disabled := !isGcpBackupReplicationFeatureEnabled() ||
+		spec == nil ||
+		spec.GCPSpec == nil ||
+		!boolValue(spec.GCPSpec.Enabled)
+
+	// When disabled → unset everywhere
+	if disabled {
+		for i := range clusterRegionInfo {
+			clusterRegionInfo[i].UnsetBackupReplicationGcpTarget()
+		}
+		return nil
+	}
+
+	switch plan.ClusterType.Value {
+
+	case "SYNCHRONOUS":
+		// All regions share the same target
+		target := spec.GCPSpec.SyncClusterSpec.ReplicationConfig.Target.Value
+		for i := range clusterRegionInfo {
+			clusterRegionInfo[i].SetBackupReplicationGcpTarget(target)
+		}
+		return nil
+
+	case "GEO_PARTITIONED":
+		// Map each region → target
+		targetMap := make(map[string]string)
+		for _, cfg := range spec.GCPSpec.GeoPartitionedClusterSpec.ReplicationConfigs {
+			targetMap[cfg.DesiredRegion.Value] = cfg.Target.Value
+		}
+
+		for i := range clusterRegionInfo {
+			region := clusterRegionInfo[i].PlacementInfo.CloudInfo.Region
+			clusterRegionInfo[i].SetBackupReplicationGcpTarget(targetMap[region])
+		}
+		return nil
+
+	default:
+		return fmt.Errorf("unsupported cluster type: %s", plan.ClusterType.Value)
+	}
+}
+
 func getPlan(ctx context.Context, plan tfsdk.Plan, cluster *Cluster) diag.Diagnostics {
 	// NOTE: currently must manually fill out each attribute due to usage of Go structs
 	// Once the opt-in conversion of null or unknown values to the empty value is implemented, this can all be replaced with req.Plan.Get(ctx, &cluster)
@@ -933,7 +1268,90 @@ func getPlan(ctx context.Context, plan tfsdk.Plan, cluster *Cluster) diag.Diagno
 	diags.Append(plan.GetAttribute(ctx, path.Root("backup_schedules"), &cluster.BackupSchedules)...)
 	diags.Append(plan.GetAttribute(ctx, path.Root("cmk_spec"), &cluster.CMKSpec)...)
 
+	backupReplicationSpec, backupDiags := getPlanBackupReplicationSpec(ctx, plan)
+	diags.Append(backupDiags...)
+	if backupReplicationSpec != nil {
+		cluster.BackupReplicationSpec = backupReplicationSpec
+	}
+
 	return diags
+}
+
+func getPlanBackupReplicationSpec(ctx context.Context, plan tfsdk.Plan) (*BackupReplicationSpec, diag.Diagnostics) {
+	var diags diag.Diagnostics
+
+	var enabled types.Bool
+	diagsEnabled := plan.GetAttribute(ctx, path.Root("backup_replication_spec").AtName("gcp_spec").AtName("enabled"), &enabled)
+	diags.Append(diagsEnabled...)
+
+	// If the enabled field is null ,it means that the path was not provided by the user
+
+	if diags.HasError() || enabled.IsNull() || enabled.IsUnknown() {
+		return nil, diags
+	}
+
+	spec := &BackupReplicationSpec{
+		GCPSpec: &GcpBackupReplicationSpec{
+			Enabled: enabled,
+		},
+	}
+
+	var target types.String
+	diagsTarget := plan.GetAttribute(ctx,
+		path.Root("backup_replication_spec").AtName("gcp_spec").AtName("sync_cluster_spec").AtName("replication_config").AtName("target"),
+		&target)
+	diags.Append(diagsTarget...)
+	if !diagsTarget.HasError() && !target.IsNull() && !target.IsUnknown() {
+		spec.GCPSpec.SyncClusterSpec = &SyncClusterGcpBackupReplicationSpec{
+			ReplicationConfig: &SyncClusterGcpReplicationConfig{
+				Target: target,
+				// Don't read computed fields - they'll be unknown
+			},
+		}
+	}
+
+	configs := []GeoClusterGcpReplicationConfig{}
+
+	basePath := path.Root("backup_replication_spec").
+		AtName("gcp_spec").
+		AtName("geo_partitioned_cluster_spec").
+		AtName("replication_configs")
+
+	for i := 0; ; i++ {
+		configPath := basePath.AtListIndex(i)
+
+		var desiredRegion types.String
+		var target types.String
+
+		diagsRegion := plan.GetAttribute(ctx, configPath.AtName("desired_region"), &desiredRegion)
+		if diagsRegion.HasError() {
+			break
+		}
+
+		diagsTarget := plan.GetAttribute(ctx, configPath.AtName("target"), &target)
+		if diagsTarget.HasError() {
+			diags.Append(diagsTarget...)
+			continue
+		}
+
+		if desiredRegion.IsNull() && target.IsNull() {
+			break
+		}
+
+		config := GeoClusterGcpReplicationConfig{
+			DesiredRegion: desiredRegion,
+			Target:        target,
+		}
+
+		configs = append(configs, config)
+	}
+	if len(configs) > 0 {
+		spec.GCPSpec.GeoPartitionedClusterSpec = &GeoClusterGcpBackupReplicationSpec{
+			ReplicationConfigs: configs,
+		}
+	}
+
+	return spec, diags
 }
 
 // fills account, project, cluster ID from state
@@ -947,6 +1365,7 @@ func getIDsFromState(ctx context.Context, state tfsdk.State, cluster *Cluster) {
 	state.GetAttribute(ctx, path.Root("cluster_region_info"), &cluster.ClusterRegionInfo)
 	state.GetAttribute(ctx, path.Root("backup_schedules"), &cluster.BackupSchedules)
 	state.GetAttribute(ctx, path.Root("credentials"), &cluster.Credentials)
+	state.GetAttribute(ctx, path.Root("backup_replication_spec"), &cluster.BackupReplicationSpec)
 }
 
 func validateCredentials(credentials *Credentials, isCreateCluster bool) bool {
@@ -1082,6 +1501,17 @@ func (r resourceCluster) Create(ctx context.Context, req tfsdk.CreateResourceReq
 	if resp.Diagnostics.HasError() {
 		tflog.Debug(ctx, "Cluster Resource: Error on Get Plan")
 		return
+	}
+
+	if plan.BackupReplicationSpec != nil && plan.BackupReplicationSpec.GCPSpec != nil {
+		if !isGcpBackupReplicationFeatureEnabled() {
+			resp.Diagnostics.AddError("GCP backup replication feature disabled", "The backup_replication_spec block is gated by the GCP_BACKUP_REPLICATION feature flag. Set YBM_FF_GCP_BACKUP_REPLICATION=true to enable it.")
+			return
+		}
+		if err := validateGcpBackupReplicationPlan(plan); err != nil {
+			resp.Diagnostics.AddError("Invalid backup_replication_spec", err.Error())
+			return
+		}
 	}
 
 	if !validateCredentials(plan.Credentials, true /* isCreateCluster*/) {
@@ -1338,6 +1768,14 @@ func (r resourceCluster) Create(ctx context.Context, req tfsdk.CreateResourceReq
 		}
 	}
 
+	if isGcpBackupReplicationFeatureEnabled() && hasGcpBackupReplicationPlan(plan.BackupReplicationSpec) {
+		err = r.applyGcpBackupReplication(ctx, accountId, projectId, clusterId, plan, apiClient)
+		if err != nil {
+			resp.Diagnostics.AddError("Unable to configure GCP backup replication", err.Error())
+			return
+		}
+	}
+
 	var regions []string
 	for _, regionInfo := range plan.ClusterRegionInfo {
 		regions = append(regions, regionInfo.Region.Value)
@@ -1416,6 +1854,15 @@ func (r resourceCluster) Create(ctx context.Context, req tfsdk.CreateResourceReq
 	if strings.EqualFold(plan.DesiredConnectionPoolingState.Value, "Enabled") || strings.EqualFold(plan.DesiredConnectionPoolingState.Value, "Disabled") {
 		cluster.DesiredConnectionPoolingState.Value = plan.DesiredConnectionPoolingState.Value
 	}
+
+	// Update the state file with backup replication enabled parameter as provided by the user
+	if plan.BackupReplicationSpec != nil && plan.BackupReplicationSpec.GCPSpec != nil {
+		cluster.BackupReplicationSpec.GCPSpec.Enabled.Value = plan.BackupReplicationSpec.GCPSpec.Enabled.Value
+	}
+
+	// We need to make sure the region order is preserved to avoid terraform treating re-order as state mismatch
+	alignGcpBackupReplicationRegionOrder(&cluster, getGeoGcpReplicationRegionReferenceOrder(plan.BackupReplicationSpec))
+
 	diags := resp.State.Set(ctx, &cluster)
 	resp.Diagnostics.Append(diags...)
 	if resp.Diagnostics.HasError() {
@@ -1705,6 +2152,9 @@ func (r resourceCluster) Read(ctx context.Context, req tfsdk.ReadResourceRequest
 		return
 	}
 
+	// We need to make sure the region order is preserved to avoid terraform treating re-order as state mismatch
+	alignGcpBackupReplicationRegionOrder(&cluster, getGeoGcpReplicationRegionReferenceOrder(state.BackupReplicationSpec))
+
 	tflog.Debug(ctx, "Cluster Read: Allow List IDs read from API server", map[string]interface{}{
 		"Allow List IDs": cluster.ClusterAllowListIDs})
 
@@ -1800,7 +2250,11 @@ func resourceClusterRead(ctx context.Context, clusterId string, backUpSchedules 
 		}
 	}
 
-	cmkResp, _, err := apiClient.ClusterApi.GetClusterCMK(context.Background(), accountId, projectId, clusterId).Execute()
+	cmkResp, cmkHttpResp, err := apiClient.ClusterApi.GetClusterCMK(context.Background(), accountId, projectId, clusterId).Execute()
+	if err != nil {
+		errMsg := getErrorMessage(cmkHttpResp, err)
+		return cluster, false, errMsg
+	}
 	if cmkResp.Data != nil {
 		cmkSpec := CMKSpec{}
 		cmkDataSpec := cmkResp.GetData().Spec.Get()
@@ -2026,6 +2480,16 @@ func resourceClusterRead(ctx context.Context, clusterId string, backUpSchedules 
 	cluster.ClusterRegionInfo = clusterRegionInfo
 	cluster.CloudType.Value = string(respClusterRegionInfo[0].PlacementInfo.CloudInfo.GetCode())
 
+	if isGcpBackupReplicationFeatureEnabled() && cluster.CloudType.Value == "GCP" {
+		backupSpec, err := readGcpBackupReplicationState(ctx, apiClient, accountId, projectId, clusterId, cluster.ClusterType.Value)
+		if err != nil {
+			return cluster, false, err.Error()
+		}
+		cluster.BackupReplicationSpec = backupSpec
+	} else {
+		cluster.BackupReplicationSpec = nil
+	}
+
 	if allowListProvided {
 		const maxRetries = 5
 		for attempt := 0; attempt < maxRetries; attempt++ {
@@ -2137,6 +2601,17 @@ func (r resourceCluster) Update(ctx context.Context, req tfsdk.UpdateResourceReq
 		return
 	}
 
+	if plan.BackupReplicationSpec != nil && plan.BackupReplicationSpec.GCPSpec != nil {
+		if !isGcpBackupReplicationFeatureEnabled() {
+			resp.Diagnostics.AddError("GCP backup replication feature disabled", "The backup_replication_spec block is gated by the GCP_BACKUP_REPLICATION feature flag. Set YBM_FF_GCP_BACKUP_REPLICATION=true to enable it.")
+			return
+		}
+		if err := validateGcpBackupReplicationPlan(plan); err != nil {
+			resp.Diagnostics.AddError("Invalid backup_replication_spec", err.Error())
+			return
+		}
+	}
+
 	if plan.NodeConfig != nil && !plan.NodeConfig.DiskSizeGb.IsUnknown() && !util.IsDiskSizeValid(plan.ClusterTier.Value, plan.NodeConfig.DiskSizeGb.Value) {
 		resp.Diagnostics.AddError("Invalid disk size", "The disk size for a paid cluster must be at least 50 GB.")
 		return
@@ -2210,11 +2685,6 @@ func (r resourceCluster) Update(ctx context.Context, req tfsdk.UpdateResourceReq
 		}
 	}
 
-	if err := validateBackupReplicationTargets(plan.ClusterType.Value, plan.ClusterTier.Value, plan.CloudType.Value, plan.ClusterRegionInfo); err != nil {
-		resp.Diagnostics.AddError("Invalid backup replication configuration", err.Error())
-		return
-	}
-
 	scheduleId := ""
 	backupDescription := ""
 	var r1 *http.Response
@@ -2241,7 +2711,7 @@ func (r resourceCluster) Update(ctx context.Context, req tfsdk.UpdateResourceReq
 	maxRetries := 5
 	var response *http.Response
 
-	for true {
+	for {
 		_, response, err = apiClient.ClusterApi.EditCluster(ctx, accountId, projectId, clusterId).ClusterSpec(*clusterSpec).Execute()
 		if err != nil {
 			// Retry on 503s
@@ -2512,6 +2982,10 @@ func (r resourceCluster) Update(ctx context.Context, req tfsdk.UpdateResourceReq
 	if strings.EqualFold(plan.DesiredConnectionPoolingState.Value, "Enabled") || strings.EqualFold(plan.DesiredConnectionPoolingState.Value, "Disabled") {
 		cluster.DesiredConnectionPoolingState.Value = plan.DesiredConnectionPoolingState.Value
 	}
+
+	// We need to make sure the region order is preserved to avoid terraform treating re-order as state mismatch
+	alignGcpBackupReplicationRegionOrder(&cluster, getGeoGcpReplicationRegionReferenceOrder(plan.BackupReplicationSpec))
+
 	diags := resp.State.Set(ctx, &cluster)
 	resp.Diagnostics.Append(diags...)
 	if resp.Diagnostics.HasError() {
@@ -2610,4 +3084,412 @@ func validateBackupReplicationTargets(clusterType string, clusterTier string, cl
 	}
 
 	return nil
+}
+
+func isGcpBackupReplicationFeatureEnabled() bool {
+	return fflags.IsFeatureFlagEnabled(fflags.GCPBackupReplication)
+}
+
+func hasGcpBackupReplicationPlan(spec *BackupReplicationSpec) bool {
+	return spec != nil && spec.GCPSpec != nil
+}
+
+func validateGcpBackupReplicationPlan(plan Cluster) error {
+	if plan.BackupReplicationSpec == nil || plan.BackupReplicationSpec.GCPSpec == nil {
+		return nil
+	}
+
+	if plan.CloudType.Value != "GCP" {
+		return fmt.Errorf("backup_replication_spec is supported only for GCP clusters")
+	}
+
+	if strings.EqualFold(plan.ClusterTier.Value, "FREE") {
+		return fmt.Errorf("backup_replication_spec is not supported for free tier clusters")
+	}
+
+	gcpSpec := plan.BackupReplicationSpec.GCPSpec
+	syncSpec := gcpSpec.SyncClusterSpec
+	geoSpec := gcpSpec.GeoPartitionedClusterSpec
+
+	if boolValue(gcpSpec.Enabled) {
+		switch plan.ClusterType.Value {
+		case "SYNCHRONOUS":
+			if syncSpec == nil || syncSpec.ReplicationConfig == nil {
+				return fmt.Errorf("sync_cluster_spec.replication_config must be provided for synchronous clusters")
+			}
+		case "GEO_PARTITIONED":
+			if geoSpec == nil || len(geoSpec.ReplicationConfigs) == 0 {
+				return fmt.Errorf("geo_partitioned_cluster_spec.replication_configs must be provided for geo partitioned clusters")
+			}
+			clusterRegions := make(map[string]struct{})
+			for _, region := range plan.ClusterRegionInfo {
+				regionName := strings.TrimSpace(typesStringValue(region.Region))
+				if regionName != "" {
+					clusterRegions[regionName] = struct{}{}
+				}
+			}
+			if len(geoSpec.ReplicationConfigs) != len(clusterRegions) {
+				return fmt.Errorf("geo_partitioned_cluster_spec must include a replication_config for every cluster region")
+			}
+			for _, cfg := range geoSpec.ReplicationConfigs {
+				regionName := strings.TrimSpace(typesStringValue(cfg.DesiredRegion))
+				if _, ok := clusterRegions[regionName]; !ok {
+					return fmt.Errorf("desired_region %s must match one of the cluster regions", regionName)
+				}
+			}
+		default:
+			return fmt.Errorf("backup_replication_spec is not supported for cluster type %s", plan.ClusterType.Value)
+		}
+	} else {
+		if syncSpec != nil || geoSpec != nil {
+			return fmt.Errorf("backup_replication_spec.gcp_spec.enabled must be true when sync_cluster_spec or geo_partitioned_cluster_spec is set")
+		}
+	}
+
+	return nil
+}
+
+func (r resourceCluster) applyGcpBackupReplication(ctx context.Context, accountId, projectId, clusterId string, plan Cluster, apiClient *openapiclient.APIClient) error {
+	spec, shouldApply, err := expandPlanToGcpSpec(ctx, apiClient, accountId, projectId, clusterId, plan)
+	if err != nil || !shouldApply {
+		return err
+	}
+	request := apiClient.BackupReplicationApi.ModifyGcpBackupReplication(ctx, accountId, projectId, clusterId)
+	if spec != nil {
+		request = request.GcpBackupReplicationSpec(*spec)
+	}
+	_, response, err := request.Execute()
+	if err != nil {
+		errMsg := getErrorMessage(response, err)
+		return fmt.Errorf("unable to configure GCP backup replication: %s", errMsg)
+	}
+	return waitForBackupReplicationTask(ctx, apiClient, accountId, projectId, clusterId)
+}
+
+func expandPlanToGcpSpec(ctx context.Context, apiClient *openapiclient.APIClient, accountId, projectId, clusterId string, plan Cluster) (*openapiclient.GcpBackupReplicationSpec, bool, error) {
+	gcpSpec := plan.BackupReplicationSpec.GCPSpec
+	if !boolValue(gcpSpec.Enabled) {
+		return &openapiclient.GcpBackupReplicationSpec{}, true, nil
+	}
+
+	switch plan.ClusterType.Value {
+	case "SYNCHRONOUS":
+		config := gcpSpec.SyncClusterSpec
+		target := strings.TrimSpace(typesStringValue(config.ReplicationConfig.Target))
+		region, regionErr := getPrimaryBackupRegion(ctx, apiClient, accountId, projectId, clusterId)
+		if regionErr != nil || region == "" {
+			return nil, false, regionErr
+		}
+		targetSpec := openapiclient.NewGcpBackupReplicationRegionTarget(region)
+		t := ""
+		if boolValue(gcpSpec.Enabled) {
+			t = target
+		}
+		targetSpec.SetTarget(t)
+
+		return openapiclient.NewGcpBackupReplicationSpec([]openapiclient.GcpBackupReplicationRegionTarget{*targetSpec}), true, nil
+	case "GEO_PARTITIONED":
+		geo := gcpSpec.GeoPartitionedClusterSpec
+		var targets []openapiclient.GcpBackupReplicationRegionTarget
+		for _, cfg := range geo.ReplicationConfigs {
+			region := strings.TrimSpace(typesStringValue(cfg.DesiredRegion))
+			target := strings.TrimSpace(typesStringValue(cfg.Target))
+			targetSpec := openapiclient.NewGcpBackupReplicationRegionTarget(region)
+			t := ""
+			if boolValue(gcpSpec.Enabled) {
+				t = target
+			}
+			targetSpec.SetTarget(t)
+			targets = append(targets, *targetSpec)
+		}
+		return openapiclient.NewGcpBackupReplicationSpec(targets), true, nil
+	default:
+		return nil, false, fmt.Errorf("backup_replication_spec is not supported for cluster type %s", plan.ClusterType.Value)
+	}
+}
+
+func getPrimaryBackupRegion(ctx context.Context, apiClient *openapiclient.APIClient, accountId, projectId, clusterId string) (string, error) {
+	resp, httpResp, err := apiClient.ClusterApi.GetClusterBackupRegions(ctx, accountId, projectId, clusterId).Execute()
+	if err != nil {
+		errMsg := getErrorMessage(httpResp, err)
+		return "", fmt.Errorf("unable to fetch backup region information: %s", errMsg)
+	}
+	regions := resp.Data.GetBackupRegions()
+	if len(regions) == 0 {
+		return "", fmt.Errorf("no backup regions returned for cluster %s", clusterId)
+	}
+	return regions[0], nil
+}
+
+func waitForBackupReplicationTask(ctx context.Context, apiClient *openapiclient.APIClient, accountId, projectId, clusterId string) error {
+	retryPolicy := retry.NewConstant(10 * time.Second)
+	retryPolicy = retry.WithMaxDuration(3600*time.Second, retryPolicy)
+	err := retry.Do(ctx, retryPolicy, func(ctx context.Context) error {
+		taskState, readOK, message := getTaskState(accountId, projectId, clusterId, openapiclient.ENTITYTYPEENUM_CLUSTER, openapiclient.TASKTYPEENUM_MODIFY_GCP_BACKUP_REPLICATION, apiClient, ctx)
+		if readOK {
+			switch taskState {
+			case string(openapiclient.TASKACTIONSTATEENUM_SUCCEEDED):
+				return nil
+			case string(openapiclient.TASKACTIONSTATEENUM_FAILED):
+				return ErrFailedTask
+			case "TASK_NOT_FOUND":
+				return retry.RetryableError(errors.New("backup replication task not found yet"))
+			}
+		} else {
+			return retry.RetryableError(fmt.Errorf("unable to read backup replication task status: %s", message))
+		}
+		return retry.RetryableError(errors.New("backup replication operation in progress"))
+	})
+	if err != nil {
+		if errors.Is(err, ErrFailedTask) {
+			return fmt.Errorf("backup replication operation failed")
+		}
+		return fmt.Errorf("backup replication operation did not complete: %w", err)
+	}
+	return nil
+}
+
+func readGcpBackupReplicationState(ctx context.Context, apiClient *openapiclient.APIClient, accountId, projectId, clusterId, clusterType string) (*BackupReplicationSpec, error) {
+	resp, httpResp, err := apiClient.BackupReplicationApi.GetGcpBackupReplicationConfig(ctx, accountId, projectId, clusterId).Execute()
+	if err != nil {
+		if httpResp != nil && httpResp.StatusCode == http.StatusNotFound {
+			return nil, nil
+		}
+		errMsg := getErrorMessage(httpResp, err)
+		return nil, fmt.Errorf("unable to read GCP backup replication configuration: %s", errMsg)
+	}
+	return flattenGcpBackupReplicationResponse(resp, clusterType), nil
+}
+
+func flattenGcpBackupReplicationResponse(resp openapiclient.GCPBackupReplicationResponse, clusterType string) *BackupReplicationSpec {
+	info := resp.Data.Info
+	if info.RegionConfigs == nil && info.State == "" {
+		return nil
+	}
+	enabled := info.GetState() != openapiclient.CLUSTERBACKUPREPLICATIONSTATEENUM_DISABLED
+	result := &BackupReplicationSpec{
+		GCPSpec: &GcpBackupReplicationSpec{
+			Enabled: types.Bool{Value: enabled},
+		},
+	}
+
+	regionConfigs := info.GetRegionConfigs()
+	if len(regionConfigs) == 0 {
+		return result
+	}
+
+	var syncConfig *SyncClusterGcpReplicationConfig
+	var geoConfigs []GeoClusterGcpReplicationConfig
+	var expiryConfigs []GcpBackupReplicationExpiryConfig
+	for _, regionConfig := range regionConfigs {
+		for _, report := range regionConfig.Reports {
+			expiry := extractBackupReplicationExpiry(report)
+			if expiry.Null {
+				switch clusterType {
+				case "GEO_PARTITIONED":
+					geoConfigs = append(geoConfigs, buildGeoBackupReplicationConfig(regionConfig.Region, report, expiry))
+				case "SYNCHRONOUS":
+					if syncConfig == nil {
+						syncConfig = buildSyncBackupReplicationConfig(regionConfig.Region, report, expiry)
+					}
+				default:
+					// Unknown cluster type – skip processing but continue collecting expiry configs
+				}
+			} else {
+				expiryConfigs = append(expiryConfigs, buildExpiryBackupReplicationConfig(regionConfig.Region, report, expiry))
+			}
+		}
+	}
+
+	switch clusterType {
+	case "SYNCHRONOUS":
+		syncSpec := &SyncClusterGcpBackupReplicationSpec{}
+		syncSpec.ReplicationConfig = syncConfig
+		syncSpec.ConfigsSetForExpiry = expiryConfigs
+		result.GCPSpec.SyncClusterSpec = syncSpec
+	case "GEO_PARTITIONED":
+		geoSpec := &GeoClusterGcpBackupReplicationSpec{
+			ReplicationConfigs:  geoConfigs,
+			ConfigsSetForExpiry: expiryConfigs,
+		}
+		result.GCPSpec.GeoPartitionedClusterSpec = geoSpec
+	}
+
+	return result
+}
+
+func alignGeoGcpReplicationOrder(target *GeoClusterGcpBackupReplicationSpec, reference []GeoClusterGcpReplicationConfig) {
+	if target == nil || len(target.ReplicationConfigs) == 0 {
+		return
+	}
+
+	// If no reference ordering is available, sort alphabetically for determinism.
+	if len(reference) == 0 {
+		sort.SliceStable(target.ReplicationConfigs, func(i, j int) bool {
+			return target.ReplicationConfigs[i].DesiredRegion.Value < target.ReplicationConfigs[j].DesiredRegion.Value
+		})
+		return
+	}
+
+	configByRegion := make(map[string]GeoClusterGcpReplicationConfig, len(target.ReplicationConfigs))
+	for _, cfg := range target.ReplicationConfigs {
+		configByRegion[cfg.DesiredRegion.Value] = cfg
+	}
+
+	var ordered []GeoClusterGcpReplicationConfig
+	for _, ref := range reference {
+		region := ref.DesiredRegion.Value
+		if cfg, ok := configByRegion[region]; ok {
+			ordered = append(ordered, cfg)
+			delete(configByRegion, region)
+		}
+	}
+
+	if len(configByRegion) > 0 {
+		remaining := make([]GeoClusterGcpReplicationConfig, 0, len(configByRegion))
+		for _, cfg := range configByRegion {
+			remaining = append(remaining, cfg)
+		}
+		sort.SliceStable(remaining, func(i, j int) bool {
+			return remaining[i].DesiredRegion.Value < remaining[j].DesiredRegion.Value
+		})
+		ordered = append(ordered, remaining...)
+	}
+
+	if len(ordered) > 0 {
+		target.ReplicationConfigs = ordered
+	}
+}
+
+func alignGcpBackupReplicationRegionOrder(cluster *Cluster, reference []GeoClusterGcpReplicationConfig) {
+	if cluster == nil ||
+		cluster.BackupReplicationSpec == nil ||
+		cluster.BackupReplicationSpec.GCPSpec == nil {
+		return
+	}
+
+	alignGeoGcpReplicationOrder(cluster.BackupReplicationSpec.GCPSpec.GeoPartitionedClusterSpec, reference)
+}
+
+func getGeoGcpReplicationRegionReferenceOrder(spec *BackupReplicationSpec) []GeoClusterGcpReplicationConfig {
+	if spec == nil || spec.GCPSpec == nil || spec.GCPSpec.GeoPartitionedClusterSpec == nil {
+		return nil
+	}
+	return spec.GCPSpec.GeoPartitionedClusterSpec.ReplicationConfigs
+}
+
+func buildSyncBackupReplicationConfig(region string, report openapiclient.GcpBackupReplicationRegionReport, expiry types.String) *SyncClusterGcpReplicationConfig {
+	baseCfg := buildBackupReplicationBaseConfig(report, expiry)
+	return &SyncClusterGcpReplicationConfig{
+		AssignedRegion:                 stringValueOrNull(region),
+		Target:                         baseCfg.Target,
+		ConfigState:                    baseCfg.ConfigState,
+		ID:                             baseCfg.ID,
+		NextTransferOperationTime:      baseCfg.NextTransferOperationTime,
+		LatestTransferOperationDetails: baseCfg.LatestTransferOperationDetails,
+		ExpiryOn:                       baseCfg.ExpiryOn,
+	}
+}
+
+func buildGeoBackupReplicationConfig(region string, report openapiclient.GcpBackupReplicationRegionReport, expiry types.String) GeoClusterGcpReplicationConfig {
+	baseCfg := buildBackupReplicationBaseConfig(report, expiry)
+	return GeoClusterGcpReplicationConfig{
+		DesiredRegion:                  stringValueOrNull(region),
+		Target:                         baseCfg.Target,
+		ConfigState:                    baseCfg.ConfigState,
+		ID:                             baseCfg.ID,
+		NextTransferOperationTime:      baseCfg.NextTransferOperationTime,
+		LatestTransferOperationDetails: baseCfg.LatestTransferOperationDetails,
+		ExpiryOn:                       baseCfg.ExpiryOn,
+	}
+}
+
+func buildExpiryBackupReplicationConfig(region string, report openapiclient.GcpBackupReplicationRegionReport, expiry types.String) GcpBackupReplicationExpiryConfig {
+	baseCfg := buildBackupReplicationBaseConfig(report, expiry)
+	return GcpBackupReplicationExpiryConfig{
+		Region:                         stringValueOrNull(region),
+		Target:                         baseCfg.Target,
+		ConfigState:                    baseCfg.ConfigState,
+		ID:                             baseCfg.ID,
+		NextTransferOperationTime:      baseCfg.NextTransferOperationTime,
+		LatestTransferOperationDetails: baseCfg.LatestTransferOperationDetails,
+		ExpiryOn:                       baseCfg.ExpiryOn,
+	}
+}
+
+func buildBackupReplicationBaseConfig(report openapiclient.GcpBackupReplicationRegionReport, expiry types.String) GcpBackupReplicationBaseConfig {
+	return GcpBackupReplicationBaseConfig{
+		Target:                         stringValueOrNull(report.Target),
+		ConfigState:                    stringValueOrNull(string(report.ConfigState)),
+		ID:                             stringValueOrNull(report.Id),
+		NextTransferOperationTime:      extractNextTransferOperationTime(report),
+		LatestTransferOperationDetails: buildLatestTransferDetails(report),
+		ExpiryOn:                       expiry,
+	}
+}
+
+func extractBackupReplicationExpiry(report openapiclient.GcpBackupReplicationRegionReport) types.String {
+	if report.Metadata.IsSet() {
+		if meta := report.Metadata.Get(); meta != nil {
+			return nullableStringToTypesString(meta.ExpiryOn)
+		}
+	}
+	return types.String{Null: true}
+}
+
+func extractNextTransferOperationTime(report openapiclient.GcpBackupReplicationRegionReport) types.String {
+	if report.TransferJobDetails != nil {
+		return timeToTypesString(report.TransferJobDetails.GetNextTransferOperationTime())
+	}
+	return types.String{Null: true}
+}
+
+func buildLatestTransferDetails(report openapiclient.GcpBackupReplicationRegionReport) *GcpBackupReplicationLatestTransferOperationDetails {
+	if report.TransferJobDetails == nil {
+		return nil
+	}
+	if details, ok := report.TransferJobDetails.GetLatestTransferOperationDetailsOk(); ok && details != nil {
+		return &GcpBackupReplicationLatestTransferOperationDetails{
+			StartTime: timeToTypesString(details.StartTime),
+			EndTime:   timeToTypesString(details.EndTime),
+			Status:    stringValueOrNull(details.Status),
+		}
+	}
+	return nil
+}
+
+func nullableStringToTypesString(value openapiclient.NullableString) types.String {
+	if !value.IsSet() {
+		return types.String{Null: true}
+	}
+	val := value.Get()
+	if val == nil {
+		return types.String{Null: true}
+	}
+	return stringValueOrNull(*val)
+}
+
+func stringValueOrNull(val string) types.String {
+	if strings.TrimSpace(val) == "" {
+		return types.String{Null: true}
+	}
+	return types.String{Value: val}
+}
+
+func timeToTypesString(t time.Time) types.String {
+	if t.IsZero() {
+		return types.String{Null: true}
+	}
+	return types.String{Value: t.UTC().Format(time.RFC3339)}
+}
+
+func boolValue(val types.Bool) bool {
+	return !(val.Unknown || val.Null) && val.Value
+}
+
+func typesStringValue(val types.String) string {
+	if val.Unknown || val.Null {
+		return ""
+	}
+	return val.Value
 }
