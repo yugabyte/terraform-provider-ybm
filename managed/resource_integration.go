@@ -62,7 +62,7 @@ func (r resourceIntegrationType) getSchemaAttributes() map[string]tfsdk.Attribut
 			Description: "Defines different exporter destination types.",
 			Type:        types.StringType,
 			Required:    true,
-			Validators:  []tfsdk.AttributeValidator{stringvalidator.OneOf("DATADOG", "GRAFANA", "SUMOLOGIC", "GOOGLECLOUD", "PROMETHEUS", "VICTORIAMETRICS")},
+			Validators:  []tfsdk.AttributeValidator{stringvalidator.OneOf("DATADOG", "GRAFANA", "SUMOLOGIC", "GOOGLECLOUD", "PROMETHEUS", "VICTORIAMETRICS", "NEWRELIC")},
 			PlanModifiers: []tfsdk.AttributePlanModifier{
 				planmodifier.ImmutableFieldModifier{},
 			},
@@ -246,11 +246,32 @@ func (r resourceIntegrationType) getSchemaAttributes() map[string]tfsdk.Attribut
 				},
 			}),
 		},
+		"newrelic_spec": {
+			Description: "The specifications of a New Relic integration.",
+			Optional:    true,
+			PlanModifiers: []tfsdk.AttributePlanModifier{
+				planmodifier.ImmutableFieldModifier{},
+			},
+			Validators: onlyContainsPath("newrelic_spec"),
+			Attributes: tfsdk.SingleNestedAttributes(map[string]tfsdk.Attribute{
+				"endpoint": {
+					Description: "New Relic Endpoint URL",
+					Type:        types.StringType,
+					Required:    true,
+				},
+				"license_key": {
+					Description: "New Relic License Key",
+					Type:        types.StringType,
+					Required:    true,
+					Sensitive:   true,
+				},
+			}),
+		},
 	}
 }
 
 func onlyContainsPath(requiredPath string) []tfsdk.AttributeValidator {
-	allPaths := []string{"datadog_spec", "grafana_spec", "sumologic_spec", "googlecloud_spec", "prometheus_spec", "victoriametrics_spec"}
+	allPaths := []string{"datadog_spec", "grafana_spec", "sumologic_spec", "googlecloud_spec", "prometheus_spec", "victoriametrics_spec", "newrelic_spec"}
 	var validators []tfsdk.AttributeValidator
 
 	for _, specPath := range allPaths {
@@ -282,6 +303,7 @@ func getIntegrationPlan(ctx context.Context, plan tfsdk.Plan, tp *TelemetryProvi
 	diags.Append(plan.GetAttribute(ctx, path.Root("grafana_spec"), &tp.GrafanaSpec)...)
 	diags.Append(plan.GetAttribute(ctx, path.Root("sumologic_spec"), &tp.SumoLogicSpec)...)
 	diags.Append(plan.GetAttribute(ctx, path.Root("googlecloud_spec"), &tp.GoogleCloudSpec)...)
+	diags.Append(plan.GetAttribute(ctx, path.Root("newrelic_spec"), &tp.NewRelicSpec)...)
 	return diags
 }
 
@@ -303,6 +325,8 @@ func getIDsFromIntegrationState(ctx context.Context, state tfsdk.State, tp *Tele
 		state.GetAttribute(ctx, path.Root("sumologic_spec"), &tp.SumoLogicSpec)
 	case string(openapiclient.TELEMETRYPROVIDERTYPEENUM_GOOGLECLOUD):
 		state.GetAttribute(ctx, path.Root("googlecloud_spec"), &tp.GoogleCloudSpec)
+	case string(openapiclient.TELEMETRYPROVIDERTYPEENUM_NEWRELIC):
+		state.GetAttribute(ctx, path.Root("newrelic_spec"), &tp.NewRelicSpec)
 	}
 }
 
@@ -410,10 +434,19 @@ func (r resourceIntegration) Create(ctx context.Context, req tfsdk.CreateResourc
 			googleCloudSpec.SetUniverseDomain(gcpServiceAccountPlan.UniverseDomain.Value)
 		}
 		telemetryProviderSpec.SetGooglecloudSpec(googleCloudSpec)
+	case openapiclient.TELEMETRYPROVIDERTYPEENUM_NEWRELIC:
+		if plan.NewRelicSpec == nil {
+			resp.Diagnostics.AddError(
+				"newrelic_spec is required for type NEWRELIC",
+				"newrelic_spec is required when telemetry sink is NEWRELIC. Please include this field in the resource",
+			)
+			return
+		}
+		telemetryProviderSpec.SetNewrelicSpec(*openapiclient.NewNewrelicTelemetryProviderSpec(plan.NewRelicSpec.LicenseKey.Value, plan.NewRelicSpec.Endpoint.Value))
 	default:
 		//We should never go there normally
 		resp.Diagnostics.AddError(
-			"Only DATADOG, GRAFANA, SUMOLOGIC and GOOGLECLOUD are currently supported as an integrations",
+			"Only DATADOG, GRAFANA, SUMOLOGIC, GOOGLECLOUD, PROMETHEUS, VICTORIAMETRICS and NEWRELIC are currently supported as an integrations",
 			"",
 		)
 		return
@@ -540,6 +573,11 @@ func resourceTelemetryProviderRead(accountId string, projectId string, configID 
 		}
 		if googlecloudSpec.HasUniverseDomain() {
 			tp.GoogleCloudSpec.UniverseDomain = types.String{Value: *googlecloudSpec.UniverseDomain}
+		}
+	case openapiclient.TELEMETRYPROVIDERTYPEENUM_NEWRELIC:
+		tp.NewRelicSpec = &NewRelicSpec{
+			Endpoint:   types.String{Value: configSpec.NewrelicSpec.Get().Endpoint},
+			LicenseKey: userProvidedTpDetails.NewRelicSpec.LicenseKey,
 		}
 	}
 

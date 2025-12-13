@@ -204,6 +204,23 @@ func (r dataSourceIntegrationType) GetSchema(_ context.Context) (tfsdk.Schema, d
 					},
 				}),
 			},
+			"newrelic_spec": {
+				Description: "The specifications of a Newrelic integration.",
+				Computed:    true,
+				Attributes: tfsdk.SingleNestedAttributes(map[string]tfsdk.Attribute{
+					"endpoint": {
+						Description: "Newrelic Endpoint URL",
+						Type:        types.StringType,
+						Required:    true,
+					},
+					"license_key": {
+						Description: "Newrelic License Key",
+						Type:        types.StringType,
+						Required:    true,
+						Sensitive:   true,
+					},
+				}),
+			},
 		},
 	}, nil
 }
@@ -342,6 +359,12 @@ func dataSourceTelemetryProviderRead(accountId string, projectId string, configN
 		}
 		if googlecloudSpec.HasUniverseDomain() {
 			tp.GoogleCloudSpec.UniverseDomain = types.String{Value: *googlecloudSpec.UniverseDomain}
+		}
+	case openapiclient.TELEMETRYPROVIDERTYPEENUM_NEWRELIC:
+		newRelicSpec := configSpec.GetNewrelicSpec()
+		tp.NewRelicSpec = &NewRelicSpec{
+			Endpoint:   types.String{Value: newRelicSpec.Endpoint},
+			LicenseKey: types.String{Value: newRelicSpec.LicenseKey},
 		}
 	}
 
