@@ -2480,7 +2480,7 @@ func resourceClusterRead(ctx context.Context, clusterId string, backUpSchedules 
 	cluster.ClusterRegionInfo = clusterRegionInfo
 	cluster.CloudType.Value = string(respClusterRegionInfo[0].PlacementInfo.CloudInfo.GetCode())
 
-	if isGcpBackupReplicationFeatureEnabled() && cluster.CloudType.Value == "GCP" {
+	if cluster.CloudType.Value == "GCP" {
 		backupSpec, err := readGcpBackupReplicationState(ctx, apiClient, accountId, projectId, clusterId, cluster.ClusterType.Value)
 		if err != nil {
 			return cluster, false, err.Error()

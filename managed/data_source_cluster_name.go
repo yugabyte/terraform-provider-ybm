@@ -311,6 +311,263 @@ func (r dataClusterNameType) GetSchema(_ context.Context) (tfsdk.Schema, diag.Di
 					},
 				}),
 			},
+			"backup_replication_spec": {
+				Description: "Configuration for backup replication. Enables replication of cluster backups to offsite buckets.",
+				Computed:    true,
+				Attributes: tfsdk.SingleNestedAttributes(map[string]tfsdk.Attribute{
+					"gcp_spec": {
+						Description: "GCP-specific backup replication configuration.",
+						Computed:    true,
+						Attributes: tfsdk.SingleNestedAttributes(map[string]tfsdk.Attribute{
+							"enabled": {
+								Description: "Whether GCP backup replication is enabled for this cluster.",
+								Type:        types.BoolType,
+								Computed:    true,
+							},
+							"sync_cluster_spec": {
+								Description: "Backup replication configuration for SYNCHRONOUS clusters.",
+								Computed:    true,
+								Attributes: tfsdk.SingleNestedAttributes(map[string]tfsdk.Attribute{
+									"replication_config": {
+										Description: "Replication configuration specifying the target GCS bucket and status information.",
+										Computed:    true,
+										Attributes: tfsdk.SingleNestedAttributes(map[string]tfsdk.Attribute{
+											"target": {
+												Description: "The GCS bucket name where backups will be replicated",
+												Type:        types.StringType,
+												Computed:    true,
+											},
+											"assigned_region": {
+												Description: "The desginated backup region from where the backups will be replicated",
+												Type:        types.StringType,
+												Computed:    true,
+											},
+											"config_state": {
+												Description: "The current state of the replication configuration (e.g., ENABLED, DISABLED etc.).",
+												Type:        types.StringType,
+												Computed:    true,
+											},
+											"id": {
+												Description: "Unique identifier for the replication configuration.",
+												Type:        types.StringType,
+												Computed:    true,
+											},
+											"next_transfer_operation_time": {
+												Description: "Timestamp of the next scheduled backup transfer operation.",
+												Type:        types.StringType,
+												Computed:    true,
+											},
+											"latest_transfer_operation_details": {
+												Description: "Details about the most recent backup transfer operation.",
+												Computed:    true,
+												Attributes: tfsdk.SingleNestedAttributes(map[string]tfsdk.Attribute{
+													"start_time": {
+														Description: "Start time of the latest transfer operation.",
+														Type:        types.StringType,
+														Computed:    true,
+													},
+													"end_time": {
+														Description: "End time of the latest transfer operation.",
+														Type:        types.StringType,
+														Computed:    true,
+													},
+													"status": {
+														Description: "Status of the latest transfer operation (e.g., SUCCESS, FAILED, IN_PROGRESS).",
+														Type:        types.StringType,
+														Computed:    true,
+													},
+												}),
+											},
+											"expiry_on": {
+												Description: "Timestamp when this replication configuration expires, if applicable.",
+												Type:        types.StringType,
+												Computed:    true,
+											},
+										}),
+									},
+									"configs_set_for_expiry": {
+										Description: "List of replication configurations that are set to expire.",
+										Computed:    true,
+										Attributes: tfsdk.ListNestedAttributes(map[string]tfsdk.Attribute{
+											"region": {
+												Description: "The region associated with this replication configuration.",
+												Type:        types.StringType,
+												Computed:    true,
+											},
+											"target": {
+												Description: "The GCS bucket name for this replication configuration",
+												Type:        types.StringType,
+												Computed:    true,
+											},
+											"config_state": {
+												Description: "The current state of the replication configuration (e.g., ENABLED, DISABLED etc.).",
+												Type:        types.StringType,
+												Computed:    true,
+											},
+											"id": {
+												Description: "Unique identifier for the replication configuration.",
+												Type:        types.StringType,
+												Computed:    true,
+											},
+											"next_transfer_operation_time": {
+												Description: "Timestamp of the next scheduled backup transfer operation.",
+												Type:        types.StringType,
+												Computed:    true,
+											},
+											"latest_transfer_operation_details": {
+												Description: "Details about the most recent backup transfer operation.",
+												Computed:    true,
+												Attributes: tfsdk.SingleNestedAttributes(map[string]tfsdk.Attribute{
+													"start_time": {
+														Description: "Start time of the latest transfer operation.",
+														Type:        types.StringType,
+														Computed:    true,
+													},
+													"end_time": {
+														Description: "End time of the latest transfer operation.",
+														Type:        types.StringType,
+														Computed:    true,
+													},
+													"status": {
+														Description: "Status of the latest transfer operation (e.g., SUCCESS, FAILED, IN_PROGRESS).",
+														Type:        types.StringType,
+														Computed:    true,
+													},
+												}),
+											},
+											"expiry_on": {
+												Description: "Timestamp when this replication configuration expires.",
+												Type:        types.StringType,
+												Computed:    true,
+											},
+										}),
+									},
+								}),
+							},
+							"geo_partitioned_cluster_spec": {
+								Description: "Backup replication configuration for GEO_PARTITIONED clusters.",
+								Computed:    true,
+								Attributes: tfsdk.SingleNestedAttributes(map[string]tfsdk.Attribute{
+									"replication_configs": {
+										Description: "List of replication configurations, one for each region in the geo-partitioned cluster.",
+										Computed:    true,
+										Attributes: tfsdk.ListNestedAttributes(map[string]tfsdk.Attribute{
+											"desired_region": {
+												Description: "The region name for this replication configuration. Must match one of the cluster's regions.",
+												Type:        types.StringType,
+												Computed:    true,
+											},
+											"target": {
+												Description: "The GCS bucket name where backups for this region will be replicated.",
+												Type:        types.StringType,
+												Computed:    true,
+											},
+											"config_state": {
+												Description: "The current state of the replication configuration (e.g., ENABLED, DISABLED etc.).",
+												Type:        types.StringType,
+												Computed:    true,
+											},
+											"id": {
+												Description: "Unique identifier for the replication configuration.",
+												Type:        types.StringType,
+												Computed:    true,
+											},
+											"next_transfer_operation_time": {
+												Description: "Timestamp of the next scheduled backup transfer operation.",
+												Type:        types.StringType,
+												Computed:    true,
+											},
+											"latest_transfer_operation_details": {
+												Description: "Details about the most recent backup transfer operation.",
+												Computed:    true,
+												Attributes: tfsdk.SingleNestedAttributes(map[string]tfsdk.Attribute{
+													"start_time": {
+														Description: "Start time of the latest transfer operation.",
+														Type:        types.StringType,
+														Computed:    true,
+													},
+													"end_time": {
+														Description: "End time of the latest transfer operation.",
+														Type:        types.StringType,
+														Computed:    true,
+													},
+													"status": {
+														Description: "Status of the latest transfer operation (e.g., SUCCESS, FAILED, IN_PROGRESS).",
+														Type:        types.StringType,
+														Computed:    true,
+													},
+												}),
+											},
+											"expiry_on": {
+												Description: "Timestamp when this replication configuration expires, if applicable.",
+												Type:        types.StringType,
+												Computed:    true,
+											},
+										}),
+									},
+									"configs_set_for_expiry": {
+										Description: "List of replication configurations that are set to expire.",
+										Computed:    true,
+										Attributes: tfsdk.ListNestedAttributes(map[string]tfsdk.Attribute{
+											"region": {
+												Description: "The region associated with this replication configuration.",
+												Type:        types.StringType,
+												Computed:    true,
+											},
+											"target": {
+												Description: "The GCS bucket name for this replication configuration.",
+												Type:        types.StringType,
+												Computed:    true,
+											},
+											"config_state": {
+												Description: "The current state of the replication configuration (e.g., ACTIVE, PENDING, ERROR).",
+												Type:        types.StringType,
+												Computed:    true,
+											},
+											"id": {
+												Description: "Unique identifier for the replication configuration.",
+												Type:        types.StringType,
+												Computed:    true,
+											},
+											"next_transfer_operation_time": {
+												Description: "Timestamp of the next scheduled backup transfer operation.",
+												Type:        types.StringType,
+												Computed:    true,
+											},
+											"latest_transfer_operation_details": {
+												Description: "Details about the most recent backup transfer operation.",
+												Computed:    true,
+												Attributes: tfsdk.SingleNestedAttributes(map[string]tfsdk.Attribute{
+													"start_time": {
+														Description: "Start time of the latest transfer operation.",
+														Type:        types.StringType,
+														Computed:    true,
+													},
+													"end_time": {
+														Description: "End time of the latest transfer operation.",
+														Type:        types.StringType,
+														Computed:    true,
+													},
+													"status": {
+														Description: "Status of the latest transfer operation (e.g., SUCCESS, FAILED, IN_PROGRESS).",
+														Type:        types.StringType,
+														Computed:    true,
+													},
+												}),
+											},
+											"expiry_on": {
+												Description: "Timestamp when this replication configuration expires.",
+												Type:        types.StringType,
+												Computed:    true,
+											},
+										}),
+									},
+								}),
+							},
+						}),
+					},
+				}),
+			},
 			"cluster_tier": {
 				Description: "FREE (Sandbox) or PAID (Dedicated).",
 				Type:        types.StringType,
