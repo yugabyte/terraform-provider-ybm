@@ -11,6 +11,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
 	"github.com/hashicorp/terraform-plugin-framework/types"
+	"github.com/yugabyte/terraform-provider-ybm/managed/fflags"
 
 	//"github.com/hashicorp/terraform-plugin-log/tflog"
 
@@ -342,6 +343,27 @@ func dataSourceTelemetryProviderRead(accountId string, projectId string, configN
 		}
 		if googlecloudSpec.HasUniverseDomain() {
 			tp.GoogleCloudSpec.UniverseDomain = types.String{Value: *googlecloudSpec.UniverseDomain}
+		}
+	case openapiclient.TELEMETRYPROVIDERTYPEENUM_AWS_S3:
+		if fflags.IsFeatureFlagEnabled(fflags.S3Integration) {
+			s3Spec := configSpec.GetAwsS3Spec()
+			tp.AwsS3Spec = &AwsS3Spec{
+				BucketName:      types.String{Value: s3Spec.GetBucketName()},
+				Region:          types.String{Value: s3Spec.GetRegion()},
+				AccessKeyId:     types.String{Value: s3Spec.GetAccessKeyId()},
+				SecretAccessKey: types.String{Value: s3Spec.GetSecretAccessKey()},
+			}
+
+			// Set optional fields if they exist
+			if s3Spec.HasPathPrefix() {
+				tp.AwsS3Spec.PathPrefix = types.String{Value: s3Spec.GetPathPrefix()}
+			}
+			if s3Spec.HasFilePrefix() {
+				tp.AwsS3Spec.FilePrefix = types.String{Value: s3Spec.GetFilePrefix()}
+			}
+			if s3Spec.HasPartitionStrategy() {
+				tp.AwsS3Spec.PartitionStrategy = types.String{Value: s3Spec.GetPartitionStrategy()}
+			}
 		}
 	}
 
