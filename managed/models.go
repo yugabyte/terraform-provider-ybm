@@ -369,6 +369,16 @@ type SumoLogicSpec struct {
 	InstallationToken types.String `tfsdk:"installation_token"`
 }
 
+type AwsS3Spec struct {
+	BucketName        types.String `tfsdk:"bucket_name"`
+	Region            types.String `tfsdk:"region"`
+	AccessKeyId       types.String `tfsdk:"access_key_id"`
+	SecretAccessKey   types.String `tfsdk:"secret_access_key"`
+	PathPrefix        types.String `tfsdk:"path_prefix"`
+	FilePrefix        types.String `tfsdk:"file_prefix"`
+	PartitionStrategy types.String `tfsdk:"partition_strategy"`
+}
+
 func (d DataDogSpec) EncryptedKey() string {
 	return util.ObfuscateString(d.ApiKey.Value)
 }
@@ -386,6 +396,16 @@ func (s SumoLogicSpec) EncryptedKey(key string) string {
 		return util.ObfuscateString(s.AccessId.Value)
 	case "installation_token":
 		return util.ObfuscateString(s.InstallationToken.Value)
+	}
+	return ""
+}
+
+func (a AwsS3Spec) EncryptedKey(key string) string {
+	switch key {
+	case "access_key_id":
+		return util.ObfuscateString(a.AccessKeyId.Value)
+	case "secret_access_key":
+		return util.ObfuscateString(a.SecretAccessKey.Value)
 	}
 	return ""
 }
@@ -437,6 +457,7 @@ type TelemetryProvider struct {
 	GrafanaSpec         *GrafanaSpec         `tfsdk:"grafana_spec"`
 	SumoLogicSpec       *SumoLogicSpec       `tfsdk:"sumologic_spec"`
 	GoogleCloudSpec     *GCPServiceAccount   `tfsdk:"googlecloud_spec"`
+	AwsS3Spec           *AwsS3Spec           `tfsdk:"aws_s3_spec"`
 	IsValid             types.Bool           `tfsdk:"is_valid"`
 }
 

@@ -1,0 +1,12 @@
+# Copy this file to terraform.tfvars and fill in your values
+
+# AWS credentials for S3 access
+aws_access_key_id     = "AKIA..."
+aws_secret_access_key = "your-secret-key"
+
+# Optional: Override default S3 settings
+# bucket_name = "my-custom-bucket-name"
+# region = "us-east-1"
+# path_prefix = "custom-logs/"
+# file_prefix = "custom-prefix"
+# partition_strategy = "minute"

@@ -16,6 +16,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
+	"github.com/yugabyte/terraform-provider-ybm/managed/fflags"
 	planmodifier "github.com/yugabyte/terraform-provider-ybm/managed/plan_modifier"
 	openapiclient "github.com/yugabyte/yugabytedb-managed-go-client-internal"
 )
@@ -33,8 +34,16 @@ func (r resourceIntegrationType) GetSchema(_ context.Context) (tfsdk.Schema, dia
 	}, nil
 }
 
+func (r resourceIntegrationType) getTypeValidator() tfsdk.AttributeValidator {
+	validTypes := []string{"DATADOG", "GRAFANA", "SUMOLOGIC", "GOOGLECLOUD", "PROMETHEUS", "VICTORIAMETRICS"}
+	if fflags.IsFeatureFlagEnabled(fflags.S3Integration) {
+		validTypes = append(validTypes, "AWS_S3")
+	}
+	return stringvalidator.OneOf(validTypes...)
+}
+
 func (r resourceIntegrationType) getSchemaAttributes() map[string]tfsdk.Attribute {
-	return map[string]tfsdk.Attribute{
+	attributes := map[string]tfsdk.Attribute{
 		"account_id": {
 			Description: "The ID of the account this integration belongs to.",
 			Type:        types.StringType,
@@ -62,7 +71,7 @@ func (r resourceIntegrationType) getSchemaAttributes() map[string]tfsdk.Attribut
 			Description: "Defines different exporter destination types.",
 			Type:        types.StringType,
 			Required:    true,
-			Validators:  []tfsdk.AttributeValidator{stringvalidator.OneOf("DATADOG", "GRAFANA", "SUMOLOGIC", "GOOGLECLOUD", "PROMETHEUS", "VICTORIAMETRICS")},
+			Validators:  []tfsdk.AttributeValidator{r.getTypeValidator()},
 			PlanModifiers: []tfsdk.AttributePlanModifier{
 				planmodifier.ImmutableFieldModifier{},
 			},
@@ -247,10 +256,70 @@ func (r resourceIntegrationType) getSchemaAttributes() map[string]tfsdk.Attribut
 			}),
 		},
 	}
+
+	// Add S3 integration support if feature flag is enabled
+	if fflags.IsFeatureFlagEnabled(fflags.S3Integration) {
+		attributes["aws_s3_spec"] = tfsdk.Attribute{
+			Description: "The specifications of an AWS S3 integration for PG logs export.",
+			Optional:    true,
+			PlanModifiers: []tfsdk.AttributePlanModifier{
+				planmodifier.ImmutableFieldModifier{},
+			},
+			Validators: onlyContainsPath("aws_s3_spec"),
+			Attributes: tfsdk.SingleNestedAttributes(map[string]tfsdk.Attribute{
+				"bucket_name": {
+					Description: "The S3 bucket name to export logs to",
+					Type:        types.StringType,
+					Required:    true,
+				},
+				"region": {
+					Description: "AWS region where the S3 bucket is located",
+					Type:        types.StringType,
+					Required:    true,
+				},
+				"access_key_id": {
+					Description: "AWS Access Key ID for S3 access",
+					Type:        types.StringType,
+					Required:    true,
+					Sensitive:   true,
+				},
+				"secret_access_key": {
+					Description: "AWS Secret Access Key for S3 access",
+					Type:        types.StringType,
+					Required:    true,
+					Sensitive:   true,
+				},
+				"path_prefix": {
+					Description: "S3 path prefix for organizing objects (default: yugabyte-logs/)",
+					Type:        types.StringType,
+					Optional:    true,
+				},
+				"file_prefix": {
+					Description: "Prefix for exported file names (default: yugabyte-logs)",
+					Type:        types.StringType,
+					Optional:    true,
+				},
+				"partition_strategy": {
+					Description: "Time-based partitioning: 'minute' or 'hour' (default: hour)",
+					Type:        types.StringType,
+					Optional:    true,
+					Validators:  []tfsdk.AttributeValidator{stringvalidator.OneOf("minute", "hour")},
+				},
+			}),
+		}
+	}
+
+	return attributes
 }
 
 func onlyContainsPath(requiredPath string) []tfsdk.AttributeValidator {
 	allPaths := []string{"datadog_spec", "grafana_spec", "sumologic_spec", "googlecloud_spec", "prometheus_spec", "victoriametrics_spec"}
+
+	// Add S3 integration to conflicts if feature flag is enabled
+	if fflags.IsFeatureFlagEnabled(fflags.S3Integration) {
+		allPaths = append(allPaths, "aws_s3_spec")
+	}
+
 	var validators []tfsdk.AttributeValidator
 
 	for _, specPath := range allPaths {
@@ -282,6 +351,12 @@ func getIntegrationPlan(ctx context.Context, plan tfsdk.Plan, tp *TelemetryProvi
 	diags.Append(plan.GetAttribute(ctx, path.Root("grafana_spec"), &tp.GrafanaSpec)...)
 	diags.Append(plan.GetAttribute(ctx, path.Root("sumologic_spec"), &tp.SumoLogicSpec)...)
 	diags.Append(plan.GetAttribute(ctx, path.Root("googlecloud_spec"), &tp.GoogleCloudSpec)...)
+
+	// Only try to get aws_s3_spec if the feature flag is enabled
+	if fflags.IsFeatureFlagEnabled(fflags.S3Integration) {
+		diags.Append(plan.GetAttribute(ctx, path.Root("aws_s3_spec"), &tp.AwsS3Spec)...)
+	}
+
 	return diags
 }
 
@@ -303,6 +378,10 @@ func getIDsFromIntegrationState(ctx context.Context, state tfsdk.State, tp *Tele
 		state.GetAttribute(ctx, path.Root("sumologic_spec"), &tp.SumoLogicSpec)
 	case string(openapiclient.TELEMETRYPROVIDERTYPEENUM_GOOGLECLOUD):
 		state.GetAttribute(ctx, path.Root("googlecloud_spec"), &tp.GoogleCloudSpec)
+	case string(openapiclient.TELEMETRYPROVIDERTYPEENUM_AWS_S3):
+		if fflags.IsFeatureFlagEnabled(fflags.S3Integration) {
+			state.GetAttribute(ctx, path.Root("aws_s3_spec"), &tp.AwsS3Spec)
+		}
 	}
 }
 
@@ -410,10 +489,39 @@ func (r resourceIntegration) Create(ctx context.Context, req tfsdk.CreateResourc
 			googleCloudSpec.SetUniverseDomain(gcpServiceAccountPlan.UniverseDomain.Value)
 		}
 		telemetryProviderSpec.SetGooglecloudSpec(googleCloudSpec)
+	case openapiclient.TELEMETRYPROVIDERTYPEENUM_AWS_S3:
+		if !fflags.IsFeatureFlagEnabled(fflags.S3Integration) {
+			resp.Diagnostics.AddError(
+				"AWS_S3 integration is not enabled",
+				"AWS S3 integration is disabled. Enable it with the YBM_FF_S3_INTEGRATION=true environment variable.",
+			)
+			return
+		}
+		if plan.AwsS3Spec == nil {
+			resp.Diagnostics.AddError(
+				"aws_s3_spec is required for type AWS_S3",
+				"aws_s3_spec is required when telemetry sink is AWS_S3. Please include this field in the resource",
+			)
+			return
+		}
+		awsS3SpecPlan := plan.AwsS3Spec
+		s3TelemetrySpec := *openapiclient.NewS3TelemetryProviderSpec(awsS3SpecPlan.BucketName.Value, awsS3SpecPlan.Region.Value, awsS3SpecPlan.AccessKeyId.Value, awsS3SpecPlan.SecretAccessKey.Value)
+
+		// Set optional fields if provided
+		if !awsS3SpecPlan.PathPrefix.Null && !awsS3SpecPlan.PathPrefix.Unknown && awsS3SpecPlan.PathPrefix.Value != "" {
+			s3TelemetrySpec.SetPathPrefix(awsS3SpecPlan.PathPrefix.Value)
+		}
+		if !awsS3SpecPlan.FilePrefix.Null && !awsS3SpecPlan.FilePrefix.Unknown && awsS3SpecPlan.FilePrefix.Value != "" {
+			s3TelemetrySpec.SetFilePrefix(awsS3SpecPlan.FilePrefix.Value)
+		}
+		if !awsS3SpecPlan.PartitionStrategy.Null && !awsS3SpecPlan.PartitionStrategy.Unknown && awsS3SpecPlan.PartitionStrategy.Value != "" {
+			s3TelemetrySpec.SetPartitionStrategy(awsS3SpecPlan.PartitionStrategy.Value)
+		}
+		telemetryProviderSpec.SetAwsS3Spec(s3TelemetrySpec)
 	default:
 		//We should never go there normally
 		resp.Diagnostics.AddError(
-			"Only DATADOG, GRAFANA, SUMOLOGIC and GOOGLECLOUD are currently supported as an integrations",
+			"Only DATADOG, GRAFANA, SUMOLOGIC, GOOGLECLOUD, PROMETHEUS, VICTORIAMETRICS and AWS_S3 are currently supported as integrations",
 			"",
 		)
 		return
@@ -540,6 +648,27 @@ func resourceTelemetryProviderRead(accountId string, projectId string, configID 
 		}
 		if googlecloudSpec.HasUniverseDomain() {
 			tp.GoogleCloudSpec.UniverseDomain = types.String{Value: *googlecloudSpec.UniverseDomain}
+		}
+	case openapiclient.TELEMETRYPROVIDERTYPEENUM_AWS_S3:
+		if fflags.IsFeatureFlagEnabled(fflags.S3Integration) && userProvidedTpDetails.AwsS3Spec != nil {
+			s3Spec := configSpec.GetAwsS3Spec()
+			tp.AwsS3Spec = &AwsS3Spec{
+				BucketName:      types.String{Value: s3Spec.BucketName},
+				Region:          types.String{Value: s3Spec.Region},
+				AccessKeyId:     userProvidedTpDetails.AwsS3Spec.AccessKeyId,     // Use user-provided value (API returns masked)
+				SecretAccessKey: userProvidedTpDetails.AwsS3Spec.SecretAccessKey, // Use user-provided value (API returns masked)
+			}
+
+			// Set optional fields from API response if they exist
+			if s3Spec.HasPathPrefix() {
+				tp.AwsS3Spec.PathPrefix = types.String{Value: s3Spec.GetPathPrefix()}
+			}
+			if s3Spec.HasFilePrefix() {
+				tp.AwsS3Spec.FilePrefix = types.String{Value: s3Spec.GetFilePrefix()}
+			}
+			if s3Spec.HasPartitionStrategy() {
+				tp.AwsS3Spec.PartitionStrategy = types.String{Value: s3Spec.GetPartitionStrategy()}
+			}
 		}
 	}
 
