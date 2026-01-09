@@ -361,7 +361,12 @@ func getIntegrationPlan(ctx context.Context, plan tfsdk.Plan, tp *TelemetryProvi
 	diags.Append(plan.GetAttribute(ctx, path.Root("grafana_spec"), &tp.GrafanaSpec)...)
 	diags.Append(plan.GetAttribute(ctx, path.Root("sumologic_spec"), &tp.SumoLogicSpec)...)
 	diags.Append(plan.GetAttribute(ctx, path.Root("googlecloud_spec"), &tp.GoogleCloudSpec)...)
-	diags.Append(plan.GetAttribute(ctx, path.Root("aws_s3_spec"), &tp.AwsS3Spec)...)
+	
+	// Only try to get aws_s3_spec if the feature flag is enabled
+	if fflags.IsFeatureFlagEnabled(fflags.S3Integration) {
+		diags.Append(plan.GetAttribute(ctx, path.Root("aws_s3_spec"), &tp.AwsS3Spec)...)
+	}
+	
 	return diags
 }
 
@@ -655,7 +660,7 @@ func resourceTelemetryProviderRead(accountId string, projectId string, configID 
 			tp.GoogleCloudSpec.UniverseDomain = types.String{Value: *googlecloudSpec.UniverseDomain}
 		}
 	case openapiclient.TELEMETRYPROVIDERTYPEENUM_AWS_S3:
-		if fflags.IsFeatureFlagEnabled(fflags.S3Integration) {
+		if fflags.IsFeatureFlagEnabled(fflags.S3Integration) && userProvidedTpDetails.AwsS3Spec != nil {
 			s3Spec := configSpec.GetAwsS3Spec()
 			tp.AwsS3Spec = &AwsS3Spec{
 				BucketName:      types.String{Value: s3Spec.BucketName},
