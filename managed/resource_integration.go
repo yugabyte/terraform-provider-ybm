@@ -265,7 +265,7 @@ func (r resourceIntegrationType) getSchemaAttributes() map[string]tfsdk.Attribut
 			PlanModifiers: []tfsdk.AttributePlanModifier{
 				planmodifier.ImmutableFieldModifier{},
 			},
-			Validators: r.onlyContainsPathWithS3("aws_s3_spec"),
+			Validators: onlyContainsPath("aws_s3_spec"),
 			Attributes: tfsdk.SingleNestedAttributes(map[string]tfsdk.Attribute{
 				"bucket_name": {
 					Description: "The S3 bucket name to export logs to",
@@ -314,22 +314,12 @@ func (r resourceIntegrationType) getSchemaAttributes() map[string]tfsdk.Attribut
 
 func onlyContainsPath(requiredPath string) []tfsdk.AttributeValidator {
 	allPaths := []string{"datadog_spec", "grafana_spec", "sumologic_spec", "googlecloud_spec", "prometheus_spec", "victoriametrics_spec"}
-	var validators []tfsdk.AttributeValidator
-
-	for _, specPath := range allPaths {
-		if specPath != requiredPath {
-			validators = append(validators, schemavalidator.ConflictsWith(path.MatchRoot(specPath)))
-		}
-	}
-
-	return validators
-}
-
-func (r resourceIntegrationType) onlyContainsPathWithS3(requiredPath string) []tfsdk.AttributeValidator {
-	allPaths := []string{"datadog_spec", "grafana_spec", "sumologic_spec", "googlecloud_spec", "prometheus_spec", "victoriametrics_spec"}
+	
+	// Add S3 integration to conflicts if feature flag is enabled
 	if fflags.IsFeatureFlagEnabled(fflags.S3Integration) {
 		allPaths = append(allPaths, "aws_s3_spec")
 	}
+	
 	var validators []tfsdk.AttributeValidator
 
 	for _, specPath := range allPaths {
