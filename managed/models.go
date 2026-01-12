@@ -94,6 +94,7 @@ type BackupScheduleInfo struct {
 	CronExpression            types.String `tfsdk:"cron_expression"`
 	TimeIntervalInDays        types.Int64  `tfsdk:"time_interval_in_days"`
 	IncrementalIntervalInMins types.Int64  `tfsdk:"incremental_interval_in_mins"`
+	UseRoles                  types.Bool   `tfsdk:"use_roles"`
 }
 type RegionInfo struct {
 	Region                     types.String `tfsdk:"region"`
@@ -217,6 +218,7 @@ type Backup struct {
 	RetentionPeriodInDays types.Int64  `tfsdk:"retention_period_in_days"`
 	MostRecent            types.Bool   `tfsdk:"most_recent"`
 	Timestamp             types.String `tfsdk:"timestamp"`
+	UseRoles              types.Bool   `tfsdk:"use_roles"`
 }
 
 type VPC struct {
