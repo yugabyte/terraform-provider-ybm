@@ -11,6 +11,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
 	"github.com/hashicorp/terraform-plugin-framework/types"
+	"github.com/yugabyte/terraform-provider-ybm/managed/fflags"
 
 	//"github.com/hashicorp/terraform-plugin-log/tflog"
 
@@ -20,191 +21,238 @@ import (
 type dataSourceIntegrationType struct{}
 
 func (r dataSourceIntegrationType) GetSchema(_ context.Context) (tfsdk.Schema, diag.Diagnostics) {
+	attributes := map[string]tfsdk.Attribute{
+		"account_id": {
+			Description: "The ID of the account this integration belongs to.",
+			Type:        types.StringType,
+			Computed:    true,
+		},
+		"project_id": {
+			Description: "The ID of the project this integration belongs to.",
+			Type:        types.StringType,
+			Computed:    true,
+		},
+		"config_id": {
+			Description: "The ID of the integration.",
+			Type:        types.StringType,
+			Computed:    true,
+		},
+		"config_name": {
+			Description: "The name of the integration",
+			Type:        types.StringType,
+			Required:    true,
+		},
+		"type": {
+			Description: "Defines different exporter destination types.",
+			Type:        types.StringType,
+			Computed:    true,
+		},
+		"is_valid": {
+			Description: "Signifies whether the integration configuration is valid or not",
+			Type:        types.BoolType,
+			Computed:    true,
+		},
+		"datadog_spec": {
+			Description: "The specifications of a Datadog integration.",
+			Computed:    true,
+			Attributes: tfsdk.SingleNestedAttributes(map[string]tfsdk.Attribute{
+				"api_key": {
+					Description: "Datadog Api Key",
+					Type:        types.StringType,
+					Computed:    true,
+					Sensitive:   true,
+				},
+				"site": {
+					Description: "Datadog site.",
+					Type:        types.StringType,
+					Computed:    true,
+				},
+			}),
+		},
+		"prometheus_spec": {
+			Description: "The specifications of a Prometheus integration.",
+			Computed:    true,
+			Attributes: tfsdk.SingleNestedAttributes(map[string]tfsdk.Attribute{
+				"endpoint": {
+					Description: "Prometheus OTLP endpoint URL e.g. http://my-prometheus-endpoint/api/v1/otlp",
+					Type:        types.StringType,
+					Computed:    true,
+				},
+			}),
+		},
+		"victoriametrics_spec": {
+			Description: "The specifications of a VictoriaMetrics integration.",
+			Computed:    true,
+			Attributes: tfsdk.SingleNestedAttributes(map[string]tfsdk.Attribute{
+				"endpoint": {
+					Description: "VictoriaMetrics OTLP endpoint URL e.g. http://my-victoria-metrics-endpoint/opentelemetry",
+					Type:        types.StringType,
+					Computed:    true,
+				},
+			}),
+		},
+		"grafana_spec": {
+			Description: "The specifications of a Grafana integration.",
+			Computed:    true,
+			Attributes: tfsdk.SingleNestedAttributes(map[string]tfsdk.Attribute{
+				"access_policy_token": {
+					Description: "Grafana Access Policy Token",
+					Type:        types.StringType,
+					Computed:    true,
+					Sensitive:   true,
+				},
+				"zone": {
+					Description: "Grafana Zone.",
+					Type:        types.StringType,
+					Computed:    true,
+				},
+				"instance_id": {
+					Description: "Grafana InstanceID.",
+					Type:        types.StringType,
+					Computed:    true,
+				},
+				"org_slug": {
+					Description: "Grafana OrgSlug.",
+					Type:        types.StringType,
+					Computed:    true,
+				},
+			}),
+		},
+		"sumologic_spec": {
+			Description: "The specifications of a Sumo Logic integration.",
+			Computed:    true,
+			Attributes: tfsdk.SingleNestedAttributes(map[string]tfsdk.Attribute{
+				"access_id": {
+					Description: "Sumo Logic Access Key ID",
+					Type:        types.StringType,
+					Computed:    true,
+					Sensitive:   true,
+				},
+				"access_key": {
+					Description: "Sumo Logic Access Key",
+					Type:        types.StringType,
+					Computed:    true,
+					Sensitive:   true,
+				},
+				"installation_token": {
+					Description: "A Sumo Logic installation token to export telemetry to Grafana with",
+					Type:        types.StringType,
+					Computed:    true,
+					Sensitive:   true,
+				},
+			}),
+		},
+		"googlecloud_spec": {
+			Description: "The specifications of a Google Cloud integration.",
+			Computed:    true,
+			Attributes: tfsdk.SingleNestedAttributes(map[string]tfsdk.Attribute{
+				"type": {
+					Description: "Service Account Type",
+					Type:        types.StringType,
+					Computed:    true,
+				},
+				"project_id": {
+					Description: "GCP Project ID",
+					Type:        types.StringType,
+					Computed:    true,
+				},
+				"private_key": {
+					Description: "Private Key",
+					Type:        types.StringType,
+					Computed:    true,
+				},
+				"private_key_id": {
+					Description: "Private Key ID",
+					Type:        types.StringType,
+					Computed:    true,
+				},
+				"client_email": {
+					Description: "Client Email",
+					Type:        types.StringType,
+					Computed:    true,
+				},
+				"client_id": {
+					Description: "Client ID",
+					Type:        types.StringType,
+					Computed:    true,
+				},
+				"auth_uri": {
+					Description: "Auth URI",
+					Type:        types.StringType,
+					Computed:    true,
+				},
+				"token_uri": {
+					Description: "Token URI",
+					Type:        types.StringType,
+					Computed:    true,
+				},
+				"auth_provider_x509_cert_url": {
+					Description: "Auth Provider X509 Cert URL",
+					Type:        types.StringType,
+					Computed:    true,
+				},
+				"client_x509_cert_url": {
+					Description: "Client X509 Cert URL",
+					Type:        types.StringType,
+					Computed:    true,
+				},
+				"universe_domain": {
+					Description: "Google Universe Domain",
+					Type:        types.StringType,
+					Computed:    true,
+				},
+			}),
+		},
+	}
+
+	// Always include S3 integration schema to match struct definition
+	attributes["aws_s3_spec"] = tfsdk.Attribute{
+		Description: "The specifications of an AWS S3 integration for PG logs export.",
+		Computed:    true,
+		Attributes: tfsdk.SingleNestedAttributes(map[string]tfsdk.Attribute{
+			"bucket_name": {
+				Description: "The S3 bucket name to export logs to",
+				Type:        types.StringType,
+				Computed:    true,
+			},
+			"region": {
+				Description: "AWS region where the S3 bucket is located",
+				Type:        types.StringType,
+				Computed:    true,
+			},
+			"access_key_id": {
+				Description: "AWS Access Key ID for S3 access",
+				Type:        types.StringType,
+				Computed:    true,
+				Sensitive:   true,
+			},
+			"secret_access_key": {
+				Description: "AWS Secret Access Key for S3 access",
+				Type:        types.StringType,
+				Computed:    true,
+				Sensitive:   true,
+			},
+			"path_prefix": {
+				Description: "S3 path prefix for organizing objects",
+				Type:        types.StringType,
+				Computed:    true,
+			},
+			"file_prefix": {
+				Description: "Prefix for exported file names",
+				Type:        types.StringType,
+				Computed:    true,
+			},
+			"partition_strategy": {
+				Description: "Time-based partitioning: 'minute' or 'hour'",
+				Type:        types.StringType,
+				Computed:    true,
+			},
+		}),
+	}
+
 	return tfsdk.Schema{
 		Description: "The data source to fetch Yugabyte Aeon Integration",
-		Attributes: map[string]tfsdk.Attribute{
-			"account_id": {
-				Description: "The ID of the account this integration belongs to.",
-				Type:        types.StringType,
-				Computed:    true,
-			},
-			"project_id": {
-				Description: "The ID of the project this integration belongs to.",
-				Type:        types.StringType,
-				Computed:    true,
-			},
-			"config_id": {
-				Description: "The ID of the integration.",
-				Type:        types.StringType,
-				Computed:    true,
-			},
-			"config_name": {
-				Description: "The name of the integration",
-				Type:        types.StringType,
-				Required:    true,
-			},
-			"type": {
-				Description: "Defines different exporter destination types.",
-				Type:        types.StringType,
-				Computed:    true,
-			},
-			"is_valid": {
-				Description: "Signifies whether the integration configuration is valid or not",
-				Type:        types.BoolType,
-				Computed:    true,
-			},
-			"datadog_spec": {
-				Description: "The specifications of a Datadog integration.",
-				Computed:    true,
-				Attributes: tfsdk.SingleNestedAttributes(map[string]tfsdk.Attribute{
-					"api_key": {
-						Description: "Datadog Api Key",
-						Type:        types.StringType,
-						Computed:    true,
-						Sensitive:   true,
-					},
-					"site": {
-						Description: "Datadog site.",
-						Type:        types.StringType,
-						Computed:    true,
-					},
-				}),
-			},
-			"prometheus_spec": {
-				Description: "The specifications of a Prometheus integration.",
-				Computed:    true,
-				Attributes: tfsdk.SingleNestedAttributes(map[string]tfsdk.Attribute{
-					"endpoint": {
-						Description: "Prometheus OTLP endpoint URL e.g. http://my-prometheus-endpoint/api/v1/otlp",
-						Type:        types.StringType,
-						Computed:    true,
-					},
-				}),
-			},
-			"victoriametrics_spec": {
-				Description: "The specifications of a VictoriaMetrics integration.",
-				Computed:    true,
-				Attributes: tfsdk.SingleNestedAttributes(map[string]tfsdk.Attribute{
-					"endpoint": {
-						Description: "VictoriaMetrics OTLP endpoint URL e.g. http://my-victoria-metrics-endpoint/opentelemetry",
-						Type:        types.StringType,
-						Computed:    true,
-					},
-				}),
-			},
-			"grafana_spec": {
-				Description: "The specifications of a Grafana integration.",
-				Computed:    true,
-				Attributes: tfsdk.SingleNestedAttributes(map[string]tfsdk.Attribute{
-					"access_policy_token": {
-						Description: "Grafana Access Policy Token",
-						Type:        types.StringType,
-						Computed:    true,
-						Sensitive:   true,
-					},
-					"zone": {
-						Description: "Grafana Zone.",
-						Type:        types.StringType,
-						Computed:    true,
-					},
-					"instance_id": {
-						Description: "Grafana InstanceID.",
-						Type:        types.StringType,
-						Computed:    true,
-					},
-					"org_slug": {
-						Description: "Grafana OrgSlug.",
-						Type:        types.StringType,
-						Computed:    true,
-					},
-				}),
-			},
-			"sumologic_spec": {
-				Description: "The specifications of a Sumo Logic integration.",
-				Computed:    true,
-				Attributes: tfsdk.SingleNestedAttributes(map[string]tfsdk.Attribute{
-					"access_id": {
-						Description: "Sumo Logic Access Key ID",
-						Type:        types.StringType,
-						Computed:    true,
-						Sensitive:   true,
-					},
-					"access_key": {
-						Description: "Sumo Logic Access Key",
-						Type:        types.StringType,
-						Computed:    true,
-						Sensitive:   true,
-					},
-					"installation_token": {
-						Description: "A Sumo Logic installation token to export telemetry to Grafana with",
-						Type:        types.StringType,
-						Computed:    true,
-						Sensitive:   true,
-					},
-				}),
-			},
-			"googlecloud_spec": {
-				Description: "The specifications of a Google Cloud integration.",
-				Computed:    true,
-				Attributes: tfsdk.SingleNestedAttributes(map[string]tfsdk.Attribute{
-					"type": {
-						Description: "Service Account Type",
-						Type:        types.StringType,
-						Computed:    true,
-					},
-					"project_id": {
-						Description: "GCP Project ID",
-						Type:        types.StringType,
-						Computed:    true,
-					},
-					"private_key": {
-						Description: "Private Key",
-						Type:        types.StringType,
-						Computed:    true,
-					},
-					"private_key_id": {
-						Description: "Private Key ID",
-						Type:        types.StringType,
-						Computed:    true,
-					},
-					"client_email": {
-						Description: "Client Email",
-						Type:        types.StringType,
-						Computed:    true,
-					},
-					"client_id": {
-						Description: "Client ID",
-						Type:        types.StringType,
-						Computed:    true,
-					},
-					"auth_uri": {
-						Description: "Auth URI",
-						Type:        types.StringType,
-						Computed:    true,
-					},
-					"token_uri": {
-						Description: "Token URI",
-						Type:        types.StringType,
-						Computed:    true,
-					},
-					"auth_provider_x509_cert_url": {
-						Description: "Auth Provider X509 Cert URL",
-						Type:        types.StringType,
-						Computed:    true,
-					},
-					"client_x509_cert_url": {
-						Description: "Client X509 Cert URL",
-						Type:        types.StringType,
-						Computed:    true,
-					},
-					"universe_domain": {
-						Description: "Google Universe Domain",
-						Type:        types.StringType,
-						Computed:    true,
-					},
-				}),
-			},
-		},
+		Attributes:  attributes,
 	}, nil
 }
 
@@ -254,6 +302,15 @@ func (r dataSourceIntegration) Read(ctx context.Context, req tfsdk.ReadDataSourc
 	telemetryProvider, readOK, message := dataSourceTelemetryProviderRead(accountId, projectId, tpConfig.ConfigName.Value, apiClient)
 	if !readOK {
 		resp.Diagnostics.AddError("Unable to read the state of the integration", message)
+		return
+	}
+
+	// Check if trying to read S3 integration when feature flag is disabled
+	if telemetryProvider.Type.Value == "AWS_S3" && !fflags.IsFeatureFlagEnabled(fflags.S3Integration) {
+		resp.Diagnostics.AddError(
+			"AWS S3 integration is not enabled",
+			"Cannot read AWS S3 integration when the feature flag is disabled. Enable it with the YBM_FF_S3_INTEGRATION=true environment variable.",
+		)
 		return
 	}
 
@@ -342,6 +399,27 @@ func dataSourceTelemetryProviderRead(accountId string, projectId string, configN
 		}
 		if googlecloudSpec.HasUniverseDomain() {
 			tp.GoogleCloudSpec.UniverseDomain = types.String{Value: *googlecloudSpec.UniverseDomain}
+		}
+	case openapiclient.TELEMETRYPROVIDERTYPEENUM_AWS_S3:
+		if fflags.IsFeatureFlagEnabled(fflags.S3Integration) {
+			s3Spec := configSpec.GetAwsS3Spec()
+			tp.AwsS3Spec = &AwsS3Spec{
+				BucketName:      types.String{Value: s3Spec.GetBucketName()},
+				Region:          types.String{Value: s3Spec.GetRegion()},
+				AccessKeyId:     types.String{Value: s3Spec.GetAccessKeyId()},
+				SecretAccessKey: types.String{Value: s3Spec.GetSecretAccessKey()},
+			}
+
+			// Set optional fields if they exist
+			if s3Spec.HasPathPrefix() {
+				tp.AwsS3Spec.PathPrefix = types.String{Value: s3Spec.GetPathPrefix()}
+			}
+			if s3Spec.HasFilePrefix() {
+				tp.AwsS3Spec.FilePrefix = types.String{Value: s3Spec.GetFilePrefix()}
+			}
+			if s3Spec.HasPartitionStrategy() {
+				tp.AwsS3Spec.PartitionStrategy = types.String{Value: s3Spec.GetPartitionStrategy()}
+			}
 		}
 	}
 
