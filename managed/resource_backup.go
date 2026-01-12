@@ -67,6 +67,12 @@ func (r resourceBackupType) GetSchema(_ context.Context) (tfsdk.Schema, diag.Dia
 				Type:        types.StringType,
 				Optional:    true,
 			},
+			"use_roles": {
+				Description: "Backup global YSQL roles. Defaults to false.",
+				Type:        types.BoolType,
+				Optional:    true,
+				Computed:    true,
+			},
 		},
 	}, nil
 }
@@ -92,6 +98,7 @@ func getBackupPlan(ctx context.Context, plan tfsdk.Plan, backup *Backup) diag.Di
 	diags.Append(plan.GetAttribute(ctx, path.Root("backup_id"), &backup.BackupID)...)
 	diags.Append(plan.GetAttribute(ctx, path.Root("backup_description"), &backup.BackupDescription)...)
 	diags.Append(plan.GetAttribute(ctx, path.Root("retention_period_in_days"), &backup.RetentionPeriodInDays)...)
+	diags.Append(plan.GetAttribute(ctx, path.Root("use_roles"), &backup.UseRoles)...)
 
 	return diags
 }
@@ -146,6 +153,10 @@ func (r resourceBackup) Create(ctx context.Context, req tfsdk.CreateResourceRequ
 	backupSpec := *openapiclient.NewBackupSpec(clusterId)
 	backupSpec.SetDescription(backupDescription)
 	backupSpec.RetentionPeriodInDays = &backupRetentionPeriodInDays
+
+	if !plan.UseRoles.IsNull() && !plan.UseRoles.IsUnknown() {
+		backupSpec.SetUseRoles(plan.UseRoles.Value)
+	}
 
 	backupResp, response, err := apiClient.BackupApi.CreateBackup(context.Background(), accountId, projectId).BackupSpec(backupSpec).Execute()
 	if err != nil {
@@ -207,6 +218,14 @@ func resourceBackupRead(accountId string, projectId string, backupId string, api
 	backup.RetentionPeriodInDays.Value = int64(*backupResp.Data.Spec.RetentionPeriodInDays)
 	backup.MostRecent.Null = true
 	backup.Timestamp.Null = true
+
+	// Read use_roles from response (defaults to false if not present)
+	if backupResp.Data.Spec.HasUseRoles() {
+		backup.UseRoles.Value = backupResp.Data.Spec.GetUseRoles()
+	} else {
+		backup.UseRoles.Value = false
+	}
+
 	return backup, true, ""
 }
 

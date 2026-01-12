@@ -35,6 +35,7 @@ resource "ybm_backup" "example_backup" {
 - `backup_id` (String) The ID of the backup. Created automatically when the backup is created. Used to get a specific backup.
 - `most_recent` (Boolean) Set to true to fetch the most recent backup.
 - `timestamp` (String) The timestamp of the backup to be fetched
+- `use_roles` (Boolean) Backup global YSQL roles. Defaults to false.
 
 ### Read-Only
 

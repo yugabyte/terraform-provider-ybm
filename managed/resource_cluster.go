@@ -549,6 +549,12 @@ func (r resourceClusterType) GetSchema(_ context.Context) (tfsdk.Schema, diag.Di
 					Optional:    true,
 					Validators:  []tfsdk.AttributeValidator{int64validator.AtLeast(60)},
 				},
+				"use_roles": {
+					Description: "Backup global YSQL roles in scheduled backups. Defaults to false.",
+					Type:        types.BoolType,
+					Optional:    true,
+					Computed:    true,
+				},
 			}),
 		},
 		"cmk_spec": {
@@ -974,6 +980,10 @@ func editBackupScheduleV2(ctx context.Context, backupScheduleStruct BackupSchedu
 		}
 		if backupScheduleStruct.TimeIntervalInDays.Value != 0 && backupScheduleStruct.CronExpression.Value != "" {
 			return errors.New("unable to create custom backup schedule. You can't pass both the cron expression and time interval in days")
+		}
+
+		if !backupScheduleStruct.UseRoles.IsNull() && !backupScheduleStruct.UseRoles.IsUnknown() {
+			backupScheduleSpec.SetUseRoles(backupScheduleStruct.UseRoles.Value)
 		}
 
 		_, res, err := apiClient.BackupApi.ModifyBackupScheduleV2(ctx, accountId, projectId, clusterId, scheduleId).ScheduleSpecV2(backupScheduleSpec).Execute()
@@ -2201,6 +2211,12 @@ func readBackupScheduleInfoV2(ctx context.Context, apiClient *openapiclient.APIC
 	}
 	if backupScheduleStruct.IncrementalIntervalInMins.Value == 0 {
 		backupScheduleStruct.IncrementalIntervalInMins.Null = true
+	}
+	// Read use_roles from response (defaults to false if not present)
+	if spec.HasUseRoles() {
+		backupScheduleStruct.UseRoles = types.Bool{Value: spec.GetUseRoles()}
+	} else {
+		backupScheduleStruct.UseRoles = types.Bool{Value: false}
 	}
 	backupScheduleInfo[0] = backupScheduleStruct
 
