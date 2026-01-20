@@ -606,48 +606,58 @@ func resourceTelemetryProviderRead(accountId string, projectId string, configID 
 	// API returns masked credentials. We use the credential details provided by the user in the plan or the existing state
 	switch configData.GetSpec().Type {
 	case openapiclient.TELEMETRYPROVIDERTYPEENUM_DATADOG:
-		tp.DataDogSpec = &DataDogSpec{
-			ApiKey: userProvidedTpDetails.DataDogSpec.ApiKey,
-			Site:   types.String{Value: configSpec.DatadogSpec.Get().Site},
+		if userProvidedTpDetails.DataDogSpec != nil {
+			tp.DataDogSpec = &DataDogSpec{
+				ApiKey: userProvidedTpDetails.DataDogSpec.ApiKey,
+				Site:   types.String{Value: configSpec.DatadogSpec.Get().Site},
+			}
 		}
 	case openapiclient.TELEMETRYPROVIDERTYPEENUM_PROMETHEUS:
-		tp.PrometheusSpec = &PrometheusSpec{
-			Endpoint: types.String{Value: userProvidedTpDetails.PrometheusSpec.Endpoint.Value},
+		if userProvidedTpDetails.PrometheusSpec != nil {
+			tp.PrometheusSpec = &PrometheusSpec{
+				Endpoint: types.String{Value: userProvidedTpDetails.PrometheusSpec.Endpoint.Value},
+			}
 		}
 	case openapiclient.TELEMETRYPROVIDERTYPEENUM_VICTORIAMETRICS:
 		tp.VictoriaMetricsSpec = &VictoriaMetricsSpec{
 			Endpoint: types.String{Value: configSpec.VictoriametricsSpec.Get().Endpoint},
 		}
 	case openapiclient.TELEMETRYPROVIDERTYPEENUM_GRAFANA:
-		grafanaSpec := configSpec.GetGrafanaSpec()
-		tp.GrafanaSpec = &GrafanaSpec{
-			AccessTokenPolicy: userProvidedTpDetails.GrafanaSpec.AccessTokenPolicy,
-			Zone:              types.String{Value: grafanaSpec.Zone},
-			InstanceId:        types.String{Value: grafanaSpec.InstanceId},
-			OrgSlug:           types.String{Value: grafanaSpec.OrgSlug},
+		if userProvidedTpDetails.GrafanaSpec != nil {
+			grafanaSpec := configSpec.GetGrafanaSpec()
+			tp.GrafanaSpec = &GrafanaSpec{
+				AccessTokenPolicy: userProvidedTpDetails.GrafanaSpec.AccessTokenPolicy,
+				Zone:              types.String{Value: grafanaSpec.Zone},
+				InstanceId:        types.String{Value: grafanaSpec.InstanceId},
+				OrgSlug:           types.String{Value: grafanaSpec.OrgSlug},
+			}
 		}
 	case openapiclient.TELEMETRYPROVIDERTYPEENUM_SUMOLOGIC:
-		tp.SumoLogicSpec = &SumoLogicSpec{
-			AccessKey:         userProvidedTpDetails.SumoLogicSpec.AccessKey,
-			AccessId:          userProvidedTpDetails.SumoLogicSpec.AccessId,
-			InstallationToken: userProvidedTpDetails.SumoLogicSpec.InstallationToken,
+		if userProvidedTpDetails.SumoLogicSpec != nil {
+			tp.SumoLogicSpec = &SumoLogicSpec{
+				AccessKey:         userProvidedTpDetails.SumoLogicSpec.AccessKey,
+				AccessId:          userProvidedTpDetails.SumoLogicSpec.AccessId,
+				InstallationToken: userProvidedTpDetails.SumoLogicSpec.InstallationToken,
+			}
 		}
 	case openapiclient.TELEMETRYPROVIDERTYPEENUM_GOOGLECLOUD:
-		googlecloudSpec := configSpec.GetGooglecloudSpec()
-		tp.GoogleCloudSpec = &GCPServiceAccount{
-			Type:                    types.String{Value: googlecloudSpec.Type},
-			ProjectId:               types.String{Value: googlecloudSpec.ProjectId},
-			PrivateKeyId:            types.String{Value: googlecloudSpec.PrivateKeyId},
-			PrivateKey:              userProvidedTpDetails.GoogleCloudSpec.PrivateKey,
-			ClientEmail:             types.String{Value: googlecloudSpec.ClientEmail},
-			ClientId:                types.String{Value: googlecloudSpec.ClientId},
-			AuthUri:                 types.String{Value: googlecloudSpec.AuthUri},
-			TokenUri:                types.String{Value: googlecloudSpec.TokenUri},
-			AuthProviderX509CertUrl: types.String{Value: googlecloudSpec.AuthProviderX509CertUrl},
-			ClientX509CertUrl:       types.String{Value: googlecloudSpec.ClientX509CertUrl},
-		}
-		if googlecloudSpec.HasUniverseDomain() {
-			tp.GoogleCloudSpec.UniverseDomain = types.String{Value: *googlecloudSpec.UniverseDomain}
+		if userProvidedTpDetails.GoogleCloudSpec != nil {
+			googlecloudSpec := configSpec.GetGooglecloudSpec()
+			tp.GoogleCloudSpec = &GCPServiceAccount{
+				Type:                    types.String{Value: googlecloudSpec.Type},
+				ProjectId:               types.String{Value: googlecloudSpec.ProjectId},
+				PrivateKeyId:            types.String{Value: googlecloudSpec.PrivateKeyId},
+				PrivateKey:              userProvidedTpDetails.GoogleCloudSpec.PrivateKey,
+				ClientEmail:             types.String{Value: googlecloudSpec.ClientEmail},
+				ClientId:                types.String{Value: googlecloudSpec.ClientId},
+				AuthUri:                 types.String{Value: googlecloudSpec.AuthUri},
+				TokenUri:                types.String{Value: googlecloudSpec.TokenUri},
+				AuthProviderX509CertUrl: types.String{Value: googlecloudSpec.AuthProviderX509CertUrl},
+				ClientX509CertUrl:       types.String{Value: googlecloudSpec.ClientX509CertUrl},
+			}
+			if googlecloudSpec.HasUniverseDomain() {
+				tp.GoogleCloudSpec.UniverseDomain = types.String{Value: *googlecloudSpec.UniverseDomain}
+			}
 		}
 	case openapiclient.TELEMETRYPROVIDERTYPEENUM_AWS_S3:
 		if fflags.IsFeatureFlagEnabled(fflags.S3Integration) && userProvidedTpDetails.AwsS3Spec != nil {
