@@ -291,7 +291,11 @@ func (r dataSourceIntegration) Read(ctx context.Context, req tfsdk.ReadDataSourc
 
 	var tpConfig TelemetryProvider
 
-	diags := req.Config.Get(ctx, &tpConfig)
+	if !fflags.IsFeatureFlagEnabled(fflags.S3Integration) {
+		tpConfig.AwsS3Spec = nil
+	}
+
+	diags := setIntegrationState(ctx, &resp.State, tpConfig)
 	resp.Diagnostics.Append(diags...)
 	if resp.Diagnostics.HasError() {
 		return

@@ -35,7 +35,7 @@ func (r resourceIntegrationType) GetSchema(_ context.Context) (tfsdk.Schema, dia
 }
 
 func (r resourceIntegrationType) getTypeValidator() tfsdk.AttributeValidator {
-	validTypes := []string{"DATADOG", "GRAFANA", "SUMOLOGIC", "GOOGLECLOUD", "PROMETHEUS", "VICTORIAMETRICS"}
+	validTypes := []string{"DATADOG", "GRAFANA", "SUMOLOGIC", "GOOGLECLOUD", "PROMETHEUS", "VICTORIAMETRICS", "NEWRELIC"}
 	if fflags.IsFeatureFlagEnabled(fflags.S3Integration) {
 		validTypes = append(validTypes, "AWS_S3")
 	}
@@ -276,11 +276,7 @@ func (r resourceIntegrationType) getSchemaAttributes() map[string]tfsdk.Attribut
 				},
 			}),
 		},
-	}
-
-	// Add S3 integration support if feature flag is enabled
-	if fflags.IsFeatureFlagEnabled(fflags.S3Integration) {
-		attributes["aws_s3_spec"] = tfsdk.Attribute{
+		"aws_s3_spec": {
 			Description: "The specifications of an AWS S3 integration for PG logs export.",
 			Optional:    true,
 			PlanModifiers: []tfsdk.AttributePlanModifier{
@@ -327,7 +323,12 @@ func (r resourceIntegrationType) getSchemaAttributes() map[string]tfsdk.Attribut
 					Validators:  []tfsdk.AttributeValidator{stringvalidator.OneOf("minute", "hour")},
 				},
 			}),
-		}
+		},
+	}
+
+	// Remove S3 integration support if feature flag is disabled
+	if !fflags.IsFeatureFlagEnabled(fflags.S3Integration) {
+		delete(attributes, "aws_s3_spec")
 	}
 
 	return attributes
@@ -554,7 +555,7 @@ func (r resourceIntegration) Create(ctx context.Context, req tfsdk.CreateResourc
 	default:
 		//We should never go there normally
 		resp.Diagnostics.AddError(
-			"Only DATADOG, GRAFANA, SUMOLOGIC, GOOGLECLOUD, PROMETHEUS, VICTORIAMETRICS, NEWRELIC and AWS_S3 are currently supported as an integrations",
+			"Only DATADOG, GRAFANA, SUMOLOGIC, GOOGLECLOUD, PROMETHEUS, VICTORIAMETRICS, NEWRELIC and AWS_S3 are currently supported as integrations",
 			"",
 		)
 		return
@@ -572,7 +573,11 @@ func (r resourceIntegration) Create(ctx context.Context, req tfsdk.CreateResourc
 		return
 	}
 
-	diags := resp.State.Set(ctx, &telemetryProvider)
+	if !fflags.IsFeatureFlagEnabled(fflags.S3Integration) {
+		telemetryProvider.AwsS3Spec = nil
+	}
+
+	diags := setIntegrationState(ctx, &resp.State, telemetryProvider)
 	resp.Diagnostics.Append(diags...)
 	if resp.Diagnostics.HasError() {
 		return
@@ -605,12 +610,55 @@ func (r resourceIntegration) Read(ctx context.Context, req tfsdk.ReadResourceReq
 		return
 	}
 
-	diags := resp.State.Set(ctx, &config)
+	if !fflags.IsFeatureFlagEnabled(fflags.S3Integration) {
+		config.AwsS3Spec = nil
+	}
+
+	diags := setIntegrationState(ctx, &resp.State, config)
 	resp.Diagnostics.Append(diags...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
 }
+
+func setIntegrationState(ctx context.Context, state *tfsdk.State, config TelemetryProvider) diag.Diagnostics {
+	if !fflags.IsFeatureFlagEnabled(fflags.S3Integration) {
+		// Use a temporary struct to set the state without the AWS S3 spec
+		tempState := struct {
+			AccountID           types.String         `tfsdk:"account_id"`
+			ProjectID           types.String         `tfsdk:"project_id"`
+			ConfigID            types.String         `tfsdk:"config_id"`
+			ConfigName          types.String         `tfsdk:"config_name"`
+			Type                types.String         `tfsdk:"type"`
+			DataDogSpec         *DataDogSpec         `tfsdk:"datadog_spec"`
+			PrometheusSpec      *PrometheusSpec      `tfsdk:"prometheus_spec"`
+			VictoriaMetricsSpec *VictoriaMetricsSpec `tfsdk:"victoriametrics_spec"`
+			GrafanaSpec         *GrafanaSpec         `tfsdk:"grafana_spec"`
+			SumoLogicSpec       *SumoLogicSpec       `tfsdk:"sumologic_spec"`
+			GoogleCloudSpec     *GCPServiceAccount   `tfsdk:"googlecloud_spec"`
+			NewRelicSpec        *NewRelicSpec        `tfsdk:"newrelic_spec"`
+			IsValid             types.Bool           `tfsdk:"is_valid"`
+		}{
+			AccountID:           config.AccountID,
+			ProjectID:           config.ProjectID,
+			ConfigID:            config.ConfigID,
+			ConfigName:          config.ConfigName,
+			Type:                config.Type,
+			DataDogSpec:         config.DataDogSpec,
+			PrometheusSpec:      config.PrometheusSpec,
+			VictoriaMetricsSpec: config.VictoriaMetricsSpec,
+			GrafanaSpec:         config.GrafanaSpec,
+			SumoLogicSpec:       config.SumoLogicSpec,
+			GoogleCloudSpec:     config.GoogleCloudSpec,
+			NewRelicSpec:        config.NewRelicSpec,
+			IsValid:             config.IsValid,
+		}
+		return state.Set(ctx, &tempState)
+	} else {
+		return state.Set(ctx, &config)
+	}
+}
+
 func (r resourceIntegration) Update(ctx context.Context, req tfsdk.UpdateResourceRequest, resp *tfsdk.UpdateResourceResponse) {
 	resp.Diagnostics.AddError(
 		"Unsupported Operation",
