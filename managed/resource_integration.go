@@ -276,11 +276,7 @@ func (r resourceIntegrationType) getSchemaAttributes() map[string]tfsdk.Attribut
 				},
 			}),
 		},
-	}
-
-	// Add S3 integration support if feature flag is enabled
-	if fflags.IsFeatureFlagEnabled(fflags.S3Integration) {
-		attributes["aws_s3_spec"] = tfsdk.Attribute{
+		"aws_s3_spec": {
 			Description: "The specifications of an AWS S3 integration for PG logs export.",
 			Optional:    true,
 			PlanModifiers: []tfsdk.AttributePlanModifier{
@@ -327,7 +323,12 @@ func (r resourceIntegrationType) getSchemaAttributes() map[string]tfsdk.Attribut
 					Validators:  []tfsdk.AttributeValidator{stringvalidator.OneOf("minute", "hour")},
 				},
 			}),
-		}
+		},
+	}
+
+	// Remove S3 integration support if feature flag is disabled
+	if fflags.IsFeatureFlagEnabled(fflags.S3Integration) {
+		delete(attributes, "aws_s3_spec")
 	}
 
 	return attributes
@@ -572,6 +573,10 @@ func (r resourceIntegration) Create(ctx context.Context, req tfsdk.CreateResourc
 		return
 	}
 
+	if !fflags.IsFeatureFlagEnabled(fflags.S3Integration) {
+		telemetryProvider.AwsS3Spec = nil
+	}
+
 	diags := resp.State.Set(ctx, &telemetryProvider)
 	resp.Diagnostics.Append(diags...)
 	if resp.Diagnostics.HasError() {
@@ -605,12 +610,17 @@ func (r resourceIntegration) Read(ctx context.Context, req tfsdk.ReadResourceReq
 		return
 	}
 
+	if !fflags.IsFeatureFlagEnabled(fflags.S3Integration) {
+		config.AwsS3Spec = nil
+	}
+
 	diags := resp.State.Set(ctx, &config)
 	resp.Diagnostics.Append(diags...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
 }
+
 func (r resourceIntegration) Update(ctx context.Context, req tfsdk.UpdateResourceRequest, resp *tfsdk.UpdateResourceResponse) {
 	resp.Diagnostics.AddError(
 		"Unsupported Operation",
