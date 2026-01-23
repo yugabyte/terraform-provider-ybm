@@ -35,7 +35,7 @@ func (r resourceIntegrationType) GetSchema(_ context.Context) (tfsdk.Schema, dia
 }
 
 func (r resourceIntegrationType) getTypeValidator() tfsdk.AttributeValidator {
-	validTypes := []string{"DATADOG", "GRAFANA", "SUMOLOGIC", "GOOGLECLOUD", "PROMETHEUS", "VICTORIAMETRICS"}
+	validTypes := []string{"DATADOG", "GRAFANA", "SUMOLOGIC", "GOOGLECLOUD", "PROMETHEUS", "VICTORIAMETRICS", "NEWRELIC"}
 	if fflags.IsFeatureFlagEnabled(fflags.S3Integration) {
 		validTypes = append(validTypes, "AWS_S3")
 	}
@@ -255,11 +255,28 @@ func (r resourceIntegrationType) getSchemaAttributes() map[string]tfsdk.Attribut
 				},
 			}),
 		},
-	}
-
-	// Add S3 integration support if feature flag is enabled
-	if fflags.IsFeatureFlagEnabled(fflags.S3Integration) {
-		attributes["aws_s3_spec"] = tfsdk.Attribute{
+		"newrelic_spec": {
+			Description: "The specifications of a New Relic integration.",
+			Optional:    true,
+			PlanModifiers: []tfsdk.AttributePlanModifier{
+				planmodifier.ImmutableFieldModifier{},
+			},
+			Validators: onlyContainsPath("newrelic_spec"),
+			Attributes: tfsdk.SingleNestedAttributes(map[string]tfsdk.Attribute{
+				"endpoint": {
+					Description: "New Relic Endpoint URL",
+					Type:        types.StringType,
+					Required:    true,
+				},
+				"license_key": {
+					Description: "New Relic License Key",
+					Type:        types.StringType,
+					Required:    true,
+					Sensitive:   true,
+				},
+			}),
+		},
+		"aws_s3_spec": {
 			Description: "The specifications of an AWS S3 integration for PG logs export.",
 			Optional:    true,
 			PlanModifiers: []tfsdk.AttributePlanModifier{
@@ -306,14 +323,19 @@ func (r resourceIntegrationType) getSchemaAttributes() map[string]tfsdk.Attribut
 					Validators:  []tfsdk.AttributeValidator{stringvalidator.OneOf("minute", "hour")},
 				},
 			}),
-		}
+		},
+	}
+
+	// Remove S3 integration support if feature flag is disabled
+	if !fflags.IsFeatureFlagEnabled(fflags.S3Integration) {
+		delete(attributes, "aws_s3_spec")
 	}
 
 	return attributes
 }
 
 func onlyContainsPath(requiredPath string) []tfsdk.AttributeValidator {
-	allPaths := []string{"datadog_spec", "grafana_spec", "sumologic_spec", "googlecloud_spec", "prometheus_spec", "victoriametrics_spec"}
+	allPaths := []string{"datadog_spec", "grafana_spec", "sumologic_spec", "googlecloud_spec", "prometheus_spec", "victoriametrics_spec", "newrelic_spec"}
 
 	// Add S3 integration to conflicts if feature flag is enabled
 	if fflags.IsFeatureFlagEnabled(fflags.S3Integration) {
@@ -351,6 +373,7 @@ func getIntegrationPlan(ctx context.Context, plan tfsdk.Plan, tp *TelemetryProvi
 	diags.Append(plan.GetAttribute(ctx, path.Root("grafana_spec"), &tp.GrafanaSpec)...)
 	diags.Append(plan.GetAttribute(ctx, path.Root("sumologic_spec"), &tp.SumoLogicSpec)...)
 	diags.Append(plan.GetAttribute(ctx, path.Root("googlecloud_spec"), &tp.GoogleCloudSpec)...)
+	diags.Append(plan.GetAttribute(ctx, path.Root("newrelic_spec"), &tp.NewRelicSpec)...)
 
 	// Only try to get aws_s3_spec if the feature flag is enabled
 	if fflags.IsFeatureFlagEnabled(fflags.S3Integration) {
@@ -378,6 +401,8 @@ func getIDsFromIntegrationState(ctx context.Context, state tfsdk.State, tp *Tele
 		state.GetAttribute(ctx, path.Root("sumologic_spec"), &tp.SumoLogicSpec)
 	case string(openapiclient.TELEMETRYPROVIDERTYPEENUM_GOOGLECLOUD):
 		state.GetAttribute(ctx, path.Root("googlecloud_spec"), &tp.GoogleCloudSpec)
+	case string(openapiclient.TELEMETRYPROVIDERTYPEENUM_NEWRELIC):
+		state.GetAttribute(ctx, path.Root("newrelic_spec"), &tp.NewRelicSpec)
 	case string(openapiclient.TELEMETRYPROVIDERTYPEENUM_AWS_S3):
 		if fflags.IsFeatureFlagEnabled(fflags.S3Integration) {
 			state.GetAttribute(ctx, path.Root("aws_s3_spec"), &tp.AwsS3Spec)
@@ -489,6 +514,15 @@ func (r resourceIntegration) Create(ctx context.Context, req tfsdk.CreateResourc
 			googleCloudSpec.SetUniverseDomain(gcpServiceAccountPlan.UniverseDomain.Value)
 		}
 		telemetryProviderSpec.SetGooglecloudSpec(googleCloudSpec)
+	case openapiclient.TELEMETRYPROVIDERTYPEENUM_NEWRELIC:
+		if plan.NewRelicSpec == nil {
+			resp.Diagnostics.AddError(
+				"newrelic_spec is required for type NEWRELIC",
+				"newrelic_spec is required when telemetry sink is NEWRELIC. Please include this field in the resource",
+			)
+			return
+		}
+		telemetryProviderSpec.SetNewrelicSpec(*openapiclient.NewNewrelicTelemetryProviderSpec(plan.NewRelicSpec.LicenseKey.Value, plan.NewRelicSpec.Endpoint.Value))
 	case openapiclient.TELEMETRYPROVIDERTYPEENUM_AWS_S3:
 		if !fflags.IsFeatureFlagEnabled(fflags.S3Integration) {
 			resp.Diagnostics.AddError(
@@ -521,7 +555,7 @@ func (r resourceIntegration) Create(ctx context.Context, req tfsdk.CreateResourc
 	default:
 		//We should never go there normally
 		resp.Diagnostics.AddError(
-			"Only DATADOG, GRAFANA, SUMOLOGIC, GOOGLECLOUD, PROMETHEUS, VICTORIAMETRICS and AWS_S3 are currently supported as integrations",
+			"Only DATADOG, GRAFANA, SUMOLOGIC, GOOGLECLOUD, PROMETHEUS, VICTORIAMETRICS, NEWRELIC and AWS_S3 are currently supported as integrations",
 			"",
 		)
 		return
@@ -539,7 +573,11 @@ func (r resourceIntegration) Create(ctx context.Context, req tfsdk.CreateResourc
 		return
 	}
 
-	diags := resp.State.Set(ctx, &telemetryProvider)
+	if !fflags.IsFeatureFlagEnabled(fflags.S3Integration) {
+		telemetryProvider.AwsS3Spec = nil
+	}
+
+	diags := setIntegrationState(ctx, &resp.State, telemetryProvider)
 	resp.Diagnostics.Append(diags...)
 	if resp.Diagnostics.HasError() {
 		return
@@ -572,12 +610,55 @@ func (r resourceIntegration) Read(ctx context.Context, req tfsdk.ReadResourceReq
 		return
 	}
 
-	diags := resp.State.Set(ctx, &config)
+	if !fflags.IsFeatureFlagEnabled(fflags.S3Integration) {
+		config.AwsS3Spec = nil
+	}
+
+	diags := setIntegrationState(ctx, &resp.State, config)
 	resp.Diagnostics.Append(diags...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
 }
+
+func setIntegrationState(ctx context.Context, state *tfsdk.State, config TelemetryProvider) diag.Diagnostics {
+	if !fflags.IsFeatureFlagEnabled(fflags.S3Integration) {
+		// Use a temporary struct to set the state without the AWS S3 spec
+		tempState := struct {
+			AccountID           types.String         `tfsdk:"account_id"`
+			ProjectID           types.String         `tfsdk:"project_id"`
+			ConfigID            types.String         `tfsdk:"config_id"`
+			ConfigName          types.String         `tfsdk:"config_name"`
+			Type                types.String         `tfsdk:"type"`
+			DataDogSpec         *DataDogSpec         `tfsdk:"datadog_spec"`
+			PrometheusSpec      *PrometheusSpec      `tfsdk:"prometheus_spec"`
+			VictoriaMetricsSpec *VictoriaMetricsSpec `tfsdk:"victoriametrics_spec"`
+			GrafanaSpec         *GrafanaSpec         `tfsdk:"grafana_spec"`
+			SumoLogicSpec       *SumoLogicSpec       `tfsdk:"sumologic_spec"`
+			GoogleCloudSpec     *GCPServiceAccount   `tfsdk:"googlecloud_spec"`
+			NewRelicSpec        *NewRelicSpec        `tfsdk:"newrelic_spec"`
+			IsValid             types.Bool           `tfsdk:"is_valid"`
+		}{
+			AccountID:           config.AccountID,
+			ProjectID:           config.ProjectID,
+			ConfigID:            config.ConfigID,
+			ConfigName:          config.ConfigName,
+			Type:                config.Type,
+			DataDogSpec:         config.DataDogSpec,
+			PrometheusSpec:      config.PrometheusSpec,
+			VictoriaMetricsSpec: config.VictoriaMetricsSpec,
+			GrafanaSpec:         config.GrafanaSpec,
+			SumoLogicSpec:       config.SumoLogicSpec,
+			GoogleCloudSpec:     config.GoogleCloudSpec,
+			NewRelicSpec:        config.NewRelicSpec,
+			IsValid:             config.IsValid,
+		}
+		return state.Set(ctx, &tempState)
+	} else {
+		return state.Set(ctx, &config)
+	}
+}
+
 func (r resourceIntegration) Update(ctx context.Context, req tfsdk.UpdateResourceRequest, resp *tfsdk.UpdateResourceResponse) {
 	resp.Diagnostics.AddError(
 		"Unsupported Operation",
@@ -606,61 +687,57 @@ func resourceTelemetryProviderRead(accountId string, projectId string, configID 
 	// API returns masked credentials. We use the credential details provided by the user in the plan or the existing state
 	switch configData.GetSpec().Type {
 	case openapiclient.TELEMETRYPROVIDERTYPEENUM_DATADOG:
-		if userProvidedTpDetails.DataDogSpec != nil {
-			tp.DataDogSpec = &DataDogSpec{
-				ApiKey: userProvidedTpDetails.DataDogSpec.ApiKey,
-				Site:   types.String{Value: configSpec.DatadogSpec.Get().Site},
-			}
+		tp.DataDogSpec = &DataDogSpec{
+			ApiKey: userProvidedTpDetails.DataDogSpec.ApiKey,
+			Site:   types.String{Value: configSpec.DatadogSpec.Get().Site},
 		}
 	case openapiclient.TELEMETRYPROVIDERTYPEENUM_PROMETHEUS:
-		if userProvidedTpDetails.PrometheusSpec != nil {
-			tp.PrometheusSpec = &PrometheusSpec{
-				Endpoint: types.String{Value: userProvidedTpDetails.PrometheusSpec.Endpoint.Value},
-			}
+		tp.PrometheusSpec = &PrometheusSpec{
+			Endpoint: types.String{Value: userProvidedTpDetails.PrometheusSpec.Endpoint.Value},
 		}
+
 	case openapiclient.TELEMETRYPROVIDERTYPEENUM_VICTORIAMETRICS:
 		tp.VictoriaMetricsSpec = &VictoriaMetricsSpec{
 			Endpoint: types.String{Value: configSpec.VictoriametricsSpec.Get().Endpoint},
 		}
 	case openapiclient.TELEMETRYPROVIDERTYPEENUM_GRAFANA:
-		if userProvidedTpDetails.GrafanaSpec != nil {
-			grafanaSpec := configSpec.GetGrafanaSpec()
-			tp.GrafanaSpec = &GrafanaSpec{
-				AccessTokenPolicy: userProvidedTpDetails.GrafanaSpec.AccessTokenPolicy,
-				Zone:              types.String{Value: grafanaSpec.Zone},
-				InstanceId:        types.String{Value: grafanaSpec.InstanceId},
-				OrgSlug:           types.String{Value: grafanaSpec.OrgSlug},
-			}
+		grafanaSpec := configSpec.GetGrafanaSpec()
+		tp.GrafanaSpec = &GrafanaSpec{
+			AccessTokenPolicy: userProvidedTpDetails.GrafanaSpec.AccessTokenPolicy,
+			Zone:              types.String{Value: grafanaSpec.Zone},
+			InstanceId:        types.String{Value: grafanaSpec.InstanceId},
+			OrgSlug:           types.String{Value: grafanaSpec.OrgSlug},
 		}
 	case openapiclient.TELEMETRYPROVIDERTYPEENUM_SUMOLOGIC:
-		if userProvidedTpDetails.SumoLogicSpec != nil {
-			tp.SumoLogicSpec = &SumoLogicSpec{
-				AccessKey:         userProvidedTpDetails.SumoLogicSpec.AccessKey,
-				AccessId:          userProvidedTpDetails.SumoLogicSpec.AccessId,
-				InstallationToken: userProvidedTpDetails.SumoLogicSpec.InstallationToken,
-			}
+		tp.SumoLogicSpec = &SumoLogicSpec{
+			AccessKey:         userProvidedTpDetails.SumoLogicSpec.AccessKey,
+			AccessId:          userProvidedTpDetails.SumoLogicSpec.AccessId,
+			InstallationToken: userProvidedTpDetails.SumoLogicSpec.InstallationToken,
 		}
 	case openapiclient.TELEMETRYPROVIDERTYPEENUM_GOOGLECLOUD:
-		if userProvidedTpDetails.GoogleCloudSpec != nil {
-			googlecloudSpec := configSpec.GetGooglecloudSpec()
-			tp.GoogleCloudSpec = &GCPServiceAccount{
-				Type:                    types.String{Value: googlecloudSpec.Type},
-				ProjectId:               types.String{Value: googlecloudSpec.ProjectId},
-				PrivateKeyId:            types.String{Value: googlecloudSpec.PrivateKeyId},
-				PrivateKey:              userProvidedTpDetails.GoogleCloudSpec.PrivateKey,
-				ClientEmail:             types.String{Value: googlecloudSpec.ClientEmail},
-				ClientId:                types.String{Value: googlecloudSpec.ClientId},
-				AuthUri:                 types.String{Value: googlecloudSpec.AuthUri},
-				TokenUri:                types.String{Value: googlecloudSpec.TokenUri},
-				AuthProviderX509CertUrl: types.String{Value: googlecloudSpec.AuthProviderX509CertUrl},
-				ClientX509CertUrl:       types.String{Value: googlecloudSpec.ClientX509CertUrl},
-			}
-			if googlecloudSpec.HasUniverseDomain() {
-				tp.GoogleCloudSpec.UniverseDomain = types.String{Value: *googlecloudSpec.UniverseDomain}
-			}
+		googlecloudSpec := configSpec.GetGooglecloudSpec()
+		tp.GoogleCloudSpec = &GCPServiceAccount{
+			Type:                    types.String{Value: googlecloudSpec.Type},
+			ProjectId:               types.String{Value: googlecloudSpec.ProjectId},
+			PrivateKeyId:            types.String{Value: googlecloudSpec.PrivateKeyId},
+			PrivateKey:              userProvidedTpDetails.GoogleCloudSpec.PrivateKey,
+			ClientEmail:             types.String{Value: googlecloudSpec.ClientEmail},
+			ClientId:                types.String{Value: googlecloudSpec.ClientId},
+			AuthUri:                 types.String{Value: googlecloudSpec.AuthUri},
+			TokenUri:                types.String{Value: googlecloudSpec.TokenUri},
+			AuthProviderX509CertUrl: types.String{Value: googlecloudSpec.AuthProviderX509CertUrl},
+			ClientX509CertUrl:       types.String{Value: googlecloudSpec.ClientX509CertUrl},
+		}
+		if googlecloudSpec.HasUniverseDomain() {
+			tp.GoogleCloudSpec.UniverseDomain = types.String{Value: *googlecloudSpec.UniverseDomain}
+		}
+	case openapiclient.TELEMETRYPROVIDERTYPEENUM_NEWRELIC:
+		tp.NewRelicSpec = &NewRelicSpec{
+			Endpoint:   types.String{Value: configSpec.NewrelicSpec.Get().Endpoint},
+			LicenseKey: userProvidedTpDetails.NewRelicSpec.LicenseKey,
 		}
 	case openapiclient.TELEMETRYPROVIDERTYPEENUM_AWS_S3:
-		if fflags.IsFeatureFlagEnabled(fflags.S3Integration) && userProvidedTpDetails.AwsS3Spec != nil {
+		if fflags.IsFeatureFlagEnabled(fflags.S3Integration) {
 			s3Spec := configSpec.GetAwsS3Spec()
 			tp.AwsS3Spec = &AwsS3Spec{
 				BucketName:      types.String{Value: s3Spec.BucketName},
