@@ -539,12 +539,9 @@ func (r resourceIntegration) Create(ctx context.Context, req tfsdk.CreateResourc
 			return
 		}
 		awsS3SpecPlan := plan.AwsS3Spec
-		s3TelemetrySpec := *openapiclient.NewS3TelemetryProviderSpec(awsS3SpecPlan.BucketName.Value, awsS3SpecPlan.Region.Value, awsS3SpecPlan.AccessKeyId.Value, awsS3SpecPlan.SecretAccessKey.Value)
+		s3TelemetrySpec := *openapiclient.NewS3TelemetryProviderSpec(awsS3SpecPlan.BucketName.Value, awsS3SpecPlan.Region.Value, awsS3SpecPlan.AccessKeyId.Value, awsS3SpecPlan.SecretAccessKey.Value, awsS3SpecPlan.PathPrefix.Value)
 
 		// Set optional fields if provided
-		if !awsS3SpecPlan.PathPrefix.Null && !awsS3SpecPlan.PathPrefix.Unknown && awsS3SpecPlan.PathPrefix.Value != "" {
-			s3TelemetrySpec.SetPathPrefix(awsS3SpecPlan.PathPrefix.Value)
-		}
 		if !awsS3SpecPlan.FilePrefix.Null && !awsS3SpecPlan.FilePrefix.Unknown && awsS3SpecPlan.FilePrefix.Value != "" {
 			s3TelemetrySpec.SetFilePrefix(awsS3SpecPlan.FilePrefix.Value)
 		}
@@ -744,12 +741,10 @@ func resourceTelemetryProviderRead(accountId string, projectId string, configID 
 				Region:          types.String{Value: s3Spec.Region},
 				AccessKeyId:     userProvidedTpDetails.AwsS3Spec.AccessKeyId,     // Use user-provided value (API returns masked)
 				SecretAccessKey: userProvidedTpDetails.AwsS3Spec.SecretAccessKey, // Use user-provided value (API returns masked)
+				PathPrefix:      types.String{Value: s3Spec.GetPathPrefix()},
 			}
 
 			// Set optional fields from API response if they exist
-			if s3Spec.HasPathPrefix() {
-				tp.AwsS3Spec.PathPrefix = types.String{Value: s3Spec.GetPathPrefix()}
-			}
 			if s3Spec.HasFilePrefix() {
 				tp.AwsS3Spec.FilePrefix = types.String{Value: s3Spec.GetFilePrefix()}
 			}
