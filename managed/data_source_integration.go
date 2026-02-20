@@ -430,12 +430,10 @@ func dataSourceTelemetryProviderRead(accountId string, projectId string, configN
 				Region:          types.String{Value: s3Spec.GetRegion()},
 				AccessKeyId:     types.String{Value: s3Spec.GetAccessKeyId()},
 				SecretAccessKey: types.String{Value: s3Spec.GetSecretAccessKey()},
+				PathPrefix:      types.String{Value: s3Spec.GetPathPrefix()},
 			}
 
 			// Set optional fields if they exist
-			if s3Spec.HasPathPrefix() {
-				tp.AwsS3Spec.PathPrefix = types.String{Value: s3Spec.GetPathPrefix()}
-			}
 			if s3Spec.HasFilePrefix() {
 				tp.AwsS3Spec.FilePrefix = types.String{Value: s3Spec.GetFilePrefix()}
 			}
