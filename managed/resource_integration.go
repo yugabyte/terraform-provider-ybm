@@ -307,12 +307,12 @@ func (r resourceIntegrationType) getSchemaAttributes() map[string]tfsdk.Attribut
 					Sensitive:   true,
 				},
 				"path_prefix": {
-					Description: "S3 path prefix for organizing objects (default: yugabyte-logs/)",
+					Description: "S3 path prefix for organizing objects (Use '/' for root directory)",
 					Type:        types.StringType,
-					Optional:    true,
+					Required:    true,
 				},
 				"file_prefix": {
-					Description: "Prefix for exported file names (default: yugabyte-logs)",
+					Description: "Prefix for exported file names",
 					Type:        types.StringType,
 					Optional:    true,
 				},
@@ -320,6 +320,7 @@ func (r resourceIntegrationType) getSchemaAttributes() map[string]tfsdk.Attribut
 					Description: "Time-based partitioning: 'minute' or 'hour' (default: hour)",
 					Type:        types.StringType,
 					Optional:    true,
+					Computed:    true,
 					Validators:  []tfsdk.AttributeValidator{stringvalidator.OneOf("minute", "hour")},
 				},
 			}),
