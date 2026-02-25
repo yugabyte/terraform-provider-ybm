@@ -279,10 +279,7 @@ func (r resourceIntegrationType) getSchemaAttributes() map[string]tfsdk.Attribut
 		"aws_s3_spec": {
 			Description: "The specifications of an AWS S3 integration for PG logs export.",
 			Optional:    true,
-			PlanModifiers: []tfsdk.AttributePlanModifier{
-				planmodifier.ImmutableFieldModifier{},
-			},
-			Validators: onlyContainsPath("aws_s3_spec"),
+			Validators:  onlyContainsPath("aws_s3_spec"),
 			Attributes: tfsdk.SingleNestedAttributes(map[string]tfsdk.Attribute{
 				"bucket_name": {
 					Description: "The S3 bucket name to export logs to",
@@ -635,6 +632,7 @@ func setIntegrationState(ctx context.Context, state *tfsdk.State, config Telemet
 			SumoLogicSpec       *SumoLogicSpec       `tfsdk:"sumologic_spec"`
 			GoogleCloudSpec     *GCPServiceAccount   `tfsdk:"googlecloud_spec"`
 			NewRelicSpec        *NewRelicSpec        `tfsdk:"newrelic_spec"`
+			AwsS3Spec           *AwsS3Spec           `tfsdk:"aws_s3_spec"`
 			IsValid             types.Bool           `tfsdk:"is_valid"`
 		}{
 			AccountID:           config.AccountID,
@@ -649,6 +647,7 @@ func setIntegrationState(ctx context.Context, state *tfsdk.State, config Telemet
 			SumoLogicSpec:       config.SumoLogicSpec,
 			GoogleCloudSpec:     config.GoogleCloudSpec,
 			NewRelicSpec:        config.NewRelicSpec,
+			AwsS3Spec:           config.AwsS3Spec,
 			IsValid:             config.IsValid,
 		}
 		return state.Set(ctx, &tempState)
