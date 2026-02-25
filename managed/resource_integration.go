@@ -7,6 +7,7 @@ package managed
 import (
 	"context"
 	"fmt"
+	"regexp"
 	"strings"
 
 	"github.com/hashicorp/terraform-plugin-framework-validators/schemavalidator"
@@ -310,10 +311,17 @@ func (r resourceIntegrationType) getSchemaAttributes() map[string]tfsdk.Attribut
 					Description: "S3 path prefix for organizing objects (Use '/' for root directory)",
 					Type:        types.StringType,
 					Required:    true,
+					Validators: []tfsdk.AttributeValidator{
+						stringvalidator.RegexMatches(
+							regexp.MustCompile(`^(\/|([a-zA-Z0-9._-]+\/)+)$`),
+							"Path prefix should match the regex pattern ^(\\/|([a-zA-Z0-9._-]+\\/)+)$",
+						),
+					},
 				},
 				"file_prefix": {
 					Description: "Prefix for exported file names",
 					Type:        types.StringType,
+					Computed:    true,
 					Optional:    true,
 				},
 				"partition_strategy": {
