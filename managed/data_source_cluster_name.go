@@ -154,6 +154,12 @@ func (r dataClusterNameType) GetSchema(_ context.Context) (tfsdk.Schema, diag.Di
 						Type:        types.Int64Type,
 						Computed:    true,
 					},
+
+					"use_roles": {
+						Description: "Backup global YSQL roles in scheduled backups. Defaults to false.",
+						Type:        types.BoolType,
+						Computed:    true,
+					},
 				}),
 			},
 			"cmk_spec": {
