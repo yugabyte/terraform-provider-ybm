@@ -198,6 +198,7 @@ Read-Only:
 - `schedule_id` (String) The ID of the backup schedule. Created automatically when the backup schedule is created. Used to get a specific backup schedule.
 - `state` (String) The state of the backup schedule. Used to pause or resume the backup schedule. Valid values are ACTIVE or PAUSED.
 - `time_interval_in_days` (Number) The time interval in days for the backup schedule.
+- `use_roles` (Boolean) Backup global YSQL roles in scheduled backups. Defaults to false.
 
 
 <a id="nestedatt--cluster_info"></a>
