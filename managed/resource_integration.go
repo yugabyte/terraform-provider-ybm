@@ -741,6 +741,7 @@ func resourceTelemetryProviderRead(accountId string, projectId string, configID 
 				Region:          types.String{Value: s3Spec.Region},
 				AccessKeyId:     userProvidedTpDetails.AwsS3Spec.AccessKeyId,     // Use user-provided value (API returns masked)
 				SecretAccessKey: userProvidedTpDetails.AwsS3Spec.SecretAccessKey, // Use user-provided value (API returns masked)
+<<<<<<< HEAD
 				PathPrefix:      types.String{Value: s3Spec.GetPathPrefix()},
 			}
 
@@ -750,6 +751,13 @@ func resourceTelemetryProviderRead(accountId string, projectId string, configID 
 			}
 			if s3Spec.HasPartitionStrategy() {
 				tp.AwsS3Spec.PartitionStrategy = types.String{Value: s3Spec.GetPartitionStrategy()}
+=======
+				// Preserve user-provided values for optional fields to ensure plan/state consistency
+				// This is necessary because the nested object contains sensitive fields
+				PathPrefix:        userProvidedTpDetails.AwsS3Spec.PathPrefix,
+				FilePrefix:        userProvidedTpDetails.AwsS3Spec.FilePrefix,
+				PartitionStrategy: userProvidedTpDetails.AwsS3Spec.PartitionStrategy,
+>>>>>>> 40e7615cab2cb355db882b17f8f882874213d41e
 			}
 		}
 	}
