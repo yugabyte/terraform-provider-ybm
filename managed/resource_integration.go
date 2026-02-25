@@ -279,9 +279,6 @@ func (r resourceIntegrationType) getSchemaAttributes() map[string]tfsdk.Attribut
 		"aws_s3_spec": {
 			Description: "The specifications of an AWS S3 integration for PG logs export.",
 			Optional:    true,
-			PlanModifiers: []tfsdk.AttributePlanModifier{
-				planmodifier.ImmutableFieldModifier{},
-			},
 			Validators: onlyContainsPath("aws_s3_spec"),
 			Attributes: tfsdk.SingleNestedAttributes(map[string]tfsdk.Attribute{
 				"bucket_name": {
@@ -636,6 +633,7 @@ func setIntegrationState(ctx context.Context, state *tfsdk.State, config Telemet
 			GoogleCloudSpec     *GCPServiceAccount   `tfsdk:"googlecloud_spec"`
 			NewRelicSpec        *NewRelicSpec        `tfsdk:"newrelic_spec"`
 			IsValid             types.Bool           `tfsdk:"is_valid"`
+			AwsS3Spec           *AwsS3Spec           `tfsdk:"aws_s3_spec"`
 		}{
 			AccountID:           config.AccountID,
 			ProjectID:           config.ProjectID,
@@ -650,11 +648,12 @@ func setIntegrationState(ctx context.Context, state *tfsdk.State, config Telemet
 			GoogleCloudSpec:     config.GoogleCloudSpec,
 			NewRelicSpec:        config.NewRelicSpec,
 			IsValid:             config.IsValid,
+			AwsS3Spec:           config.AwsS3Spec,
 		}
 		return state.Set(ctx, &tempState)
-	} else {
+	} 
 		return state.Set(ctx, &config)
-	}
+	
 }
 
 func (r resourceIntegration) Update(ctx context.Context, req tfsdk.UpdateResourceRequest, resp *tfsdk.UpdateResourceResponse) {
