@@ -7,6 +7,7 @@ package managed
 import (
 	"context"
 	"fmt"
+	"regexp"
 	"strings"
 
 	"github.com/hashicorp/terraform-plugin-framework-validators/schemavalidator"
@@ -16,7 +17,6 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
-	"github.com/yugabyte/terraform-provider-ybm/managed/fflags"
 	planmodifier "github.com/yugabyte/terraform-provider-ybm/managed/plan_modifier"
 	openapiclient "github.com/yugabyte/yugabytedb-managed-go-client-internal"
 )
@@ -35,10 +35,7 @@ func (r resourceIntegrationType) GetSchema(_ context.Context) (tfsdk.Schema, dia
 }
 
 func (r resourceIntegrationType) getTypeValidator() tfsdk.AttributeValidator {
-	validTypes := []string{"DATADOG", "GRAFANA", "SUMOLOGIC", "GOOGLECLOUD", "PROMETHEUS", "VICTORIAMETRICS", "NEWRELIC"}
-	if fflags.IsFeatureFlagEnabled(fflags.S3Integration) {
-		validTypes = append(validTypes, "AWS_S3")
-	}
+	validTypes := []string{"DATADOG", "GRAFANA", "SUMOLOGIC", "GOOGLECLOUD", "PROMETHEUS", "VICTORIAMETRICS", "NEWRELIC", "AWS_S3"}
 	return stringvalidator.OneOf(validTypes...)
 }
 
@@ -310,10 +307,17 @@ func (r resourceIntegrationType) getSchemaAttributes() map[string]tfsdk.Attribut
 					Description: "S3 path prefix for organizing objects (Use '/' for root directory)",
 					Type:        types.StringType,
 					Required:    true,
+					Validators: []tfsdk.AttributeValidator{
+						stringvalidator.RegexMatches(
+							regexp.MustCompile(`^(\/|([a-zA-Z0-9._-]+\/)+)$`),
+							"Path prefix should match the regex pattern ^(\\/|([a-zA-Z0-9._-]+\\/)+)$",
+						),
+					},
 				},
 				"file_prefix": {
 					Description: "Prefix for exported file names",
 					Type:        types.StringType,
+					Computed:    true,
 					Optional:    true,
 				},
 				"partition_strategy": {
@@ -327,21 +331,11 @@ func (r resourceIntegrationType) getSchemaAttributes() map[string]tfsdk.Attribut
 		},
 	}
 
-	// Remove S3 integration support if feature flag is disabled
-	if !fflags.IsFeatureFlagEnabled(fflags.S3Integration) {
-		delete(attributes, "aws_s3_spec")
-	}
-
 	return attributes
 }
 
 func onlyContainsPath(requiredPath string) []tfsdk.AttributeValidator {
-	allPaths := []string{"datadog_spec", "grafana_spec", "sumologic_spec", "googlecloud_spec", "prometheus_spec", "victoriametrics_spec", "newrelic_spec"}
-
-	// Add S3 integration to conflicts if feature flag is enabled
-	if fflags.IsFeatureFlagEnabled(fflags.S3Integration) {
-		allPaths = append(allPaths, "aws_s3_spec")
-	}
+	allPaths := []string{"datadog_spec", "grafana_spec", "sumologic_spec", "googlecloud_spec", "prometheus_spec", "victoriametrics_spec", "newrelic_spec", "aws_s3_spec"}
 
 	var validators []tfsdk.AttributeValidator
 
@@ -375,11 +369,7 @@ func getIntegrationPlan(ctx context.Context, plan tfsdk.Plan, tp *TelemetryProvi
 	diags.Append(plan.GetAttribute(ctx, path.Root("sumologic_spec"), &tp.SumoLogicSpec)...)
 	diags.Append(plan.GetAttribute(ctx, path.Root("googlecloud_spec"), &tp.GoogleCloudSpec)...)
 	diags.Append(plan.GetAttribute(ctx, path.Root("newrelic_spec"), &tp.NewRelicSpec)...)
-
-	// Only try to get aws_s3_spec if the feature flag is enabled
-	if fflags.IsFeatureFlagEnabled(fflags.S3Integration) {
-		diags.Append(plan.GetAttribute(ctx, path.Root("aws_s3_spec"), &tp.AwsS3Spec)...)
-	}
+	diags.Append(plan.GetAttribute(ctx, path.Root("aws_s3_spec"), &tp.AwsS3Spec)...)
 
 	return diags
 }
@@ -405,9 +395,7 @@ func getIDsFromIntegrationState(ctx context.Context, state tfsdk.State, tp *Tele
 	case string(openapiclient.TELEMETRYPROVIDERTYPEENUM_NEWRELIC):
 		state.GetAttribute(ctx, path.Root("newrelic_spec"), &tp.NewRelicSpec)
 	case string(openapiclient.TELEMETRYPROVIDERTYPEENUM_AWS_S3):
-		if fflags.IsFeatureFlagEnabled(fflags.S3Integration) {
-			state.GetAttribute(ctx, path.Root("aws_s3_spec"), &tp.AwsS3Spec)
-		}
+		state.GetAttribute(ctx, path.Root("aws_s3_spec"), &tp.AwsS3Spec)
 	}
 }
 
@@ -525,13 +513,6 @@ func (r resourceIntegration) Create(ctx context.Context, req tfsdk.CreateResourc
 		}
 		telemetryProviderSpec.SetNewrelicSpec(*openapiclient.NewNewrelicTelemetryProviderSpec(plan.NewRelicSpec.LicenseKey.Value, plan.NewRelicSpec.Endpoint.Value))
 	case openapiclient.TELEMETRYPROVIDERTYPEENUM_AWS_S3:
-		if !fflags.IsFeatureFlagEnabled(fflags.S3Integration) {
-			resp.Diagnostics.AddError(
-				"AWS_S3 integration is not enabled",
-				"AWS S3 integration is disabled. Enable it with the YBM_FF_S3_INTEGRATION=true environment variable.",
-			)
-			return
-		}
 		if plan.AwsS3Spec == nil {
 			resp.Diagnostics.AddError(
 				"aws_s3_spec is required for type AWS_S3",
@@ -571,11 +552,7 @@ func (r resourceIntegration) Create(ctx context.Context, req tfsdk.CreateResourc
 		return
 	}
 
-	if !fflags.IsFeatureFlagEnabled(fflags.S3Integration) {
-		telemetryProvider.AwsS3Spec = nil
-	}
-
-	diags := setIntegrationState(ctx, &resp.State, telemetryProvider)
+	diags := resp.State.Set(ctx, &telemetryProvider)
 	resp.Diagnostics.Append(diags...)
 	if resp.Diagnostics.HasError() {
 		return
@@ -608,52 +585,10 @@ func (r resourceIntegration) Read(ctx context.Context, req tfsdk.ReadResourceReq
 		return
 	}
 
-	if !fflags.IsFeatureFlagEnabled(fflags.S3Integration) {
-		config.AwsS3Spec = nil
-	}
-
-	diags := setIntegrationState(ctx, &resp.State, config)
+	diags := resp.State.Set(ctx, &config)
 	resp.Diagnostics.Append(diags...)
 	if resp.Diagnostics.HasError() {
 		return
-	}
-}
-
-func setIntegrationState(ctx context.Context, state *tfsdk.State, config TelemetryProvider) diag.Diagnostics {
-	if !fflags.IsFeatureFlagEnabled(fflags.S3Integration) {
-		// Use a temporary struct to set the state without the AWS S3 spec
-		tempState := struct {
-			AccountID           types.String         `tfsdk:"account_id"`
-			ProjectID           types.String         `tfsdk:"project_id"`
-			ConfigID            types.String         `tfsdk:"config_id"`
-			ConfigName          types.String         `tfsdk:"config_name"`
-			Type                types.String         `tfsdk:"type"`
-			DataDogSpec         *DataDogSpec         `tfsdk:"datadog_spec"`
-			PrometheusSpec      *PrometheusSpec      `tfsdk:"prometheus_spec"`
-			VictoriaMetricsSpec *VictoriaMetricsSpec `tfsdk:"victoriametrics_spec"`
-			GrafanaSpec         *GrafanaSpec         `tfsdk:"grafana_spec"`
-			SumoLogicSpec       *SumoLogicSpec       `tfsdk:"sumologic_spec"`
-			GoogleCloudSpec     *GCPServiceAccount   `tfsdk:"googlecloud_spec"`
-			NewRelicSpec        *NewRelicSpec        `tfsdk:"newrelic_spec"`
-			IsValid             types.Bool           `tfsdk:"is_valid"`
-		}{
-			AccountID:           config.AccountID,
-			ProjectID:           config.ProjectID,
-			ConfigID:            config.ConfigID,
-			ConfigName:          config.ConfigName,
-			Type:                config.Type,
-			DataDogSpec:         config.DataDogSpec,
-			PrometheusSpec:      config.PrometheusSpec,
-			VictoriaMetricsSpec: config.VictoriaMetricsSpec,
-			GrafanaSpec:         config.GrafanaSpec,
-			SumoLogicSpec:       config.SumoLogicSpec,
-			GoogleCloudSpec:     config.GoogleCloudSpec,
-			NewRelicSpec:        config.NewRelicSpec,
-			IsValid:             config.IsValid,
-		}
-		return state.Set(ctx, &tempState)
-	} else {
-		return state.Set(ctx, &config)
 	}
 }
 
@@ -735,24 +670,23 @@ func resourceTelemetryProviderRead(accountId string, projectId string, configID 
 			LicenseKey: userProvidedTpDetails.NewRelicSpec.LicenseKey,
 		}
 	case openapiclient.TELEMETRYPROVIDERTYPEENUM_AWS_S3:
-		if fflags.IsFeatureFlagEnabled(fflags.S3Integration) {
-			s3Spec := configSpec.GetAwsS3Spec()
-			tp.AwsS3Spec = &AwsS3Spec{
-				BucketName:      types.String{Value: s3Spec.BucketName},
-				Region:          types.String{Value: s3Spec.Region},
-				AccessKeyId:     userProvidedTpDetails.AwsS3Spec.AccessKeyId,     // Use user-provided value (API returns masked)
-				SecretAccessKey: userProvidedTpDetails.AwsS3Spec.SecretAccessKey, // Use user-provided value (API returns masked)
-				PathPrefix:      types.String{Value: s3Spec.GetPathPrefix()},
-			}
-
-			// Set optional fields from API response if they exist
-			if s3Spec.HasFilePrefix() {
-				tp.AwsS3Spec.FilePrefix = types.String{Value: s3Spec.GetFilePrefix()}
-			}
-			if s3Spec.HasPartitionStrategy() {
-				tp.AwsS3Spec.PartitionStrategy = types.String{Value: s3Spec.GetPartitionStrategy()}
-			}
+		s3Spec := configSpec.GetAwsS3Spec()
+		tp.AwsS3Spec = &AwsS3Spec{
+			BucketName:      types.String{Value: s3Spec.BucketName},
+			Region:          types.String{Value: s3Spec.Region},
+			AccessKeyId:     userProvidedTpDetails.AwsS3Spec.AccessKeyId,     // Use user-provided value (API returns masked)
+			SecretAccessKey: userProvidedTpDetails.AwsS3Spec.SecretAccessKey, // Use user-provided value (API returns masked)
+			PathPrefix:      types.String{Value: s3Spec.GetPathPrefix()},
 		}
+
+		// Set optional fields from API response if they exist
+		if s3Spec.HasFilePrefix() {
+			tp.AwsS3Spec.FilePrefix = types.String{Value: s3Spec.GetFilePrefix()}
+		}
+		if s3Spec.HasPartitionStrategy() {
+			tp.AwsS3Spec.PartitionStrategy = types.String{Value: s3Spec.GetPartitionStrategy()}
+		}
+
 	}
 
 	return tp, true, ""

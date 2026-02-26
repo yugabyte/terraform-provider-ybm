@@ -130,6 +130,7 @@ resource "ybm_integration" "newrelic" {
 
 ### Optional
 
+- `aws_s3_spec` (Attributes) The specifications of an AWS S3 integration for PG logs export. (see [below for nested schema](#nestedatt--aws_s3_spec))
 - `datadog_spec` (Attributes) The specifications of a Datadog integration. (see [below for nested schema](#nestedatt--datadog_spec))
 - `googlecloud_spec` (Attributes) The specifications of a Google Cloud integration. (see [below for nested schema](#nestedatt--googlecloud_spec))
 - `grafana_spec` (Attributes) The specifications of a Grafana integration. (see [below for nested schema](#nestedatt--grafana_spec))
@@ -144,6 +145,23 @@ resource "ybm_integration" "newrelic" {
 - `config_id` (String) The ID of the integration.
 - `is_valid` (Boolean) Signifies whether the integration configuration is valid or not
 - `project_id` (String) The ID of the project this integration belongs to.
+
+<a id="nestedatt--aws_s3_spec"></a>
+### Nested Schema for `aws_s3_spec`
+
+Required:
+
+- `access_key_id` (String, Sensitive) AWS Access Key ID for S3 access
+- `bucket_name` (String) The S3 bucket name to export logs to
+- `path_prefix` (String) S3 path prefix for organizing objects (Use '/' for root directory)
+- `region` (String) AWS region where the S3 bucket is located
+- `secret_access_key` (String, Sensitive) AWS Secret Access Key for S3 access
+
+Optional:
+
+- `file_prefix` (String) Prefix for exported file names
+- `partition_strategy` (String) Time-based partitioning: 'minute' or 'hour' (default: hour)
+
 
 <a id="nestedatt--datadog_spec"></a>
 ### Nested Schema for `datadog_spec`

@@ -11,7 +11,6 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
 	"github.com/hashicorp/terraform-plugin-framework/types"
-	"github.com/yugabyte/terraform-provider-ybm/managed/fflags"
 
 	//"github.com/hashicorp/terraform-plugin-log/tflog"
 
@@ -291,11 +290,7 @@ func (r dataSourceIntegration) Read(ctx context.Context, req tfsdk.ReadDataSourc
 
 	var tpConfig TelemetryProvider
 
-	if !fflags.IsFeatureFlagEnabled(fflags.S3Integration) {
-		tpConfig.AwsS3Spec = nil
-	}
-
-	diags := setIntegrationState(ctx, &resp.State, tpConfig)
+	diags := resp.State.Set(ctx, &tpConfig)
 	resp.Diagnostics.Append(diags...)
 	if resp.Diagnostics.HasError() {
 		return
@@ -318,15 +313,6 @@ func (r dataSourceIntegration) Read(ctx context.Context, req tfsdk.ReadDataSourc
 	telemetryProvider, readOK, message := dataSourceTelemetryProviderRead(accountId, projectId, tpConfig.ConfigName.Value, apiClient)
 	if !readOK {
 		resp.Diagnostics.AddError("Unable to read the state of the integration", message)
-		return
-	}
-
-	// Check if trying to read S3 integration when feature flag is disabled
-	if telemetryProvider.Type.Value == "AWS_S3" && !fflags.IsFeatureFlagEnabled(fflags.S3Integration) {
-		resp.Diagnostics.AddError(
-			"AWS S3 integration is not enabled",
-			"Cannot read AWS S3 integration when the feature flag is disabled. Enable it with the YBM_FF_S3_INTEGRATION=true environment variable.",
-		)
 		return
 	}
 
@@ -423,24 +409,23 @@ func dataSourceTelemetryProviderRead(accountId string, projectId string, configN
 			LicenseKey: types.String{Value: newRelicSpec.LicenseKey},
 		}
 	case openapiclient.TELEMETRYPROVIDERTYPEENUM_AWS_S3:
-		if fflags.IsFeatureFlagEnabled(fflags.S3Integration) {
-			s3Spec := configSpec.GetAwsS3Spec()
-			tp.AwsS3Spec = &AwsS3Spec{
-				BucketName:      types.String{Value: s3Spec.GetBucketName()},
-				Region:          types.String{Value: s3Spec.GetRegion()},
-				AccessKeyId:     types.String{Value: s3Spec.GetAccessKeyId()},
-				SecretAccessKey: types.String{Value: s3Spec.GetSecretAccessKey()},
-				PathPrefix:      types.String{Value: s3Spec.GetPathPrefix()},
-			}
-
-			// Set optional fields if they exist
-			if s3Spec.HasFilePrefix() {
-				tp.AwsS3Spec.FilePrefix = types.String{Value: s3Spec.GetFilePrefix()}
-			}
-			if s3Spec.HasPartitionStrategy() {
-				tp.AwsS3Spec.PartitionStrategy = types.String{Value: s3Spec.GetPartitionStrategy()}
-			}
+		s3Spec := configSpec.GetAwsS3Spec()
+		tp.AwsS3Spec = &AwsS3Spec{
+			BucketName:      types.String{Value: s3Spec.GetBucketName()},
+			Region:          types.String{Value: s3Spec.GetRegion()},
+			AccessKeyId:     types.String{Value: s3Spec.GetAccessKeyId()},
+			SecretAccessKey: types.String{Value: s3Spec.GetSecretAccessKey()},
+			PathPrefix:      types.String{Value: s3Spec.GetPathPrefix()},
 		}
+
+		// Set optional fields if they exist
+		if s3Spec.HasFilePrefix() {
+			tp.AwsS3Spec.FilePrefix = types.String{Value: s3Spec.GetFilePrefix()}
+		}
+		if s3Spec.HasPartitionStrategy() {
+			tp.AwsS3Spec.PartitionStrategy = types.String{Value: s3Spec.GetPartitionStrategy()}
+		}
+
 	}
 
 	return tp, true, ""
