@@ -62,6 +62,11 @@ func (r dataSourceBackupType) GetSchema(_ context.Context) (tfsdk.Schema, diag.D
 				Type:        types.Int64Type,
 				Optional:    true,
 			},
+			"use_roles": {
+				Description: "Backup global YSQL roles. Defaults to false.",
+				Type:        types.BoolType,
+				Computed:    true,
+			},
 		},
 	}, nil
 }

@@ -167,7 +167,7 @@ func (r resourceBackup) Create(ctx context.Context, req tfsdk.CreateResourceRequ
 	backupId := *(backupResp.Data.Info.Id)
 
 	retryPolicy := retry.NewConstant(10 * time.Second)
-	retryPolicy = retry.WithMaxDuration(600*time.Second, retryPolicy)
+	retryPolicy = retry.WithMaxDuration(120*time.Minute, retryPolicy)
 	err = retry.Do(ctx, retryPolicy, func(ctx context.Context) error {
 		backupResp, _, err := apiClient.BackupApi.GetBackup(context.Background(), accountId, projectId, backupId).Execute()
 		if err == nil {
@@ -272,7 +272,7 @@ func (r resourceBackup) Delete(ctx context.Context, req tfsdk.DeleteResourceRequ
 	}
 
 	retryPolicy := retry.NewConstant(10 * time.Second)
-	retryPolicy = retry.WithMaxDuration(300*time.Second, retryPolicy)
+	retryPolicy = retry.WithMaxDuration(120*time.Minute, retryPolicy)
 	err = retry.Do(ctx, retryPolicy, func(ctx context.Context) error {
 		_, resp, err := apiClient.BackupApi.GetBackup(context.Background(), accountId, projectId, backupId).Execute()
 		if err != nil {
