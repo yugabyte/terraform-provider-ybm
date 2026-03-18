@@ -27,7 +27,7 @@ data "ybm_integration" "example_name" {
 ### Read-Only
 
 - `account_id` (String) The ID of the account this integration belongs to.
-- `aws_s3_spec` (Attributes) The specifications of an AWS S3 integration for PG logs export. (see [below for nested schema](#nestedatt--aws_s3_spec))
+- `aws_s3_spec` (Attributes) The specifications of an AWS S3 integration. (see [below for nested schema](#nestedatt--aws_s3_spec))
 - `config_id` (String) The ID of the integration.
 - `datadog_spec` (Attributes) The specifications of a Datadog integration. (see [below for nested schema](#nestedatt--datadog_spec))
 - `googlecloud_spec` (Attributes) The specifications of a Google Cloud integration. (see [below for nested schema](#nestedatt--googlecloud_spec))
