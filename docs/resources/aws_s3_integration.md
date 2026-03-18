@@ -7,7 +7,7 @@ description: |-
 
 # ybm_integration (AWS S3 Integration)
 
-Use this resource to create an AWS S3 integration for exporting PostgreSQL logs from your YugabyteDB clusters.
+Use this resource to create an AWS S3 integration for exporting PostgreSQL logs and DB audit logs from your YugabyteDB clusters.
 
 **Note:** This feature requires the S3 integration feature flag to be enabled. Set the environment variable `YBM_FF_S3_INTEGRATION=true` to enable this functionality.
 

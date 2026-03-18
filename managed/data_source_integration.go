@@ -222,7 +222,7 @@ func (r dataSourceIntegrationType) GetSchema(_ context.Context) (tfsdk.Schema, d
 				}),
 			},
 			"aws_s3_spec": {
-				Description: "The specifications of an AWS S3 integration for PG logs export.",
+				Description: "The specifications of an AWS S3 integration.",
 				Computed:    true,
 				Attributes: tfsdk.SingleNestedAttributes(map[string]tfsdk.Attribute{
 					"bucket_name": {
