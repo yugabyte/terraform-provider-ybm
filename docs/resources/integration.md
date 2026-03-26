@@ -130,7 +130,7 @@ resource "ybm_integration" "newrelic" {
 
 ### Optional
 
-- `aws_s3_spec` (Attributes) The specifications of an AWS S3 integration for PG logs export. (see [below for nested schema](#nestedatt--aws_s3_spec))
+- `aws_s3_spec` (Attributes) The specifications of an AWS S3 integration for exporting database query and audit logs. You can use the same integration with ybm_db_query_logging and ybm_db_audit_logging resources. (see [below for nested schema](#nestedatt--aws_s3_spec))
 - `datadog_spec` (Attributes) The specifications of a Datadog integration. (see [below for nested schema](#nestedatt--datadog_spec))
 - `googlecloud_spec` (Attributes) The specifications of a Google Cloud integration. (see [below for nested schema](#nestedatt--googlecloud_spec))
 - `grafana_spec` (Attributes) The specifications of a Grafana integration. (see [below for nested schema](#nestedatt--grafana_spec))

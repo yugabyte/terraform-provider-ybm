@@ -274,7 +274,7 @@ func (r resourceIntegrationType) getSchemaAttributes() map[string]tfsdk.Attribut
 			}),
 		},
 		"aws_s3_spec": {
-			Description: "The specifications of an AWS S3 integration for PG logs export.",
+			Description: "The specifications of an AWS S3 integration for exporting database query and audit logs. You can use the same integration with ybm_db_query_logging and ybm_db_audit_logging resources.",
 			Optional:    true,
 			PlanModifiers: []tfsdk.AttributePlanModifier{
 				planmodifier.ImmutableFieldModifier{},
@@ -317,8 +317,8 @@ func (r resourceIntegrationType) getSchemaAttributes() map[string]tfsdk.Attribut
 				"file_prefix": {
 					Description: "Prefix for exported file names",
 					Type:        types.StringType,
-					Computed:    true,
 					Optional:    true,
+					Computed:    true,
 				},
 				"partition_strategy": {
 					Description: "Time-based partitioning: 'minute' or 'hour' (default: hour)",

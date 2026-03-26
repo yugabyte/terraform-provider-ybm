@@ -2,21 +2,14 @@
 page_title: "ybm_integration Resource - AWS S3 Integration"
 subcategory: ""
 description: |-
-  The integration resource allows you to create and manage AWS S3 integrations for PostgreSQL logs export in YugabyteDB Managed.
+  This integration resource allows you to create and manage AWS S3 integrations for exporting database query and audit logs in YugabyteDB Aeon.
 ---
 
 # ybm_integration (AWS S3 Integration)
 
-Use this resource to create an AWS S3 integration for exporting PostgreSQL logs from your YugabyteDB clusters.
-
-**Note:** This feature requires the S3 integration feature flag to be enabled. Set the environment variable `YBM_FF_S3_INTEGRATION=true` to enable this functionality.
+Use this resource to create an AWS S3 integration for exporting database query and audit logs from your YugabyteDB clusters to S3 storage. You can attach this integration to PG logs (ybm_db_query_logging) or DB audit logs (ybm_db_audit_logging) resources by setting integration_name in the resource to this integration's config_name.
 
 ## Example Usage
-
-```bash
-# Enable the S3 integration feature flag
-export YBM_FF_S3_INTEGRATION=true
-```
 
 ```terraform
 resource "ybm_integration" "s3_logs_exporter" {
