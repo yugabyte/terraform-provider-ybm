@@ -2,7 +2,7 @@
 page_title: "ybm_integration Resource - AWS S3 Integration"
 subcategory: ""
 description: |-
-  The integration resource allows you to create and manage AWS S3 integrations for PostgreSQL and DB audit log export in YugabyteDB Managed.
+  This integration resource allows you to create and manage AWS S3 integrations for exporting database query and audit logs in YugabyteDB Aeon.
 ---
 
 # ybm_integration (AWS S3 Integration)
