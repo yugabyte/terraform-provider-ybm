@@ -221,6 +221,24 @@ type Backup struct {
 	UseRoles              types.Bool   `tfsdk:"use_roles"`
 }
 
+type BackupRestore struct {
+	AccountID           types.String          `tfsdk:"account_id"`
+	ProjectID           types.String          `tfsdk:"project_id"`
+	BackupID            types.String          `tfsdk:"backup_id"`
+	ClusterID           types.String          `tfsdk:"cluster_id"`
+	UseRoles            types.Bool            `tfsdk:"use_roles"`
+	YSQLDatabases       []types.String        `tfsdk:"ysql_databases"`
+	YCQLKeyspaces       []types.String        `tfsdk:"ycql_keyspaces"`
+	YSQLDatabasesRename []DatabaseRenameBlock `tfsdk:"ysql_databases_rename"`
+	YCQLKeyspacesRename []DatabaseRenameBlock `tfsdk:"ycql_keyspaces_rename"`
+	RestoreID           types.String          `tfsdk:"restore_id"`
+}
+
+type DatabaseRenameBlock struct {
+	BackupDatabase  types.String `tfsdk:"backup_database"`
+	RestoreDatabase types.String `tfsdk:"restore_database"`
+}
+
 type VPC struct {
 	AccountID      types.String    `tfsdk:"account_id"`
 	ProjectID      types.String    `tfsdk:"project_id"`

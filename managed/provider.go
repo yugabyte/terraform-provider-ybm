@@ -168,6 +168,11 @@ func (p *provider) GetResources(_ context.Context) (map[string]tfsdk.ResourceTyp
 		resources["ybm_dr_config"] = resourceDrConfigType{}
 	}
 
+	// Add backup_restore resource only if the feature flag is enabled
+	if fflags.IsFeatureFlagEnabled(fflags.BackupRestore) {
+		resources["ybm_backup_restore"] = resourceBackupRestoreType{}
+	}
+
 	return resources, nil
 }
 
