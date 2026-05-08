@@ -66,96 +66,6 @@ func (mr *MockAccountApiMockRecorder) BatchInviteAccountUsersExecute(arg0 interf
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "BatchInviteAccountUsersExecute", reflect.TypeOf((*MockAccountApi)(nil).BatchInviteAccountUsersExecute), arg0)
 }
 
-// CreateNewAccount mocks base method.
-func (m *MockAccountApi) CreateNewAccount(arg0 context.Context, arg1 string) openapi.ApiCreateNewAccountRequest {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "CreateNewAccount", arg0, arg1)
-	ret0, _ := ret[0].(openapi.ApiCreateNewAccountRequest)
-	return ret0
-}
-
-// CreateNewAccount indicates an expected call of CreateNewAccount.
-func (mr *MockAccountApiMockRecorder) CreateNewAccount(arg0, arg1 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateNewAccount", reflect.TypeOf((*MockAccountApi)(nil).CreateNewAccount), arg0, arg1)
-}
-
-// CreateNewAccountExecute mocks base method.
-func (m *MockAccountApi) CreateNewAccountExecute(arg0 openapi.ApiCreateNewAccountRequest) (openapi.AccountResponse, *http.Response, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "CreateNewAccountExecute", arg0)
-	ret0, _ := ret[0].(openapi.AccountResponse)
-	ret1, _ := ret[1].(*http.Response)
-	ret2, _ := ret[2].(error)
-	return ret0, ret1, ret2
-}
-
-// CreateNewAccountExecute indicates an expected call of CreateNewAccountExecute.
-func (mr *MockAccountApiMockRecorder) CreateNewAccountExecute(arg0 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateNewAccountExecute", reflect.TypeOf((*MockAccountApi)(nil).CreateNewAccountExecute), arg0)
-}
-
-// GetAccount mocks base method.
-func (m *MockAccountApi) GetAccount(arg0 context.Context, arg1 string) openapi.ApiGetAccountRequest {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetAccount", arg0, arg1)
-	ret0, _ := ret[0].(openapi.ApiGetAccountRequest)
-	return ret0
-}
-
-// GetAccount indicates an expected call of GetAccount.
-func (mr *MockAccountApiMockRecorder) GetAccount(arg0, arg1 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetAccount", reflect.TypeOf((*MockAccountApi)(nil).GetAccount), arg0, arg1)
-}
-
-// GetAccountExecute mocks base method.
-func (m *MockAccountApi) GetAccountExecute(arg0 openapi.ApiGetAccountRequest) (openapi.DeprecatedAccountResponse, *http.Response, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetAccountExecute", arg0)
-	ret0, _ := ret[0].(openapi.DeprecatedAccountResponse)
-	ret1, _ := ret[1].(*http.Response)
-	ret2, _ := ret[2].(error)
-	return ret0, ret1, ret2
-}
-
-// GetAccountExecute indicates an expected call of GetAccountExecute.
-func (mr *MockAccountApiMockRecorder) GetAccountExecute(arg0 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetAccountExecute", reflect.TypeOf((*MockAccountApi)(nil).GetAccountExecute), arg0)
-}
-
-// GetCurrentAccount mocks base method.
-func (m *MockAccountApi) GetCurrentAccount(arg0 context.Context) openapi.ApiGetCurrentAccountRequest {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetCurrentAccount", arg0)
-	ret0, _ := ret[0].(openapi.ApiGetCurrentAccountRequest)
-	return ret0
-}
-
-// GetCurrentAccount indicates an expected call of GetCurrentAccount.
-func (mr *MockAccountApiMockRecorder) GetCurrentAccount(arg0 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetCurrentAccount", reflect.TypeOf((*MockAccountApi)(nil).GetCurrentAccount), arg0)
-}
-
-// GetCurrentAccountExecute mocks base method.
-func (m *MockAccountApi) GetCurrentAccountExecute(arg0 openapi.ApiGetCurrentAccountRequest) (openapi.AccountResponse, *http.Response, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetCurrentAccountExecute", arg0)
-	ret0, _ := ret[0].(openapi.AccountResponse)
-	ret1, _ := ret[1].(*http.Response)
-	ret2, _ := ret[2].(error)
-	return ret0, ret1, ret2
-}
-
-// GetCurrentAccountExecute indicates an expected call of GetCurrentAccountExecute.
-func (mr *MockAccountApiMockRecorder) GetCurrentAccountExecute(arg0 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetCurrentAccountExecute", reflect.TypeOf((*MockAccountApi)(nil).GetCurrentAccountExecute), arg0)
-}
-
 // GetAccountQuotas mocks base method.
 func (m *MockAccountApi) GetAccountQuotas(arg0 context.Context, arg1 string) openapi.ApiGetAccountQuotasRequest {
 	m.ctrl.T.Helper()
@@ -186,36 +96,6 @@ func (mr *MockAccountApiMockRecorder) GetAccountQuotasExecute(arg0 interface{}) 
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetAccountQuotasExecute", reflect.TypeOf((*MockAccountApi)(nil).GetAccountQuotasExecute), arg0)
 }
 
-// GetAccountUser mocks base method.
-func (m *MockAccountApi) GetAccountUser(arg0 context.Context, arg1, arg2 string) openapi.ApiGetUserRequest {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetAccountUser", arg0, arg1, arg2)
-	ret0, _ := ret[0].(openapi.ApiGetUserRequest)
-	return ret0
-}
-
-// GetAccountUser indicates an expected call of GetAccountUser.
-func (mr *MockAccountApiMockRecorder) GetAccountUser(arg0, arg1, arg2 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetAccountUser", reflect.TypeOf((*MockAccountApi)(nil).GetAccountUser), arg0, arg1, arg2)
-}
-
-// GetAccountUserExecute mocks base method.
-func (m *MockAccountApi) GetAccountUserExecute(arg0 openapi.ApiGetUserRequest) (openapi.UserResponse, *http.Response, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetAccountUserExecute", arg0)
-	ret0, _ := ret[0].(openapi.UserResponse)
-	ret1, _ := ret[1].(*http.Response)
-	ret2, _ := ret[2].(error)
-	return ret0, ret1, ret2
-}
-
-// GetAccountUserExecute indicates an expected call of GetAccountUserExecute.
-func (mr *MockAccountApiMockRecorder) GetAccountUserExecute(arg0 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetAccountUserExecute", reflect.TypeOf((*MockAccountApi)(nil).GetAccountUserExecute), arg0)
-}
-
 // GetAllowedLoginTypes mocks base method.
 func (m *MockAccountApi) GetAllowedLoginTypes(arg0 context.Context, arg1 string) openapi.ApiGetAllowedLoginTypesRequest {
 	m.ctrl.T.Helper()
@@ -244,6 +124,36 @@ func (m *MockAccountApi) GetAllowedLoginTypesExecute(arg0 openapi.ApiGetAllowedL
 func (mr *MockAccountApiMockRecorder) GetAllowedLoginTypesExecute(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetAllowedLoginTypesExecute", reflect.TypeOf((*MockAccountApi)(nil).GetAllowedLoginTypesExecute), arg0)
+}
+
+// GetCurrentAccount mocks base method.
+func (m *MockAccountApi) GetCurrentAccount(arg0 context.Context) openapi.ApiGetCurrentAccountRequest {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetCurrentAccount", arg0)
+	ret0, _ := ret[0].(openapi.ApiGetCurrentAccountRequest)
+	return ret0
+}
+
+// GetCurrentAccount indicates an expected call of GetCurrentAccount.
+func (mr *MockAccountApiMockRecorder) GetCurrentAccount(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetCurrentAccount", reflect.TypeOf((*MockAccountApi)(nil).GetCurrentAccount), arg0)
+}
+
+// GetCurrentAccountExecute mocks base method.
+func (m *MockAccountApi) GetCurrentAccountExecute(arg0 openapi.ApiGetCurrentAccountRequest) (openapi.AccountResponse, *http.Response, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetCurrentAccountExecute", arg0)
+	ret0, _ := ret[0].(openapi.AccountResponse)
+	ret1, _ := ret[1].(*http.Response)
+	ret2, _ := ret[2].(error)
+	return ret0, ret1, ret2
+}
+
+// GetCurrentAccountExecute indicates an expected call of GetCurrentAccountExecute.
+func (mr *MockAccountApiMockRecorder) GetCurrentAccountExecute(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetCurrentAccountExecute", reflect.TypeOf((*MockAccountApi)(nil).GetCurrentAccountExecute), arg0)
 }
 
 // GetLoginRecords mocks base method.
@@ -321,10 +231,10 @@ func (mr *MockAccountApiMockRecorder) ListAccountUsers(arg0, arg1 interface{}) *
 }
 
 // ListAccountUsersExecute mocks base method.
-func (m *MockAccountApi) ListAccountUsersExecute(arg0 openapi.ApiListAccountUsersRequest) (openapi.UserListResponse, *http.Response, error) {
+func (m *MockAccountApi) ListAccountUsersExecute(arg0 openapi.ApiListAccountUsersRequest) (openapi.UserListWithRoleResponse, *http.Response, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "ListAccountUsersExecute", arg0)
-	ret0, _ := ret[0].(openapi.UserListResponse)
+	ret0, _ := ret[0].(openapi.UserListWithRoleResponse)
 	ret1, _ := ret[1].(*http.Response)
 	ret2, _ := ret[2].(error)
 	return ret0, ret1, ret2
@@ -334,36 +244,6 @@ func (m *MockAccountApi) ListAccountUsersExecute(arg0 openapi.ApiListAccountUser
 func (mr *MockAccountApiMockRecorder) ListAccountUsersExecute(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListAccountUsersExecute", reflect.TypeOf((*MockAccountApi)(nil).ListAccountUsersExecute), arg0)
-}
-
-// ListAccounts mocks base method.
-func (m *MockAccountApi) ListAccounts(arg0 context.Context) openapi.ApiListAccountsRequest {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "ListAccounts", arg0)
-	ret0, _ := ret[0].(openapi.ApiListAccountsRequest)
-	return ret0
-}
-
-// ListAccounts indicates an expected call of ListAccounts.
-func (mr *MockAccountApiMockRecorder) ListAccounts(arg0 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListAccounts", reflect.TypeOf((*MockAccountApi)(nil).ListAccounts), arg0)
-}
-
-// ListAccountsExecute mocks base method.
-func (m *MockAccountApi) ListAccountsExecute(arg0 openapi.ApiListAccountsRequest) (openapi.DeprecatedAccountListResponse, *http.Response, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "ListAccountsExecute", arg0)
-	ret0, _ := ret[0].(openapi.DeprecatedAccountListResponse)
-	ret1, _ := ret[1].(*http.Response)
-	ret2, _ := ret[2].(error)
-	return ret0, ret1, ret2
-}
-
-// ListAccountsExecute indicates an expected call of ListAccountsExecute.
-func (mr *MockAccountApiMockRecorder) ListAccountsExecute(arg0 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListAccountsExecute", reflect.TypeOf((*MockAccountApi)(nil).ListAccountsExecute), arg0)
 }
 
 // ModifyAccount mocks base method.

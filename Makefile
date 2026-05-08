@@ -5,6 +5,8 @@ VERSION=0.1.0-dev
 
 OS := $(if $(GOOS),$(GOOS),$(shell go env GOOS))
 ARCH := $(if $(GOARCH),$(GOARCH),$(shell go env GOARCH))
+GO_BIN := $(if $(shell go env GOBIN),$(shell go env GOBIN),$(shell go env GOPATH)/bin)
+MOCKGEN := $(GO_BIN)/mockgen
 
 BINARY=terraform-provider-${NAME}
 export GOPRIVATE := github.com/yugabyte
@@ -48,6 +50,12 @@ doc:
 update-client:
 	go get github.com/yugabyte/yugabytedb-managed-go-client-internal
 	go mod tidy
+
+update-mock-apis:
+	go install github.com/golang/mock/mockgen@v1.6.0
+	$(MOCKGEN) -destination=mock_yugabytedb_managed_go_client_internal/mock_api_account.go -package=mock_yugabytedb_managed_go_client_internal github.com/yugabyte/yugabytedb-managed-go-client-internal AccountApi
+	$(MOCKGEN) -destination=mock_yugabytedb_managed_go_client_internal/mock_api_network.go -package=mock_yugabytedb_managed_go_client_internal github.com/yugabyte/yugabytedb-managed-go-client-internal NetworkApi
+	$(MOCKGEN) -destination=mock_yugabytedb_managed_go_client_internal/mock_api_project.go -package=mock_yugabytedb_managed_go_client_internal github.com/yugabyte/yugabytedb-managed-go-client-internal ProjectApi
 
 clean:
 	rm -rf terraform-provider-ybm
