@@ -18,6 +18,18 @@ To generate documentation
 make doc
 ```
 
+## Update Managed Client Mocks
+
+When the managed Go client changes and the `AccountApi`, `NetworkApi`, or `ProjectApi` interfaces drift, first update the client dependency and then regenerate the GoMock files:
+
+```shell
+make update-client
+make update-mock-apis
+go test ./managed/...
+```
+
+The mock regeneration target uses `mockgen` in reflect mode so the generated files keep the same `github.com/yugabyte/yugabytedb-managed-go-client-internal` source banner and `openapi` import alias as the existing mocks.
+
 ## Debugging
 
 Please read [Debugging help](./DEBUGGING.md)
