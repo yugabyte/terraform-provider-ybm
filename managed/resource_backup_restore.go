@@ -9,6 +9,8 @@ import (
 	"errors"
 	"time"
 
+	"github.com/hashicorp/terraform-plugin-framework-validators/listvalidator"
+	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
@@ -69,7 +71,8 @@ func (r resourceBackupRestoreType) GetSchema(_ context.Context) (tfsdk.Schema, d
 				Type: types.ListType{
 					ElemType: types.StringType,
 				},
-				Optional: true,
+				Optional:   true,
+				Validators: listOfNonEmptyStringValidators(),
 				PlanModifiers: []tfsdk.AttributePlanModifier{
 					tfsdk.RequiresReplace(),
 				},
@@ -79,7 +82,8 @@ func (r resourceBackupRestoreType) GetSchema(_ context.Context) (tfsdk.Schema, d
 				Type: types.ListType{
 					ElemType: types.StringType,
 				},
-				Optional: true,
+				Optional:   true,
+				Validators: listOfNonEmptyStringValidators(),
 				PlanModifiers: []tfsdk.AttributePlanModifier{
 					tfsdk.RequiresReplace(),
 				},
@@ -92,11 +96,13 @@ func (r resourceBackupRestoreType) GetSchema(_ context.Context) (tfsdk.Schema, d
 						Description: "YSQL database name in the backup.",
 						Type:        types.StringType,
 						Required:    true,
+						Validators:  nonEmptyStringValidators(),
 					},
 					"restore_database": {
 						Description: "YSQL database name to use on the restored cluster.",
 						Type:        types.StringType,
 						Required:    true,
+						Validators:  nonEmptyStringValidators(),
 					},
 				}),
 				PlanModifiers: []tfsdk.AttributePlanModifier{
@@ -111,11 +117,13 @@ func (r resourceBackupRestoreType) GetSchema(_ context.Context) (tfsdk.Schema, d
 						Description: "YCQL keyspace name in the backup.",
 						Type:        types.StringType,
 						Required:    true,
+						Validators:  nonEmptyStringValidators(),
 					},
 					"restore_database": {
 						Description: "YCQL keyspace name to use on the restored cluster.",
 						Type:        types.StringType,
 						Required:    true,
+						Validators:  nonEmptyStringValidators(),
 					},
 				}),
 				PlanModifiers: []tfsdk.AttributePlanModifier{
@@ -332,4 +340,18 @@ func (r resourceBackupRestore) Update(ctx context.Context, req tfsdk.UpdateResou
 func (r resourceBackupRestore) Delete(ctx context.Context, req tfsdk.DeleteResourceRequest, resp *tfsdk.DeleteResourceResponse) {
 	// Delete only removes the resource from Terraform state; it does not call an API to "undo" the restore.
 	resp.State.RemoveResource(ctx)
+}
+
+// listOfNonEmptyStringValidators rejects empty string elements in list(string) attributes.
+func listOfNonEmptyStringValidators() []tfsdk.AttributeValidator {
+	return []tfsdk.AttributeValidator{
+		listvalidator.ValuesAre(stringvalidator.LengthAtLeast(1)),
+	}
+}
+
+// nonEmptyStringValidators rejects "" for string attributes (e.g. rename names).
+func nonEmptyStringValidators() []tfsdk.AttributeValidator {
+	return []tfsdk.AttributeValidator{
+		stringvalidator.LengthAtLeast(1),
+	}
 }
