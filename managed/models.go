@@ -225,7 +225,7 @@ type BackupRestore struct {
 	AccountID           types.String          `tfsdk:"account_id"`
 	ProjectID           types.String          `tfsdk:"project_id"`
 	BackupID            types.String          `tfsdk:"backup_id"`
-	ClusterID           types.String          `tfsdk:"cluster_id"`
+	TargetClusterID     types.String          `tfsdk:"target_cluster_id"`
 	UseRoles            types.Bool            `tfsdk:"use_roles"`
 	YSQLDatabases       []types.String        `tfsdk:"ysql_databases"`
 	YCQLKeyspaces       []types.String        `tfsdk:"ycql_keyspaces"`

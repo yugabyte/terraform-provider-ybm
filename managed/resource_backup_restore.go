@@ -47,8 +47,8 @@ func (r resourceBackupRestoreType) GetSchema(_ context.Context) (tfsdk.Schema, d
 					tfsdk.RequiresReplace(),
 				},
 			},
-			"cluster_id": {
-				Description: "The ID of the cluster to restore to.",
+			"target_cluster_id": {
+				Description: "The ID of the cluster to restore the backup onto.",
 				Type:        types.StringType,
 				Required:    true,
 				PlanModifiers: []tfsdk.AttributePlanModifier{
@@ -139,7 +139,7 @@ type resourceBackupRestore struct {
 func getBackupRestorePlan(ctx context.Context, plan tfsdk.Plan, br *BackupRestore) diag.Diagnostics {
 	var diags diag.Diagnostics
 	diags.Append(plan.GetAttribute(ctx, path.Root("backup_id"), &br.BackupID)...)
-	diags.Append(plan.GetAttribute(ctx, path.Root("cluster_id"), &br.ClusterID)...)
+	diags.Append(plan.GetAttribute(ctx, path.Root("target_cluster_id"), &br.TargetClusterID)...)
 	diags.Append(plan.GetAttribute(ctx, path.Root("use_roles"), &br.UseRoles)...)
 	diags.Append(plan.GetAttribute(ctx, path.Root("ysql_databases"), &br.YSQLDatabases)...)
 	diags.Append(plan.GetAttribute(ctx, path.Root("ycql_keyspaces"), &br.YCQLKeyspaces)...)
@@ -151,7 +151,7 @@ func getBackupRestorePlan(ctx context.Context, plan tfsdk.Plan, br *BackupRestor
 func buildRestoreSpec(plan *BackupRestore) *openapiclient.RestoreSpec {
 	restoreSpec := openapiclient.NewRestoreSpec()
 	restoreSpec.SetBackupId(plan.BackupID.Value)
-	restoreSpec.SetClusterId(plan.ClusterID.Value)
+	restoreSpec.SetClusterId(plan.TargetClusterID.Value)
 	restoreSpec.SetUseRoles(plan.UseRoles.Value)
 
 	hasYSQL := len(plan.YSQLDatabases) > 0
@@ -238,8 +238,8 @@ func (r resourceBackupRestore) Create(ctx context.Context, req tfsdk.CreateResou
 
 	restoreSpec := buildRestoreSpec(&plan)
 	tflog.Debug(ctx, "Restoring backup to cluster", map[string]interface{}{
-		"backup_id":  plan.BackupID.Value,
-		"cluster_id": plan.ClusterID.Value,
+		"backup_id":         plan.BackupID.Value,
+		"target_cluster_id": plan.TargetClusterID.Value,
 	})
 
 	restoreResp, response, err := apiClient.BackupApi.RestoreBackup(ctx, accountId, projectId).RestoreSpec(*restoreSpec).Execute()
@@ -296,7 +296,7 @@ func (r resourceBackupRestore) Read(ctx context.Context, req tfsdk.ReadResourceR
 	var state BackupRestore
 	getIDsFromBackupRestoreState(ctx, req.State, &state)
 	req.State.GetAttribute(ctx, path.Root("backup_id"), &state.BackupID)
-	req.State.GetAttribute(ctx, path.Root("cluster_id"), &state.ClusterID)
+	req.State.GetAttribute(ctx, path.Root("target_cluster_id"), &state.TargetClusterID)
 	req.State.GetAttribute(ctx, path.Root("use_roles"), &state.UseRoles)
 	req.State.GetAttribute(ctx, path.Root("ysql_databases"), &state.YSQLDatabases)
 	req.State.GetAttribute(ctx, path.Root("ycql_keyspaces"), &state.YCQLKeyspaces)
