@@ -856,10 +856,14 @@ func (r resourceClusterType) GetSchema(_ context.Context) (tfsdk.Schema, diag.Di
 			Computed: true,
 		},
 		"database_track": {
-			Description: "The track of the database. Production or Innovation or Preview.",
-			Type:        types.StringType,
-			Optional:    true,
-			Computed:    true,
+			Description: "Database software release track for the cluster. Supported values are Extended and Rapid. Deprecated values are still accepted for backward compatibility: Production and Innovation map to Extended; Preview and Early Access map to Rapid.",
+			MarkdownDescription: "Database software release track for the cluster. Supported values are `Extended` and `Rapid`.\n\n" +
+				"> **Note:** Deprecated track names are still accepted for backward compatibility, but should be updated in configuration.\n" +
+				"> - `Production` and `Innovation` are deprecated in favor of `Extended`.\n" +
+				"> - `Preview` and `Early Access` are deprecated in favor of `Rapid`.",
+			Type:     types.StringType,
+			Optional: true,
+			Computed: true,
 			PlanModifiers: []tfsdk.AttributePlanModifier{
 				tfsdk.UseStateForUnknown(),
 			},
@@ -1369,6 +1373,7 @@ func getIDsFromState(ctx context.Context, state tfsdk.State, cluster *Cluster) {
 	state.GetAttribute(ctx, path.Root("account_id"), &cluster.AccountID)
 	state.GetAttribute(ctx, path.Root("project_id"), &cluster.ProjectID)
 	state.GetAttribute(ctx, path.Root("cluster_id"), &cluster.ClusterID)
+	state.GetAttribute(ctx, path.Root("database_track"), &cluster.DatabaseTrack)
 	state.GetAttribute(ctx, path.Root("desired_state"), &cluster.DesiredState)
 	state.GetAttribute(ctx, path.Root("desired_connection_pooling_state"), &cluster.DesiredConnectionPoolingState)
 	state.GetAttribute(ctx, path.Root("cluster_allow_list_ids"), &cluster.ClusterAllowListIDs)
@@ -1802,7 +1807,8 @@ func (r resourceCluster) Create(ctx context.Context, req tfsdk.CreateResourceReq
 	// Connection pooling is now enabled during cluster creation via features parameter
 	// No need for post-creation enablement call
 
-	cluster, readOK, message := resourceClusterRead(ctx, clusterId, backUpSchedules, regions, allowListProvided, allowListIDs, false, apiClient)
+	priorDatabaseTrack := databaseTrackPriorValue(plan.DatabaseTrack)
+	cluster, readOK, message := resourceClusterRead(ctx, clusterId, backUpSchedules, regions, allowListProvided, allowListIDs, false, priorDatabaseTrack, apiClient)
 
 	// Update the State file with the unmasked creds for AWS (secret key,access) and GCP (client id,private key)
 	if plan.CMKSpec != nil {
@@ -2129,7 +2135,8 @@ func (r resourceCluster) Read(ctx context.Context, req tfsdk.ReadResourceRequest
 		backUpSchedules = append(backUpSchedules, state.BackupSchedules[0])
 	}
 
-	cluster, readOK, message := resourceClusterRead(ctx, state.ClusterID.Value, backUpSchedules, regions, allowListProvided, allowListIDs, true, r.p.client)
+	priorDatabaseTrack := databaseTrackPriorValue(state.DatabaseTrack)
+	cluster, readOK, message := resourceClusterRead(ctx, state.ClusterID.Value, backUpSchedules, regions, allowListProvided, allowListIDs, true, priorDatabaseTrack, r.p.client)
 	tflog.Debug(ctx, "Cluster Read: Allow List IDs read from API server", map[string]interface{}{
 		"Allow List IDs": cluster.ClusterAllowListIDs})
 	// Fetch the cmkSpec information from State (to get unmasked creds)
@@ -2223,7 +2230,7 @@ func readBackupScheduleInfoV2(ctx context.Context, apiClient *openapiclient.APIC
 	return backupScheduleInfo, nil, nil
 }
 
-func resourceClusterRead(ctx context.Context, clusterId string, backUpSchedules []BackupScheduleInfo, regions []string, allowListProvided bool, inputAllowListIDs []string, readOnly bool, apiClient *openapiclient.APIClient) (cluster Cluster, readOK bool, errorMessage string) {
+func resourceClusterRead(ctx context.Context, clusterId string, backUpSchedules []BackupScheduleInfo, regions []string, allowListProvided bool, inputAllowListIDs []string, readOnly bool, priorDatabaseTrack string, apiClient *openapiclient.APIClient) (cluster Cluster, readOK bool, errorMessage string) {
 	var accountId, projectId, message string
 	var getAccountOK, getProjectOK bool
 
@@ -2361,9 +2368,9 @@ func resourceClusterRead(ctx context.Context, clusterId string, backUpSchedules 
 	cluster.ClusterTier.Value = string(clusterResp.Data.Spec.ClusterInfo.ClusterTier)
 	cluster.ClusterVersion.Value = strconv.Itoa(int(clusterResp.Data.Spec.ClusterInfo.GetVersion()))
 
-	// set database track name
+	// set database track name (preserve deprecated alias from config/state when semantically equal)
 	trackId := clusterResp.Data.Spec.SoftwareInfo.GetTrackId()
-	trackName, trackNameOK, message := getTrackName(ctx, apiClient, accountId, trackId)
+	trackName, trackNameOK, message := databaseTrackNameForState(ctx, apiClient, accountId, trackId, priorDatabaseTrack)
 	if !trackNameOK {
 		return cluster, false, message
 	}
@@ -2955,7 +2962,11 @@ func (r resourceCluster) Update(ctx context.Context, req tfsdk.UpdateResourceReq
 		regions = append(regions, regionInfo.Region.Value)
 	}
 
-	cluster, readOK, message := resourceClusterRead(ctx, clusterId, backUpSchedules, regions, allowListProvided, allowListIDs, false, apiClient)
+	priorDatabaseTrack := databaseTrackPriorValue(plan.DatabaseTrack)
+	if priorDatabaseTrack == "" {
+		priorDatabaseTrack = databaseTrackPriorValue(state.DatabaseTrack)
+	}
+	cluster, readOK, message := resourceClusterRead(ctx, clusterId, backUpSchedules, regions, allowListProvided, allowListIDs, false, priorDatabaseTrack, apiClient)
 	if !readOK {
 		resp.Diagnostics.AddError("Unable to read the state of the cluster ", message)
 		return

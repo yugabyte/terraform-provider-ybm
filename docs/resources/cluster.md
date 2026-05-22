@@ -993,7 +993,11 @@ resource "ybm_cluster" "cluster_without_backup_replication" {
 - `credentials` (Attributes) Credentials to be used by the database. Required only at the time of creation. Please provide 'username' and 'password' 
 (which would be used in common for both YSQL and YCQL) OR all of 'ysql_username',
 'ysql_password', 'ycql_username' and 'ycql_password' but not a mix of both. (see [below for nested schema](#nestedatt--credentials))
-- `database_track` (String) The track of the database. Production or Innovation or Preview.
+- `database_track` (String) Database software release track for the cluster. Supported values are `Extended` and `Rapid`.
+
+> **Note:** Deprecated track names are still accepted for backward compatibility, but should be updated in configuration.
+> - `Production` and `Innovation` are deprecated in favor of `Extended`.
+> - `Preview` and `Early Access` are deprecated in favor of `Rapid`.
 - `desired_connection_pooling_state` (String) The desired connection pooling state of the cluster, Enabled or Disabled. Can be used during or after cluster creation.
 - `desired_state` (String) The desired state of the cluster, Active or Paused. This parameter can be used to pause/resume a cluster.
 - `fault_tolerance` (String) The fault tolerance of the cluster. NONE, NODE, ZONE or REGION.

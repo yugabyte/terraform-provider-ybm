@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
 	openapiclient "github.com/yugabyte/yugabytedb-managed-go-client-internal"
 )
@@ -94,12 +95,14 @@ func getTrackId(ctx context.Context, apiClient *openapiclient.APIClient, account
 
 	for _, track := range tracksData {
 		tflog.Debug(ctx, fmt.Sprintf("Required track name:  %v, current track name: %v", track.Spec.GetName(), trackName))
-		if track.Spec.GetName() == trackName || (track.Spec.GetName() == "Production" && trackName == "Stable") {
+		if track.Spec.GetName() == trackName ||
+			(track.Spec.GetName() == "Extended" && (trackName == "Production" || trackName == "Innovation")) ||
+			(track.Spec.GetName() == "Rapid" && (trackName == "Preview" || trackName == "Early Access")) {
 			return track.Info.GetId(), true, ""
 		}
 	}
 
-	return "", false, "The database version doesn't exist."
+	return "", false, "The database track doesn't exist."
 }
 
 func getTrackName(ctx context.Context, apiClient *openapiclient.APIClient, accountId string, trackId string) (trackName string, trackNameOK bool, errorMessage string) {
@@ -113,6 +116,29 @@ func getTrackName(ctx context.Context, apiClient *openapiclient.APIClient, accou
 	trackName = trackData.Spec.GetName()
 
 	return trackName, true, ""
+}
+
+func databaseTrackPriorValue(track types.String) string {
+	if track.IsNull() || track.IsUnknown() {
+		return ""
+	}
+	return track.Value
+}
+
+// databaseTrackNameForState returns the value to store in Terraform state for database_track.
+// When priorTrackName is a deprecated alias (e.g. Production) that maps to the same track ID as
+// the cluster's current track, the prior name is preserved so config and state stay aligned.
+func databaseTrackNameForState(ctx context.Context, apiClient *openapiclient.APIClient, accountId string, apiTrackID string, priorTrackName string) (trackName string, trackNameOK bool, errorMessage string) {
+	apiTrackName, ok, msg := getTrackName(ctx, apiClient, accountId, apiTrackID)
+	if !ok {
+		return "", false, msg
+	}
+	if priorTrackName != "" {
+		if priorTrackID, priorOK, _ := getTrackId(ctx, apiClient, accountId, priorTrackName); priorOK && priorTrackID == apiTrackID {
+			return priorTrackName, true, ""
+		}
+	}
+	return apiTrackName, true, ""
 }
 
 func getAccountId(ctx context.Context, apiClient *openapiclient.APIClient) (accountId string, accountIdOK bool, errorMessage string) {
