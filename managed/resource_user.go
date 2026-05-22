@@ -198,7 +198,7 @@ func resourceUserRead(accountId string, projectId string, email string, userId s
 	user.ProjectID.Value = projectId
 	user.UserID.Value = userId
 	user.Email.Value = email
-	user.RoleName.Value = userResp.Data[0].Info.GetRoleList()[0].GetRoles()[0].Info.GetDisplayName()
+	user.RoleName.Value = userResp.Data[0].GetRoleInfo()[0].GetDisplayName()
 	user.UserName.Value = userResp.Data[0].Spec.GetFirstName() + userResp.Data[0].Spec.GetLastName()
 	user.UserState.Value = string(userResp.Data[0].Info.State)
 

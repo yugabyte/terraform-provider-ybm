@@ -66,36 +66,6 @@ func (mr *MockAccountApiMockRecorder) BatchInviteAccountUsersExecute(arg0 interf
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "BatchInviteAccountUsersExecute", reflect.TypeOf((*MockAccountApi)(nil).BatchInviteAccountUsersExecute), arg0)
 }
 
-// GetAccountQuotas mocks base method.
-func (m *MockAccountApi) GetAccountQuotas(arg0 context.Context, arg1 string) openapi.ApiGetAccountQuotasRequest {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetAccountQuotas", arg0, arg1)
-	ret0, _ := ret[0].(openapi.ApiGetAccountQuotasRequest)
-	return ret0
-}
-
-// GetAccountQuotas indicates an expected call of GetAccountQuotas.
-func (mr *MockAccountApiMockRecorder) GetAccountQuotas(arg0, arg1 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetAccountQuotas", reflect.TypeOf((*MockAccountApi)(nil).GetAccountQuotas), arg0, arg1)
-}
-
-// GetAccountQuotasExecute mocks base method.
-func (m *MockAccountApi) GetAccountQuotasExecute(arg0 openapi.ApiGetAccountQuotasRequest) (openapi.AccountQuotaResponse, *http.Response, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetAccountQuotasExecute", arg0)
-	ret0, _ := ret[0].(openapi.AccountQuotaResponse)
-	ret1, _ := ret[1].(*http.Response)
-	ret2, _ := ret[2].(error)
-	return ret0, ret1, ret2
-}
-
-// GetAccountQuotasExecute indicates an expected call of GetAccountQuotasExecute.
-func (mr *MockAccountApiMockRecorder) GetAccountQuotasExecute(arg0 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetAccountQuotasExecute", reflect.TypeOf((*MockAccountApi)(nil).GetAccountQuotasExecute), arg0)
-}
-
 // GetAllowedLoginTypes mocks base method.
 func (m *MockAccountApi) GetAllowedLoginTypes(arg0 context.Context, arg1 string) openapi.ApiGetAllowedLoginTypesRequest {
 	m.ctrl.T.Helper()
