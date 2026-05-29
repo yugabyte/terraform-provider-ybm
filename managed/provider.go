@@ -147,6 +147,7 @@ func (p *provider) GetResources(_ context.Context) (map[string]tfsdk.ResourceTyp
 		"ybm_cluster":                            resourceClusterType{},
 		"ybm_allow_list":                         resourceAllowListType{},
 		"ybm_backup":                             resourceBackupType{},
+		"ybm_backup_restore":                     resourceBackupRestoreType{},
 		"ybm_vpc":                                resourceVPCType{},
 		"ybm_read_replicas":                      resourceReadReplicasType{},
 		"ybm_vpc_peering":                        resourceVPCPeeringType{},
@@ -166,11 +167,6 @@ func (p *provider) GetResources(_ context.Context) (map[string]tfsdk.ResourceTyp
 	// Add DR config resource only if the feature flag is enabled
 	if fflags.IsFeatureFlagEnabled(fflags.DR) {
 		resources["ybm_dr_config"] = resourceDrConfigType{}
-	}
-
-	// Add backup_restore resource only if the feature flag is enabled
-	if fflags.IsFeatureFlagEnabled(fflags.BackupRestore) {
-		resources["ybm_backup_restore"] = resourceBackupRestoreType{}
 	}
 
 	return resources, nil
