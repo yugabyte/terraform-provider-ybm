@@ -1003,7 +1003,7 @@ resource "ybm_cluster" "cluster_without_backup_replication" {
 - `fault_tolerance` (String) The fault tolerance of the cluster. NONE, NODE, ZONE or REGION.
 - `node_config` (Attributes, Deprecated) (see [below for nested schema](#nestedatt--node_config))
 - `num_faults_to_tolerate` (Number) The number of domain faults the cluster can tolerate. 0 for NONE, 1 for ZONE and [1-3] for NODE and REGION
-- `restore_backup_id` (String) The ID of the backup to be restored to the cluster.
+- `restore_backup_id` (String, Deprecated) The ID of the backup to be restored to the cluster.
 
 ### Read-Only
 
