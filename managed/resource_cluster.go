@@ -41,6 +41,10 @@ func b64(s string) string {
 	return base64.StdEncoding.EncodeToString([]byte(s))
 }
 
+func shouldUseRestoreBackupID(backupID types.String) bool {
+	return !backupID.Unknown && !backupID.Null && backupID.Value != ""
+}
+
 func (r resourceClusterType) GetSchema(_ context.Context) (tfsdk.Schema, diag.Diagnostics) {
 	attributes := map[string]tfsdk.Attribute{
 		"account_id": {
@@ -747,9 +751,10 @@ func (r resourceClusterType) GetSchema(_ context.Context) (tfsdk.Schema, diag.Di
 			Optional: true,
 		},
 		"restore_backup_id": {
-			Description: "The ID of the backup to be restored to the cluster.",
-			Type:        types.StringType,
-			Optional:    true,
+			Description:        "The ID of the backup to be restored to the cluster.",
+			DeprecationMessage: "Use the ybm_backup_restore resource instead. This attribute will be removed in a future release.",
+			Type:               types.StringType,
+			Optional:           true,
 		},
 		"node_config": {
 			Optional: true,
@@ -1379,6 +1384,7 @@ func getIDsFromState(ctx context.Context, state tfsdk.State, cluster *Cluster) {
 	state.GetAttribute(ctx, path.Root("cluster_allow_list_ids"), &cluster.ClusterAllowListIDs)
 	state.GetAttribute(ctx, path.Root("cluster_region_info"), &cluster.ClusterRegionInfo)
 	state.GetAttribute(ctx, path.Root("backup_schedules"), &cluster.BackupSchedules)
+	state.GetAttribute(ctx, path.Root("restore_backup_id"), &cluster.RestoreBackupID)
 	state.GetAttribute(ctx, path.Root("credentials"), &cluster.Credentials)
 	state.GetAttribute(ctx, path.Root("backup_replication_spec"), &cluster.BackupReplicationSpec)
 }
@@ -1771,9 +1777,14 @@ func (r resourceCluster) Create(ctx context.Context, req tfsdk.CreateResourceReq
 	}
 
 	restoreRequired := false
-	if (!plan.RestoreBackupID.Unknown && !plan.RestoreBackupID.Null) || plan.RestoreBackupID.Value != "" {
+	if shouldUseRestoreBackupID(plan.RestoreBackupID) {
 		restoreRequired = true
 		backupId = plan.RestoreBackupID.Value
+		tflog.Warn(ctx, "restore_backup_id on ybm_cluster is deprecated; use ybm_backup_restore resource instead")
+		resp.Diagnostics.AddWarning(
+			"restore_backup_id is deprecated",
+			"Restore via ybm_cluster restore_backup_id is deprecated. Use the ybm_backup_restore resource instead for selective keyspaces and keyspace renames. restore_backup_id on ybm_cluster will be removed in a future release.",
+		)
 	}
 	if restoreRequired {
 		err = handleRestore(ctx, accountId, projectId, clusterId, backupId, apiClient)
@@ -1861,10 +1872,10 @@ func (r resourceCluster) Create(ctx context.Context, req tfsdk.CreateResourceReq
 	}
 
 	// set restore backup id for cluster (not returned by read api)
-	if restoreRequired {
-		cluster.RestoreBackupID.Value = plan.RestoreBackupID.Value
+	if shouldUseRestoreBackupID(plan.RestoreBackupID) {
+		cluster.RestoreBackupID = types.String{Value: plan.RestoreBackupID.Value}
 	} else {
-		cluster.RestoreBackupID.Null = true
+		cluster.RestoreBackupID = types.String{Null: true}
 	}
 
 	if strings.EqualFold(plan.DesiredConnectionPoolingState.Value, "Enabled") || strings.EqualFold(plan.DesiredConnectionPoolingState.Value, "Disabled") {
@@ -2925,8 +2936,14 @@ func (r resourceCluster) Update(ctx context.Context, req tfsdk.UpdateResourceReq
 
 	restoreRequired := false
 	backupId := ""
-	if !plan.RestoreBackupID.Unknown && !plan.RestoreBackupID.Null && plan.RestoreBackupID.Value != "" {
-		if state.RestoreBackupID.Value != plan.RestoreBackupID.Value {
+	planHasRestoreBackupID := shouldUseRestoreBackupID(plan.RestoreBackupID)
+	if planHasRestoreBackupID {
+		tflog.Warn(ctx, "restore_backup_id on ybm_cluster is deprecated; use ybm_backup_restore resource instead")
+		resp.Diagnostics.AddWarning(
+			"restore_backup_id is deprecated",
+			"Restore via ybm_cluster restore_backup_id is deprecated. Use the ybm_backup_restore resource instead. restore_backup_id on ybm_cluster will be removed in a future release.",
+		)
+		if state.RestoreBackupID.Null || state.RestoreBackupID.Value != plan.RestoreBackupID.Value {
 			restoreRequired = true
 		}
 		backupId = plan.RestoreBackupID.Value
@@ -3000,10 +3017,12 @@ func (r resourceCluster) Update(ctx context.Context, req tfsdk.UpdateResourceReq
 	}
 
 	// set restore backup id for cluster (not returned by read api)
-	if restoreRequired {
-		cluster.RestoreBackupID.Value = plan.RestoreBackupID.Value
+	if planHasRestoreBackupID {
+		cluster.RestoreBackupID = types.String{Value: plan.RestoreBackupID.Value}
+	} else if plan.RestoreBackupID.Unknown {
+		cluster.RestoreBackupID = state.RestoreBackupID
 	} else {
-		cluster.RestoreBackupID.Null = true
+		cluster.RestoreBackupID = types.String{Null: true}
 	}
 
 	if strings.EqualFold(plan.DesiredConnectionPoolingState.Value, "Enabled") || strings.EqualFold(plan.DesiredConnectionPoolingState.Value, "Disabled") {
