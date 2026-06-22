@@ -2189,9 +2189,8 @@ func (r resourceCluster) Read(ctx context.Context, req tfsdk.ReadResourceRequest
 	// set credentials for cluster (not returned by read api)
 	req.State.GetAttribute(ctx, path.Root("credentials"), &cluster.Credentials)
 	// set restore backup id for cluster (not returned by read api)
-	if !state.RestoreBackupID.Null {
-		req.State.GetAttribute(ctx, path.Root("restore_backup_id"), &cluster.RestoreBackupID)
-	}
+	req.State.GetAttribute(ctx, path.Root("restore_backup_id"), &cluster.RestoreBackupID)
+
 	diags := resp.State.Set(ctx, &cluster)
 	resp.Diagnostics.Append(diags...)
 	if resp.Diagnostics.HasError() {
