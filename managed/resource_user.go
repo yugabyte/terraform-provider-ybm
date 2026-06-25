@@ -6,6 +6,7 @@ package managed
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/path"
@@ -132,10 +133,10 @@ func (r resourceUser) Create(ctx context.Context, req tfsdk.CreateResourceReques
 		resp.Diagnostics.AddError("Unable to invite user", errMsg)
 		return
 	}
-	if len(roleResp.Data) < 1 {
+	if len(roleResp.Data) < 1 || roleResp.Data[0].Info.GetDisplayName() != roleName {
 		resp.Diagnostics.AddError(
 			"Unable to invite user",
-			"The role provided for the user to be invited does not exist.",
+			fmt.Sprintf("The role '%s' does not exist.", roleName),
 		)
 		return
 	}
@@ -262,10 +263,10 @@ func (r resourceUser) Update(ctx context.Context, req tfsdk.UpdateResourceReques
 		resp.Diagnostics.AddError("Unable to modify user role", errMsg)
 		return
 	}
-	if len(roleResp.Data) < 1 {
+	if len(roleResp.Data) < 1 || roleResp.Data[0].Info.GetDisplayName() != roleName {
 		resp.Diagnostics.AddError(
 			"Unable to modify user role",
-			"The role provided for the user does not exist.",
+			fmt.Sprintf("The role '%s' does not exist.", roleName),
 		)
 		return
 	}
