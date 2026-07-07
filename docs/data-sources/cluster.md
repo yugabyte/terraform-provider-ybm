@@ -225,6 +225,7 @@ Read-Only:
 - `is_preferred` (Boolean)
 - `num_cores` (Number)
 - `num_nodes` (Number)
+- `num_zones` (Number) Number of zones in the region.
 - `public_access` (Boolean)
 - `region` (String)
 - `vpc_id` (String)

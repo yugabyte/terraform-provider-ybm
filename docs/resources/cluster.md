@@ -1031,6 +1031,7 @@ Optional:
 - `is_default` (Boolean)
 - `is_preferred` (Boolean)
 - `num_cores` (Number) Number of CPU cores in the nodes of the region.
+- `num_zones` (Number) Number of zones in the region.
 - `public_access` (Boolean)
 - `vpc_id` (String)
 - `vpc_name` (String)

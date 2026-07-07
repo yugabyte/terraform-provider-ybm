@@ -105,6 +105,12 @@ func (r resourceClusterType) GetSchema(_ context.Context) (tfsdk.Schema, diag.Di
 					Type:     types.StringType,
 					Required: true,
 				},
+				"num_zones": {
+					Description: "Number of zones in the region.",
+					Type:        types.Int64Type,
+					Optional:    true,
+					Computed:    true,
+				},
 				"num_cores": {
 					Description: "Number of CPU cores in the nodes of the region.",
 					Type:        types.Int64Type,
@@ -960,6 +966,8 @@ type resourceCluster struct {
 	p provider
 }
 
+var _ tfsdk.ResourceWithValidateConfig = resourceCluster{}
+
 func EditBackupSchedule(ctx context.Context, backupScheduleStruct BackupScheduleInfo, scheduleId string, backupDes string, accountId string, projectId string, clusterId string, apiClient *openapiclient.APIClient) error {
 	return editBackupScheduleV2(ctx, backupScheduleStruct, scheduleId, backupDes, accountId, projectId, clusterId, apiClient)
 }
@@ -1138,6 +1146,12 @@ func createClusterSpec(ctx context.Context, apiClient *openapiclient.APIClient, 
 
 		if clusterType == "SYNCHRONOUS" {
 			info.PlacementInfo.SetMultiZone(false)
+		}
+
+		if fflags.IsFeatureFlagEnabled(fflags.MultiZoneSupport) {
+			if !regionInfo.NumZones.IsNull() && !regionInfo.NumZones.IsUnknown() {
+				info.PlacementInfo.SetNumZones(int32(regionInfo.NumZones.Value))
+			}
 		}
 		info.SetIsDefault(false)
 		info.SetIsAffinitized(false)
@@ -1504,6 +1518,18 @@ func createCmkSpec(plan Cluster) (*openapiclient.CMKSpec, error) {
 	cmkSpec.SetIsEnabled(plan.CMKSpec.IsEnabled.Value)
 
 	return cmkSpec, nil
+}
+
+func (r resourceCluster) ValidateConfig(ctx context.Context, req tfsdk.ValidateResourceConfigRequest, resp *tfsdk.ValidateResourceConfigResponse) {
+	var clusterRegionInfo []RegionInfo
+	resp.Diagnostics.Append(req.Config.GetAttribute(ctx, path.Root("cluster_region_info"), &clusterRegionInfo)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	if err := validateMultiZoneSupport(clusterRegionInfo); err != nil {
+		resp.Diagnostics.AddError("Invalid num_zones field", err.Error())
+	}
 }
 
 // Create a new resource
@@ -2493,9 +2519,17 @@ func resourceClusterRead(ctx context.Context, clusterId string, backUpSchedules 
 				}
 			}
 
+			var numZones types.Int64
+			if fflags.IsFeatureFlagEnabled(fflags.MultiZoneSupport) && info.PlacementInfo.HasNumZones() {
+				numZones = types.Int64{Value: int64(info.PlacementInfo.GetNumZones())}
+			} else {
+				numZones = types.Int64{Null: true}
+			}
+
 			regionInfo := RegionInfo{
 				Region:                     types.String{Value: region},
 				NumNodes:                   types.Int64{Value: int64(info.PlacementInfo.GetNumNodes())},
+				NumZones:                   numZones,
 				NumCores:                   types.Int64{Value: int64(info.NodeInfo.Get().GetNumCores())},
 				DiskSizeGb:                 types.Int64{Value: int64(info.NodeInfo.Get().GetDiskSizeGb())},
 				DiskIops:                   types.Int64{Value: int64(info.NodeInfo.Get().GetDiskIops())},
@@ -3092,42 +3126,14 @@ func (r resourceCluster) ImportState(ctx context.Context, req tfsdk.ImportResour
 	tfsdk.ResourceImportStatePassthroughID(ctx, path.Root("cluster_id"), req, resp)
 }
 
-func validateBackupReplicationTargets(clusterType string, clusterTier string, cloudType string, regionInfos []RegionInfo) error {
-	// Collect all non-empty backup replication targets
-	var regionGcpTargets []string
-	for _, regionInfo := range regionInfos {
-		if !regionInfo.BackupReplicationGCPTarget.IsNull() && !regionInfo.BackupReplicationGCPTarget.IsUnknown() && regionInfo.BackupReplicationGCPTarget.Value != "" {
-			regionGcpTargets = append(regionGcpTargets, regionInfo.BackupReplicationGCPTarget.Value)
+func validateMultiZoneSupport(clusterRegionInfo []RegionInfo) error {
+	for _, regionInfo := range clusterRegionInfo {
+		if !regionInfo.NumZones.IsNull() && !regionInfo.NumZones.IsUnknown() && !fflags.IsFeatureFlagEnabled(fflags.MultiZoneSupport) {
+			return fmt.Errorf(
+				"Multi-zone support feature disabled: The 'num_zones' field is set in cluster_region_info, but the MULTI_ZONE_SUPPORT feature flag is disabled. Set YBM_FF_MULTI_ZONE_SUPPORT=true to enable it.",
+			)
 		}
 	}
-
-	if len(regionGcpTargets) == 0 {
-		return nil
-	}
-
-	if clusterTier == "FREE" {
-		return fmt.Errorf("backup replication is not supported for free tier clusters")
-	}
-
-	if cloudType != "GCP" {
-		return fmt.Errorf("backup replication to GCS buckets is only supported for GCP clusters")
-	}
-
-	if len(regionGcpTargets) != len(regionInfos) {
-		return fmt.Errorf("all regions must have backup replication targets")
-	}
-
-	// For SYNCHRONOUS clusters, all regions must have the same target
-	if clusterType == "SYNCHRONOUS" {
-		uniqueTargets := make(map[string]bool)
-		for _, target := range regionGcpTargets {
-			uniqueTargets[target] = true
-		}
-		if len(uniqueTargets) > 1 {
-			return fmt.Errorf("all regions must have the same backup replication targets for synchronous clusters")
-		}
-	}
-
 	return nil
 }
 
