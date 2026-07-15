@@ -749,6 +749,15 @@ func (r resourceClusterType) GetSchema(_ context.Context) (tfsdk.Schema, diag.Di
 				tfsdk.UseStateForUnknown(),
 			},
 		},
+		"is_multi_cloud": {
+			Description: "Set to true to deploy a cluster that spans multiple cloud providers. Optional; defaults to false.",
+			Type:        types.BoolType,
+			Optional:    true,
+			Computed:    true,
+			PlanModifiers: []tfsdk.AttributePlanModifier{
+				tfsdk.UseStateForUnknown(),
+			},
+		},
 		"cluster_allow_list_ids": {
 			Description: "List of IDs of the allow lists assigned to the cluster.",
 			Type: types.ListType{
@@ -1202,6 +1211,10 @@ func createClusterSpec(ctx context.Context, apiClient *openapiclient.APIClient, 
 		clusterInfo.SetNumFaultsToTolerate(int32(plan.NumFaultsToTolerate.Value))
 	}
 
+	if !plan.IsMultiCloud.IsUnknown() && !plan.IsMultiCloud.IsNull() {
+		clusterInfo.SetIsMultiCloud(plan.IsMultiCloud.Value)
+	}
+
 	clusterInfo.SetClusterType(openapiclient.ClusterType(clusterType))
 	if clusterExists {
 		clusterVersion, _ := strconv.Atoi(plan.ClusterVersion.Value)
@@ -1279,6 +1292,7 @@ func getPlan(ctx context.Context, plan tfsdk.Plan, cluster *Cluster) diag.Diagno
 	diags.Append(plan.GetAttribute(ctx, path.Root("cluster_region_info"), &cluster.ClusterRegionInfo)...)
 	diags.Append(plan.GetAttribute(ctx, path.Root("fault_tolerance"), &cluster.FaultTolerance)...)
 	diags.Append(plan.GetAttribute(ctx, path.Root("num_faults_to_tolerate"), &cluster.NumFaultsToTolerate)...)
+	diags.Append(plan.GetAttribute(ctx, path.Root("is_multi_cloud"), &cluster.IsMultiCloud)...)
 	diags.Append(plan.GetAttribute(ctx, path.Root("cluster_tier"), &cluster.ClusterTier)...)
 	diags.Append(plan.GetAttribute(ctx, path.Root("cluster_allow_list_ids"), &cluster.ClusterAllowListIDs)...)
 	diags.Append(plan.GetAttribute(ctx, path.Root("restore_backup_id"), &cluster.RestoreBackupID)...)
@@ -2414,6 +2428,7 @@ func resourceClusterRead(ctx context.Context, clusterId string, backUpSchedules 
 
 	cluster.FaultTolerance.Value = string(clusterResp.Data.Spec.ClusterInfo.FaultTolerance)
 	cluster.NumFaultsToTolerate.Value = int64(*clusterResp.Data.Spec.ClusterInfo.NumFaultsToTolerate.Get())
+	cluster.IsMultiCloud.Value = clusterResp.Data.Spec.ClusterInfo.GetIsMultiCloud()
 	nodeInfo := clusterResp.Data.Spec.ClusterInfo.NodeInfo.Get()
 	if nodeInfo != nil {
 		if cluster.NodeConfig == nil {
