@@ -1900,6 +1900,11 @@ func (r resourceCluster) Create(ctx context.Context, req tfsdk.CreateResourceReq
 		return
 	}
 
+	// Workaround: the read API currently always returns is_multi_cloud=false.
+	// Until that bug is fixed (tracked separately), trust the plan value: true if
+	// the plan set it to true, false otherwise.
+	cluster.IsMultiCloud = types.Bool{Value: plan.IsMultiCloud.Value}
+
 	// set credentials for cluster (not returned by read api)
 	clusterCreds := *(plan.Credentials)
 	if clusterCreds.Username.IsNull() {
@@ -3050,6 +3055,11 @@ func (r resourceCluster) Update(ctx context.Context, req tfsdk.UpdateResourceReq
 	}
 	tflog.Debug(ctx, "Cluster Update: Allow list IDs read from API server ", map[string]interface{}{
 		"Allow List IDs": cluster.ClusterAllowListIDs})
+
+	// Workaround: the read API currently always returns is_multi_cloud=false.
+	// Until that bug is fixed (tracked separately), trust the plan value: true if
+	// the plan set it to true, false otherwise.
+	cluster.IsMultiCloud = types.Bool{Value: plan.IsMultiCloud.Value}
 
 	// Update the State file with the unmasked creds for AWS (Secret Key, Access Key), GCP (Client ID, Private Key)
 	// and Azure (client ID, client Secret, tenant ID)
