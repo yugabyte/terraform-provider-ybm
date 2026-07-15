@@ -750,7 +750,7 @@ func (r resourceClusterType) GetSchema(_ context.Context) (tfsdk.Schema, diag.Di
 			},
 		},
 		"is_multi_cloud": {
-			Description: "Set to true to deploy a cluster that spans multiple cloud providers. Optional; defaults to false.",
+			Description: "Set to true to deploy a cluster that spans multiple cloud providers. Optional; defaults to false. Requires the MULTI_CLOUD_SUPPORT feature flag (YBM_FF_MULTI_CLOUD_SUPPORT=true).",
 			Type:        types.BoolType,
 			Optional:    true,
 			Computed:    true,
@@ -1211,8 +1211,10 @@ func createClusterSpec(ctx context.Context, apiClient *openapiclient.APIClient, 
 		clusterInfo.SetNumFaultsToTolerate(int32(plan.NumFaultsToTolerate.Value))
 	}
 
-	if !plan.IsMultiCloud.IsUnknown() && !plan.IsMultiCloud.IsNull() {
-		clusterInfo.SetIsMultiCloud(plan.IsMultiCloud.Value)
+	if fflags.IsFeatureFlagEnabled(fflags.MultiCloudSupport) {
+		if !plan.IsMultiCloud.IsUnknown() && !plan.IsMultiCloud.IsNull() {
+			clusterInfo.SetIsMultiCloud(plan.IsMultiCloud.Value)
+		}
 	}
 
 	clusterInfo.SetClusterType(openapiclient.ClusterType(clusterType))
@@ -1543,6 +1545,16 @@ func (r resourceCluster) ValidateConfig(ctx context.Context, req tfsdk.ValidateR
 
 	if err := validateMultiZoneSupport(clusterRegionInfo); err != nil {
 		resp.Diagnostics.AddError("Invalid num_zones field", err.Error())
+	}
+
+	var isMultiCloud types.Bool
+	resp.Diagnostics.Append(req.Config.GetAttribute(ctx, path.Root("is_multi_cloud"), &isMultiCloud)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	if err := validateMultiCloudSupport(isMultiCloud); err != nil {
+		resp.Diagnostics.AddError("Invalid is_multi_cloud field", err.Error())
 	}
 }
 
@@ -3148,6 +3160,16 @@ func validateMultiZoneSupport(clusterRegionInfo []RegionInfo) error {
 				"Multi-zone support feature disabled: The 'num_zones' field is set in cluster_region_info, but the MULTI_ZONE_SUPPORT feature flag is disabled. Set YBM_FF_MULTI_ZONE_SUPPORT=true to enable it.",
 			)
 		}
+	}
+	return nil
+}
+
+func validateMultiCloudSupport(isMultiCloud types.Bool) error {
+	if !isMultiCloud.IsNull() && !isMultiCloud.IsUnknown() && isMultiCloud.Value &&
+		!fflags.IsFeatureFlagEnabled(fflags.MultiCloudSupport) {
+		return fmt.Errorf(
+			"Multi-cloud support feature disabled: The 'is_multi_cloud' field is set to true, but the MULTI_CLOUD_SUPPORT feature flag is disabled. Set YBM_FF_MULTI_CLOUD_SUPPORT=true to enable it.",
+		)
 	}
 	return nil
 }
