@@ -15,11 +15,13 @@ type FeatureFlag string
 const (
 	DR                   FeatureFlag = "DR"
 	GCPBackupReplication FeatureFlag = "GCP_BACKUP_REPLICATION"
+	MultiZoneSupport     FeatureFlag = "MULTI_ZONE_SUPPORT"
 )
 
 var flagEnabled = map[FeatureFlag]bool{
 	DR:                   false,
 	GCPBackupReplication: false,
+	MultiZoneSupport:     false,
 }
 
 func (f FeatureFlag) String() string {

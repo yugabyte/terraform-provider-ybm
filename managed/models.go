@@ -100,6 +100,7 @@ type RegionInfo struct {
 	Region                     types.String `tfsdk:"region"`
 	NumNodes                   types.Int64  `tfsdk:"num_nodes"`
 	NumCores                   types.Int64  `tfsdk:"num_cores"`
+	NumZones                   types.Int64  `tfsdk:"num_zones"`
 	DiskSizeGb                 types.Int64  `tfsdk:"disk_size_gb"`
 	DiskIops                   types.Int64  `tfsdk:"disk_iops"`
 	VPCID                      types.String `tfsdk:"vpc_id"`

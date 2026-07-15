@@ -64,6 +64,11 @@ func (r dataClusterNameType) GetSchema(_ context.Context) (tfsdk.Schema, diag.Di
 						Type:     types.StringType,
 						Computed: true,
 					},
+					"num_zones": {
+						Description: "Number of zones in the region.",
+						Type:        types.Int64Type,
+						Computed:    true,
+					},
 					"num_cores": {
 						Type:     types.Int64Type,
 						Computed: true,
