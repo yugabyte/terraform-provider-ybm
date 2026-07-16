@@ -1537,14 +1537,24 @@ func createCmkSpec(plan Cluster) (*openapiclient.CMKSpec, error) {
 }
 
 func (r resourceCluster) ValidateConfig(ctx context.Context, req tfsdk.ValidateResourceConfigRequest, resp *tfsdk.ValidateResourceConfigResponse) {
-	var clusterRegionInfo []RegionInfo
-	resp.Diagnostics.Append(req.Config.GetAttribute(ctx, path.Root("cluster_region_info"), &clusterRegionInfo)...)
+	// With dynamically typed vars (e.g. list(any)), cluster_region_info can be wholly
+	// unknown here; decoding into []RegionInfo then fails with "unhandled unknown value".
+	var clusterRegionInfoList types.List
+	resp.Diagnostics.Append(req.Config.GetAttribute(ctx, path.Root("cluster_region_info"), &clusterRegionInfoList)...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
 
-	if err := validateMultiZoneSupport(clusterRegionInfo); err != nil {
-		resp.Diagnostics.AddError("Invalid num_zones field", err.Error())
+	if !clusterRegionInfoList.IsNull() && !clusterRegionInfoList.IsUnknown() {
+		var clusterRegionInfo []RegionInfo
+		resp.Diagnostics.Append(clusterRegionInfoList.ElementsAs(ctx, &clusterRegionInfo, false)...)
+		if resp.Diagnostics.HasError() {
+			return
+		}
+
+		if err := validateMultiZoneSupport(clusterRegionInfo); err != nil {
+			resp.Diagnostics.AddError("Invalid num_zones field", err.Error())
+		}
 	}
 
 	var isMultiCloud types.Bool
