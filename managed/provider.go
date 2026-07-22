@@ -169,6 +169,11 @@ func (p *provider) GetResources(_ context.Context) (map[string]tfsdk.ResourceTyp
 		resources["ybm_dr_config"] = resourceDrConfigType{}
 	}
 
+	// Add autoscaler policy resource only if the feature flag is enabled
+	if fflags.IsFeatureFlagEnabled(fflags.Autoscaling) {
+		resources["ybm_autoscaler_policy"] = resourceAutoscalerPolicyType{}
+	}
+
 	return resources, nil
 }
 
