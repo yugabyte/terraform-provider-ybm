@@ -551,3 +551,44 @@ type PitrClone struct {
 	CloneAtMillis     types.Int64  `tfsdk:"clone_at_millis"`
 	State             types.String `tfsdk:"state"`
 }
+
+type AutoscalerPolicy struct {
+	AccountID types.String              `tfsdk:"account_id"`
+	ProjectID types.String              `tfsdk:"project_id"`
+	ClusterID types.String              `tfsdk:"cluster_id"`
+	PolicyID  types.String              `tfsdk:"policy_id"`
+	Status    types.String              `tfsdk:"status"`
+	Clusters  []AutoscalerPolicyCluster `tfsdk:"clusters"`
+}
+
+type AutoscalerPolicyCluster struct {
+	ClusterID types.String                    `tfsdk:"cluster_id"`
+	Type      types.String                    `tfsdk:"type"`
+	Regions   []AutoscalerPolicyClusterRegion `tfsdk:"regions"`
+}
+
+type AutoscalerPolicyClusterRegion struct {
+	Code     types.String                           `tfsdk:"code"`
+	Policies []AutoscalerClusterRegionScalingPolicy `tfsdk:"policies"`
+}
+
+type AutoscalerClusterRegionScalingPolicy struct {
+	ScalableResource types.String             `tfsdk:"scalable_resource"`
+	Min              types.Int64              `tfsdk:"min"`
+	Max              types.Int64              `tfsdk:"max"`
+	ScalingType      types.String             `tfsdk:"scaling_type"`
+	Clause           types.String             `tfsdk:"clause"`
+	Rules            []AutoscalerScalingRule  `tfsdk:"rules"`
+	ScalingAction    *AutoscalerScalingAction `tfsdk:"scaling_action"`
+}
+
+type AutoscalerScalingRule struct {
+	Resource         types.String  `tfsdk:"resource"`
+	Condition        types.String  `tfsdk:"condition"`
+	Value            types.Float64 `tfsdk:"value"`
+	EvaluationWindow types.String  `tfsdk:"evaluation_window"`
+}
+
+type AutoscalerScalingAction struct {
+	Delta types.Int64 `tfsdk:"delta"`
+}
