@@ -17,6 +17,7 @@ const (
 	GCPBackupReplication FeatureFlag = "GCP_BACKUP_REPLICATION"
 	MultiZoneSupport     FeatureFlag = "MULTI_ZONE_SUPPORT"
 	MultiCloudSupport    FeatureFlag = "MULTI_CLOUD_SUPPORT"
+	Autoscaling          FeatureFlag = "AUTOSCALING"
 )
 
 var flagEnabled = map[FeatureFlag]bool{
@@ -24,6 +25,7 @@ var flagEnabled = map[FeatureFlag]bool{
 	GCPBackupReplication: false,
 	MultiZoneSupport:     false,
 	MultiCloudSupport:    false,
+	Autoscaling:          false,
 }
 
 func (f FeatureFlag) String() string {
