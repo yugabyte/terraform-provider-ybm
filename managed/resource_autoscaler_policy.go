@@ -15,6 +15,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
 	"github.com/hashicorp/terraform-plugin-framework/types"
+	"github.com/hashicorp/terraform-plugin-log/tflog"
 	openapiclient "github.com/yugabyte/yugabytedb-managed-go-client-internal"
 )
 
@@ -264,6 +265,110 @@ func getAutoscalerPolicyState(ctx context.Context, state tfsdk.State, policy *Au
 	state.GetAttribute(ctx, path.Root("clusters"), &policy.Clusters)
 }
 
+// Plan-only structs use types that can hold Unknown for computed nested fields.
+// Decoding Unknown metadata into *AutoscalerMetadata fails with "unhandled unknown value".
+type autoscalerPolicyClusterConfig struct {
+	ClusterID                            types.String                          `tfsdk:"cluster_id"`
+	Type                                 types.String                          `tfsdk:"type"`
+	ScaleInCooldownPeriodMinutes         types.Int64                           `tfsdk:"scale_in_cooldown_period_minutes"`
+	ScaleOutCooldownPeriodMinutes        types.Int64                           `tfsdk:"scale_out_cooldown_period_minutes"`
+	PostMaintenanceCooldownPeriodMinutes types.Int64                           `tfsdk:"post_maintenance_cooldown_period_minutes"`
+	Regions                              []autoscalerPolicyClusterRegionConfig `tfsdk:"regions"`
+	Metadata                             types.Object                          `tfsdk:"metadata"`
+}
+
+type autoscalerPolicyClusterRegionConfig struct {
+	Code     types.String                                 `tfsdk:"code"`
+	Status   types.String                                 `tfsdk:"status"`
+	Policies []autoscalerClusterRegionScalingPolicyConfig `tfsdk:"policies"`
+	Metadata types.Object                                 `tfsdk:"metadata"`
+}
+
+type autoscalerClusterRegionScalingPolicyConfig struct {
+	ScalableResource types.String                  `tfsdk:"scalable_resource"`
+	Min              types.Int64                   `tfsdk:"min"`
+	Max              types.Int64                   `tfsdk:"max"`
+	ScalingType      types.String                  `tfsdk:"scaling_type"`
+	Clause           types.String                  `tfsdk:"clause"`
+	Rules            []autoscalerScalingRuleConfig `tfsdk:"rules"`
+	Metadata         types.Object                  `tfsdk:"metadata"`
+}
+
+type autoscalerScalingRuleConfig struct {
+	Name             types.String                   `tfsdk:"name"`
+	Resource         types.String                   `tfsdk:"resource"`
+	Condition        types.String                   `tfsdk:"condition"`
+	Value            types.Float64                  `tfsdk:"value"`
+	EvaluationWindow types.String                   `tfsdk:"evaluation_window"`
+	ScalingAction    *autoscalerScalingActionConfig `tfsdk:"scaling_action"`
+	Metadata         types.Object                   `tfsdk:"metadata"`
+}
+
+type autoscalerScalingActionConfig struct {
+	Delta types.Int64 `tfsdk:"delta"`
+}
+
+func getAutoscalerPolicyPlan(ctx context.Context, plan tfsdk.Plan, clusterID *types.String, clusters *[]autoscalerPolicyClusterConfig) diag.Diagnostics {
+	var diags diag.Diagnostics
+	diags.Append(plan.GetAttribute(ctx, path.Root("cluster_id"), clusterID)...)
+	diags.Append(plan.GetAttribute(ctx, path.Root("clusters"), clusters)...)
+	return diags
+}
+
+func buildCreateAutoscalerPolicyRequestSpec(clusters []autoscalerPolicyClusterConfig) openapiclient.CreateAutoscalerPolicyRequestSpec {
+	clusterSpecs := make([]openapiclient.AutoscalerClusterSpec, 0, len(clusters))
+	for _, cluster := range clusters {
+		regionSpecs := make([]openapiclient.AutoscalerClusterRegionSpec, 0, len(cluster.Regions))
+		for _, region := range cluster.Regions {
+			policySpecs := make([]openapiclient.AutoscalerClusterRegionPolicySpec, 0, len(region.Policies))
+			for _, policy := range region.Policies {
+				rules := make([]openapiclient.AutoscalerClusterRegionPolicyScalingRuleSpec, 0, len(policy.Rules))
+				for _, rule := range policy.Rules {
+					delta := int32(0)
+					if rule.ScalingAction != nil {
+						delta = int32(rule.ScalingAction.Delta.Value)
+					}
+					action := openapiclient.NewAutoscalerClusterRegionPolicyScalingActionSpec(delta)
+					ruleSpec := openapiclient.NewAutoscalerClusterRegionPolicyScalingRuleSpec(
+						rule.Name.Value,
+						rule.Resource.Value,
+						rule.Condition.Value,
+						rule.Value.Value,
+						rule.EvaluationWindow.Value,
+						*action,
+					)
+					rules = append(rules, *ruleSpec)
+				}
+
+				policySpec := openapiclient.NewAutoscalerClusterRegionPolicySpec(
+					openapiclient.AutoscalerScalingDimensionEnum(policy.ScalableResource.Value),
+					int32(policy.Min.Value),
+					int32(policy.Max.Value),
+					openapiclient.AutoscalerScalingDirectionEnum(policy.ScalingType.Value),
+					policy.Clause.Value,
+					rules,
+				)
+				policySpecs = append(policySpecs, *policySpec)
+			}
+
+			regionSpec := openapiclient.NewAutoscalerClusterRegionSpec(region.Code.Value, policySpecs)
+			regionSpecs = append(regionSpecs, *regionSpec)
+		}
+
+		clusterSpec := openapiclient.NewAutoscalerClusterSpec(
+			cluster.ClusterID.Value,
+			cluster.Type.Value,
+			int32(cluster.ScaleInCooldownPeriodMinutes.Value),
+			int32(cluster.ScaleOutCooldownPeriodMinutes.Value),
+			int32(cluster.PostMaintenanceCooldownPeriodMinutes.Value),
+			regionSpecs,
+		)
+		clusterSpecs = append(clusterSpecs, *clusterSpec)
+	}
+
+	return *openapiclient.NewCreateAutoscalerPolicyRequestSpec(clusterSpecs)
+}
+
 func mapAutoscalerMetadata(metadata openapiclient.AutoscalerMetadata) *AutoscalerMetadata {
 	return &AutoscalerMetadata{
 		ID:        types.String{Value: metadata.GetId()},
@@ -383,10 +488,50 @@ func resourceAutoscalerPolicyRead(
 }
 
 func (r resourceAutoscalerPolicy) Create(ctx context.Context, req tfsdk.CreateResourceRequest, resp *tfsdk.CreateResourceResponse) {
-	resp.Diagnostics.AddError(
-		"Autoscaler policy create not implemented",
-		"Create for ybm_autoscaler_policy will be added in a follow-up change.",
-	)
+	if !r.p.configured {
+		resp.Diagnostics.AddError(
+			"Provider not configured",
+			"The provider wasn't configured before being applied, likely because it depends on an unknown value from another resource.",
+		)
+		return
+	}
+
+	var clusterID types.String
+	var clusters []autoscalerPolicyClusterConfig
+	resp.Diagnostics.Append(getAutoscalerPolicyPlan(ctx, req.Plan, &clusterID, &clusters)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	apiClient := r.p.client
+
+	accountId, getAccountOK, message := getAccountId(ctx, apiClient)
+	if !getAccountOK {
+		resp.Diagnostics.AddError("Unable to get account ID", message)
+		return
+	}
+
+	projectId, getProjectOK, message := getProjectId(ctx, apiClient, accountId)
+	if !getProjectOK {
+		resp.Diagnostics.AddError("Unable to get project ID", message)
+		return
+	}
+
+	requestSpec := buildCreateAutoscalerPolicyRequestSpec(clusters)
+
+	createResp, response, err := apiClient.AutoscalerApi.CreateAutoscalerPolicy(ctx, accountId, projectId, clusterID.Value).
+		CreateAutoscalerPolicyRequestSpec(requestSpec).
+		Execute()
+	if err != nil {
+		resp.Diagnostics.AddError("Unable to create autoscaler policy", getErrorMessage(response, err))
+		return
+	}
+
+	policy := mapAutoscalerPolicyFromResponse(accountId, projectId, clusterID.Value, createResp)
+	tflog.Debug(ctx, "Autoscaler policy created", map[string]interface{}{"policy": policy})
+
+	diags := resp.State.Set(ctx, &policy)
+	resp.Diagnostics.Append(diags...)
 }
 
 func (r resourceAutoscalerPolicy) Read(ctx context.Context, req tfsdk.ReadResourceRequest, resp *tfsdk.ReadResourceResponse) {
