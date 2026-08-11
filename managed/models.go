@@ -569,13 +569,13 @@ type AutoscalerPolicy struct {
 }
 
 type AutoscalerPolicyCluster struct {
-	ClusterID                           types.String                    `tfsdk:"cluster_id"`
-	Type                                types.String                    `tfsdk:"type"`
-	ScaleInCooldownPeriodMinute         types.Int64                     `tfsdk:"scale_in_cooldown_period_minute"`
-	ScaleOutCooldownPeriodMinute        types.Int64                     `tfsdk:"scale_out_cooldown_period_minute"`
-	PostMaintenanceCooldownPeriodMinute types.Int64                     `tfsdk:"post_maintenance_cooldown_period_minute"`
-	Regions                             []AutoscalerPolicyClusterRegion `tfsdk:"regions"`
-	Metadata                            *AutoscalerMetadata             `tfsdk:"metadata"`
+	ClusterID                            types.String                    `tfsdk:"cluster_id"`
+	Type                                 types.String                    `tfsdk:"type"`
+	ScaleInCooldownPeriodMinutes         types.Int64                     `tfsdk:"scale_in_cooldown_period_minutes"`
+	ScaleOutCooldownPeriodMinutes        types.Int64                     `tfsdk:"scale_out_cooldown_period_minutes"`
+	PostMaintenanceCooldownPeriodMinutes types.Int64                     `tfsdk:"post_maintenance_cooldown_period_minutes"`
+	Regions                              []AutoscalerPolicyClusterRegion `tfsdk:"regions"`
+	Metadata                             *AutoscalerMetadata             `tfsdk:"metadata"`
 }
 
 type AutoscalerPolicyClusterRegion struct {
