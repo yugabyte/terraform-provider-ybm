@@ -553,10 +553,50 @@ func (r resourceAutoscalerPolicy) Read(ctx context.Context, req tfsdk.ReadResour
 }
 
 func (r resourceAutoscalerPolicy) Update(ctx context.Context, req tfsdk.UpdateResourceRequest, resp *tfsdk.UpdateResourceResponse) {
-	resp.Diagnostics.AddError(
-		"Autoscaler policy update not implemented",
-		"Update for ybm_autoscaler_policy will be added in a follow-up change.",
-	)
+	if !r.p.configured {
+		resp.Diagnostics.AddError(
+			"Provider not configured",
+			"The provider wasn't configured before being applied, likely because it depends on an unknown value from another resource.",
+		)
+		return
+	}
+
+	var clusterID types.String
+	var clusters []autoscalerPolicyClusterConfig
+	resp.Diagnostics.Append(getAutoscalerPolicyPlan(ctx, req.Plan, &clusterID, &clusters)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	apiClient := r.p.client
+
+	accountId, getAccountOK, message := getAccountId(ctx, apiClient)
+	if !getAccountOK {
+		resp.Diagnostics.AddError("Unable to get account ID", message)
+		return
+	}
+
+	projectId, getProjectOK, message := getProjectId(ctx, apiClient, accountId)
+	if !getProjectOK {
+		resp.Diagnostics.AddError("Unable to get project ID", message)
+		return
+	}
+
+	requestSpec := buildCreateAutoscalerPolicyRequestSpec(clusters)
+
+	updateResp, response, err := apiClient.AutoscalerApi.UpdateAutoscalerPolicy(ctx, accountId, projectId, clusterID.Value).
+		CreateAutoscalerPolicyRequestSpec(requestSpec).
+		Execute()
+	if err != nil {
+		resp.Diagnostics.AddError("Unable to update autoscaler policy", getErrorMessage(response, err))
+		return
+	}
+
+	policy := mapAutoscalerPolicyFromResponse(accountId, projectId, clusterID.Value, updateResp)
+	tflog.Debug(ctx, "Autoscaler policy updated", map[string]interface{}{"policy": policy})
+
+	diags := resp.State.Set(ctx, &policy)
+	resp.Diagnostics.Append(diags...)
 }
 
 func (r resourceAutoscalerPolicy) Delete(ctx context.Context, req tfsdk.DeleteResourceRequest, resp *tfsdk.DeleteResourceResponse) {
