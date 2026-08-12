@@ -976,7 +976,6 @@ type resourceCluster struct {
 }
 
 var _ tfsdk.ResourceWithValidateConfig = resourceCluster{}
-var _ tfsdk.ResourceWithModifyPlan = resourceCluster{}
 
 func EditBackupSchedule(ctx context.Context, backupScheduleStruct BackupScheduleInfo, scheduleId string, backupDes string, accountId string, projectId string, clusterId string, apiClient *openapiclient.APIClient) error {
 	return editBackupScheduleV2(ctx, backupScheduleStruct, scheduleId, backupDes, accountId, projectId, clusterId, apiClient)
@@ -1566,32 +1565,6 @@ func (r resourceCluster) ValidateConfig(ctx context.Context, req tfsdk.ValidateR
 
 	if err := validateMultiCloudSupport(isMultiCloud); err != nil {
 		resp.Diagnostics.AddError("Invalid is_multi_cloud field", err.Error())
-	}
-}
-
-func (r resourceCluster) ModifyPlan(ctx context.Context, req tfsdk.ModifyResourcePlanRequest, resp *tfsdk.ModifyResourcePlanResponse) {
-	// Skip create (no prior state) and destroy (no plan).
-	if req.State.Raw.IsNull() || resp.Plan.Raw.IsNull() {
-		return
-	}
-
-	var stateIsMultiCloud, planIsMultiCloud types.Bool
-	resp.Diagnostics.Append(req.State.GetAttribute(ctx, path.Root("is_multi_cloud"), &stateIsMultiCloud)...)
-	resp.Diagnostics.Append(resp.Plan.GetAttribute(ctx, path.Root("is_multi_cloud"), &planIsMultiCloud)...)
-	if resp.Diagnostics.HasError() {
-		return
-	}
-
-	if stateIsMultiCloud.IsNull() || stateIsMultiCloud.IsUnknown() ||
-		planIsMultiCloud.IsNull() || planIsMultiCloud.IsUnknown() {
-		return
-	}
-
-	if stateIsMultiCloud.Value != planIsMultiCloud.Value {
-		resp.Diagnostics.AddError(
-			"is_multi_cloud cannot be modified after creation",
-			fmt.Sprintf("The 'is_multi_cloud' field can be set only at the time of creation. It is currently %t and cannot be changed to %t. Restore it to %t, or destroy and recreate the cluster.",
-				stateIsMultiCloud.Value, planIsMultiCloud.Value, stateIsMultiCloud.Value))
 	}
 }
 
@@ -2285,15 +2258,6 @@ func (r resourceCluster) Read(ctx context.Context, req tfsdk.ReadResourceRequest
 	// set restore backup id for cluster (not returned by read api)
 	req.State.GetAttribute(ctx, path.Root("restore_backup_id"), &cluster.RestoreBackupID)
 
-	// Workaround: the read API currently always returns is_multi_cloud=false.
-	// Until that bug is fixed (tracked separately), preserve the prior state value so
-	// refresh/plan does not treat an unchanged config as a forbidden update.
-	var priorIsMultiCloud types.Bool
-	req.State.GetAttribute(ctx, path.Root("is_multi_cloud"), &priorIsMultiCloud)
-	if !priorIsMultiCloud.IsNull() && !priorIsMultiCloud.IsUnknown() {
-		cluster.IsMultiCloud = types.Bool{Value: priorIsMultiCloud.Value}
-	}
-
 	diags := resp.State.Set(ctx, &cluster)
 	resp.Diagnostics.Append(diags...)
 	if resp.Diagnostics.HasError() {
@@ -2795,8 +2759,7 @@ func (r resourceCluster) Update(ctx context.Context, req tfsdk.UpdateResourceReq
 		stateIsMultiCloud.Value != plan.IsMultiCloud.Value {
 		resp.Diagnostics.AddError(
 			"is_multi_cloud cannot be modified after creation",
-			fmt.Sprintf("The 'is_multi_cloud' field can be set only at the time of creation. It is currently %t and cannot be changed to %t. Restore it to %t, or destroy and recreate the cluster.",
-				stateIsMultiCloud.Value, plan.IsMultiCloud.Value, stateIsMultiCloud.Value))
+			"The 'is_multi_cloud' field can be set only at the time of creation and cannot be modified after creation.")
 		return
 	}
 
