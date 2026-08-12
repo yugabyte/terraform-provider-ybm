@@ -24,7 +24,7 @@ var flagEnabled = map[FeatureFlag]bool{
 	DR:                   false,
 	GCPBackupReplication: false,
 	MultiZoneSupport:     false,
-	MultiCloudSupport:    false,
+	MultiCloudSupport:    true,
 	Autoscaling:          false,
 }
 
