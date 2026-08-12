@@ -2258,6 +2258,15 @@ func (r resourceCluster) Read(ctx context.Context, req tfsdk.ReadResourceRequest
 	// set restore backup id for cluster (not returned by read api)
 	req.State.GetAttribute(ctx, path.Root("restore_backup_id"), &cluster.RestoreBackupID)
 
+	// Workaround: the read API currently always returns is_multi_cloud=false.
+	// Until that bug is fixed (tracked separately), keep the value already in state.
+	// It is null only on import, where the API value is all we have.
+	var stateIsMultiCloud types.Bool
+	req.State.GetAttribute(ctx, path.Root("is_multi_cloud"), &stateIsMultiCloud)
+	if !stateIsMultiCloud.IsNull() {
+		cluster.IsMultiCloud = stateIsMultiCloud
+	}
+
 	diags := resp.State.Set(ctx, &cluster)
 	resp.Diagnostics.Append(diags...)
 	if resp.Diagnostics.HasError() {
