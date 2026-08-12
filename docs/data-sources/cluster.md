@@ -86,13 +86,13 @@ Read-Only:
 - `config_state` (String) The current state of the replication configuration (e.g., ACTIVE, PENDING, ERROR).
 - `expiry_on` (String) Timestamp when this replication configuration expires.
 - `id` (String) Unique identifier for the replication configuration.
-- `latest_transfer_operation_details` (Attributes) Details about the most recent backup transfer operation. (see [below for nested schema](#nestedatt--backup_replication_spec--gcp_spec--geo_partitioned_cluster_spec--replication_configs--latest_transfer_operation_details))
+- `latest_transfer_operation_details` (Attributes) Details about the most recent backup transfer operation. (see [below for nested schema](#nestedatt--backup_replication_spec--gcp_spec--geo_partitioned_cluster_spec--configs_set_for_expiry--latest_transfer_operation_details))
 - `next_transfer_operation_time` (String) Timestamp of the next scheduled backup transfer operation.
 - `region` (String) The region associated with this replication configuration.
 - `target` (String) The GCS bucket name for this replication configuration.
 
-<a id="nestedatt--backup_replication_spec--gcp_spec--geo_partitioned_cluster_spec--replication_configs--latest_transfer_operation_details"></a>
-### Nested Schema for `backup_replication_spec.gcp_spec.geo_partitioned_cluster_spec.replication_configs.latest_transfer_operation_details`
+<a id="nestedatt--backup_replication_spec--gcp_spec--geo_partitioned_cluster_spec--configs_set_for_expiry--latest_transfer_operation_details"></a>
+### Nested Schema for `backup_replication_spec.gcp_spec.geo_partitioned_cluster_spec.configs_set_for_expiry.latest_transfer_operation_details`
 
 Read-Only:
 
@@ -143,13 +143,13 @@ Read-Only:
 - `config_state` (String) The current state of the replication configuration (e.g., ENABLED, DISABLED etc.).
 - `expiry_on` (String) Timestamp when this replication configuration expires.
 - `id` (String) Unique identifier for the replication configuration.
-- `latest_transfer_operation_details` (Attributes) Details about the most recent backup transfer operation. (see [below for nested schema](#nestedatt--backup_replication_spec--gcp_spec--sync_cluster_spec--replication_config--latest_transfer_operation_details))
+- `latest_transfer_operation_details` (Attributes) Details about the most recent backup transfer operation. (see [below for nested schema](#nestedatt--backup_replication_spec--gcp_spec--sync_cluster_spec--configs_set_for_expiry--latest_transfer_operation_details))
 - `next_transfer_operation_time` (String) Timestamp of the next scheduled backup transfer operation.
 - `region` (String) The region associated with this replication configuration.
 - `target` (String) The GCS bucket name for this replication configuration
 
-<a id="nestedatt--backup_replication_spec--gcp_spec--sync_cluster_spec--replication_config--latest_transfer_operation_details"></a>
-### Nested Schema for `backup_replication_spec.gcp_spec.sync_cluster_spec.replication_config.latest_transfer_operation_details`
+<a id="nestedatt--backup_replication_spec--gcp_spec--sync_cluster_spec--configs_set_for_expiry--latest_transfer_operation_details"></a>
+### Nested Schema for `backup_replication_spec.gcp_spec.sync_cluster_spec.configs_set_for_expiry.latest_transfer_operation_details`
 
 Read-Only:
 
