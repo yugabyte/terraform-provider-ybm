@@ -600,10 +600,35 @@ func (r resourceAutoscalerPolicy) Update(ctx context.Context, req tfsdk.UpdateRe
 }
 
 func (r resourceAutoscalerPolicy) Delete(ctx context.Context, req tfsdk.DeleteResourceRequest, resp *tfsdk.DeleteResourceResponse) {
-	resp.Diagnostics.AddError(
-		"Autoscaler policy delete not implemented",
-		"Delete for ybm_autoscaler_policy will be added in a follow-up change.",
-	)
+	var state AutoscalerPolicy
+	getAutoscalerPolicyState(ctx, req.State, &state)
+
+	apiClient := r.p.client
+
+	accountId, getAccountOK, message := getAccountId(ctx, apiClient)
+	if !getAccountOK {
+		resp.Diagnostics.AddError("Unable to get account ID", message)
+		return
+	}
+
+	projectId, getProjectOK, message := getProjectId(ctx, apiClient, accountId)
+	if !getProjectOK {
+		resp.Diagnostics.AddError("Unable to get project ID", message)
+		return
+	}
+
+	response, err := apiClient.AutoscalerApi.DeleteAutoscalerPolicy(ctx, accountId, projectId, state.ClusterID.Value).Execute()
+	if err != nil {
+		if response != nil && response.StatusCode == http.StatusNotFound {
+			resp.State.RemoveResource(ctx)
+			return
+		}
+		resp.Diagnostics.AddError("Unable to delete autoscaler policy", getErrorMessage(response, err))
+		return
+	}
+
+	tflog.Debug(ctx, "Autoscaler policy deleted", map[string]interface{}{"cluster_id": state.ClusterID.Value})
+	resp.State.RemoveResource(ctx)
 }
 
 func (r resourceAutoscalerPolicy) ImportState(ctx context.Context, req tfsdk.ImportResourceStateRequest, resp *tfsdk.ImportResourceStateResponse) {
