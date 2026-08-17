@@ -7,7 +7,9 @@ package managed
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
+	"reflect"
 	"time"
 
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
@@ -131,10 +133,14 @@ Requires the AUTOSCALING feature flag (YBM_FF_AUTOSCALING=true).`,
 								Required:    true,
 							},
 							"status": {
-								Description: "Region policy status: ACTIVE or INACTIVE.",
+								Description: "Region policy status used to enable or disable autoscaling in this region. Valid values are ACTIVE or INACTIVE.",
 								Type:        types.StringType,
+								Optional:    true,
 								Computed:    true,
 								Validators:  []tfsdk.AttributeValidator{stringvalidator.OneOf("ACTIVE", "INACTIVE")},
+								PlanModifiers: []tfsdk.AttributePlanModifier{
+									tfsdk.UseStateForUnknown(),
+								},
 							},
 							"policies": {
 								Description: "Scaling policies for the region.",
@@ -369,6 +375,176 @@ func buildCreateAutoscalerPolicyRequestSpec(clusters []autoscalerPolicyClusterCo
 	return *openapiclient.NewCreateAutoscalerPolicyRequestSpec(clusterSpecs)
 }
 
+type autoscalerRegionKey struct {
+	clusterID string
+	code      string
+}
+
+type autoscalerRegionIdentity struct {
+	id     string
+	status string
+}
+
+func autoscalerStatusSpecified(status types.String) bool {
+	return !status.Unknown && !status.Null && status.Value != ""
+}
+
+func indexAutoscalerRegions(policy AutoscalerPolicy) map[autoscalerRegionKey]autoscalerRegionIdentity {
+	index := make(map[autoscalerRegionKey]autoscalerRegionIdentity)
+	for _, cluster := range policy.Clusters {
+		for _, region := range cluster.Regions {
+			identity := autoscalerRegionIdentity{status: region.Status.Value}
+			if region.Metadata != nil {
+				identity.id = region.Metadata.ID.Value
+			}
+			index[autoscalerRegionKey{clusterID: cluster.ClusterID.Value, code: region.Code.Value}] = identity
+		}
+	}
+	return index
+}
+
+func buildRegionStatusUpdates(desired []autoscalerPolicyClusterConfig, current AutoscalerPolicy) ([]openapiclient.AutoscalerPolicyRegionStatusSpec, error) {
+	index := indexAutoscalerRegions(current)
+	updates := make([]openapiclient.AutoscalerPolicyRegionStatusSpec, 0)
+	for _, cluster := range desired {
+		for _, region := range cluster.Regions {
+			if !autoscalerStatusSpecified(region.Status) {
+				continue
+			}
+			key := autoscalerRegionKey{clusterID: cluster.ClusterID.Value, code: region.Code.Value}
+			identity, ok := index[key]
+			if !ok {
+				return nil, fmt.Errorf("unable to find autoscaler region policy for cluster %s region %s", key.clusterID, key.code)
+			}
+			if identity.id == "" {
+				return nil, fmt.Errorf("missing metadata ID for autoscaler region policy in cluster %s region %s", key.clusterID, key.code)
+			}
+			if identity.status == region.Status.Value {
+				continue
+			}
+			updates = append(updates, *openapiclient.NewAutoscalerPolicyRegionStatusSpec(
+				identity.id,
+				openapiclient.AutoscalerPolicyStatusEnum(region.Status.Value),
+			))
+		}
+	}
+	return updates, nil
+}
+
+func applyRegionStatusToPolicy(policy AutoscalerPolicy, updates []openapiclient.AutoscalerPolicyRegionStatusSpec) AutoscalerPolicy {
+	idToStatus := make(map[string]string, len(updates))
+	for _, update := range updates {
+		idToStatus[update.Id] = string(update.Status)
+	}
+	for i := range policy.Clusters {
+		for j := range policy.Clusters[i].Regions {
+			metadata := policy.Clusters[i].Regions[j].Metadata
+			if metadata == nil {
+				continue
+			}
+			status, ok := idToStatus[metadata.ID.Value]
+			if !ok {
+				continue
+			}
+			policy.Clusters[i].Regions[j].Status = types.String{Value: status}
+		}
+	}
+	return policy
+}
+
+func applyDesiredRegionStatuses(
+	ctx context.Context,
+	apiClient *openapiclient.APIClient,
+	accountId string,
+	projectId string,
+	clusterId string,
+	desired []autoscalerPolicyClusterConfig,
+	current AutoscalerPolicy,
+) (AutoscalerPolicy, error) {
+	updates, err := buildRegionStatusUpdates(desired, current)
+	if err != nil {
+		return current, err
+	}
+	if len(updates) == 0 {
+		return current, nil
+	}
+
+	requestSpec := openapiclient.NewUpdateAutoscalerPolicyRegionStatusRequestSpec(updates)
+	response, err := apiClient.AutoscalerApi.UpdateAutoscalerPolicyRegionStatus(ctx, accountId, projectId, clusterId).
+		UpdateAutoscalerPolicyRegionStatusRequestSpec(*requestSpec).
+		Execute()
+	if err != nil {
+		return current, errors.New(getErrorMessage(response, err))
+	}
+
+	tflog.Debug(ctx, "Autoscaler policy region status updated", map[string]interface{}{
+		"cluster_id": clusterId,
+		"updates":    len(updates),
+	})
+
+	refreshed, err := resourceAutoscalerPolicyRead(ctx, clusterId, apiClient)
+	if err != nil {
+		return applyRegionStatusToPolicy(current, updates), nil
+	}
+	return refreshed, nil
+}
+
+func autoscalerPolicyClustersToConfig(clusters []AutoscalerPolicyCluster) []autoscalerPolicyClusterConfig {
+	result := make([]autoscalerPolicyClusterConfig, 0, len(clusters))
+	for _, cluster := range clusters {
+		regions := make([]autoscalerPolicyClusterRegionConfig, 0, len(cluster.Regions))
+		for _, region := range cluster.Regions {
+			policies := make([]autoscalerClusterRegionScalingPolicyConfig, 0, len(region.Policies))
+			for _, policy := range region.Policies {
+				rules := make([]autoscalerScalingRuleConfig, 0, len(policy.Rules))
+				for _, rule := range policy.Rules {
+					var action *autoscalerScalingActionConfig
+					if rule.ScalingAction != nil {
+						action = &autoscalerScalingActionConfig{Delta: rule.ScalingAction.Delta}
+					}
+					rules = append(rules, autoscalerScalingRuleConfig{
+						Name:             rule.Name,
+						Resource:         rule.Resource,
+						Condition:        rule.Condition,
+						Value:            rule.Value,
+						EvaluationWindow: rule.EvaluationWindow,
+						ScalingAction:    action,
+					})
+				}
+				policies = append(policies, autoscalerClusterRegionScalingPolicyConfig{
+					ScalableResource: policy.ScalableResource,
+					Min:              policy.Min,
+					Max:              policy.Max,
+					ScalingType:      policy.ScalingType,
+					Clause:           policy.Clause,
+					Rules:            rules,
+				})
+			}
+			regions = append(regions, autoscalerPolicyClusterRegionConfig{
+				Code:     region.Code,
+				Status:   region.Status,
+				Policies: policies,
+			})
+		}
+		result = append(result, autoscalerPolicyClusterConfig{
+			ClusterID:                            cluster.ClusterID,
+			Type:                                 cluster.Type,
+			ScaleInCooldownPeriodMinutes:         cluster.ScaleInCooldownPeriodMinutes,
+			ScaleOutCooldownPeriodMinutes:        cluster.ScaleOutCooldownPeriodMinutes,
+			PostMaintenanceCooldownPeriodMinutes: cluster.PostMaintenanceCooldownPeriodMinutes,
+			Regions:                              regions,
+		})
+	}
+	return result
+}
+
+func autoscalerPolicySpecChanged(plan []autoscalerPolicyClusterConfig, state []AutoscalerPolicyCluster) bool {
+	return !reflect.DeepEqual(
+		buildCreateAutoscalerPolicyRequestSpec(plan),
+		buildCreateAutoscalerPolicyRequestSpec(autoscalerPolicyClustersToConfig(state)),
+	)
+}
+
 func mapAutoscalerMetadata(metadata openapiclient.AutoscalerMetadata) *AutoscalerMetadata {
 	return &AutoscalerMetadata{
 		ID:        types.String{Value: metadata.GetId()},
@@ -416,6 +592,7 @@ func mapAutoscalerPolicyFromResponse(
 		for _, region := range cluster.GetRegions() {
 			tfRegion := AutoscalerPolicyClusterRegion{
 				Code:     types.String{Value: region.GetCode()},
+				Status:   types.String{Null: true},
 				Policies: []AutoscalerClusterRegionScalingPolicy{},
 				Metadata: mapOptionalAutoscalerMetadata(region.Metadata),
 			}
@@ -528,6 +705,11 @@ func (r resourceAutoscalerPolicy) Create(ctx context.Context, req tfsdk.CreateRe
 	}
 
 	policy := mapAutoscalerPolicyFromResponse(accountId, projectId, clusterID.Value, createResp)
+	policy, err = applyDesiredRegionStatuses(ctx, apiClient, accountId, projectId, clusterID.Value, clusters, policy)
+	if err != nil {
+		resp.Diagnostics.AddError("Unable to update autoscaler policy region status", err.Error())
+	}
+
 	tflog.Debug(ctx, "Autoscaler policy created", map[string]interface{}{"policy": policy})
 
 	diags := resp.State.Set(ctx, &policy)
@@ -568,6 +750,9 @@ func (r resourceAutoscalerPolicy) Update(ctx context.Context, req tfsdk.UpdateRe
 		return
 	}
 
+	var state AutoscalerPolicy
+	getAutoscalerPolicyState(ctx, req.State, &state)
+
 	apiClient := r.p.client
 
 	accountId, getAccountOK, message := getAccountId(ctx, apiClient)
@@ -582,20 +767,29 @@ func (r resourceAutoscalerPolicy) Update(ctx context.Context, req tfsdk.UpdateRe
 		return
 	}
 
-	requestSpec := buildCreateAutoscalerPolicyRequestSpec(clusters)
-
-	updateResp, response, err := apiClient.AutoscalerApi.UpdateAutoscalerPolicy(ctx, accountId, projectId, clusterID.Value).
-		CreateAutoscalerPolicyRequestSpec(requestSpec).
-		Execute()
-	if err != nil {
-		resp.Diagnostics.AddError("Unable to update autoscaler policy", getErrorMessage(response, err))
-		return
+	policy := state
+	if autoscalerPolicySpecChanged(clusters, state.Clusters) {
+		requestSpec := buildCreateAutoscalerPolicyRequestSpec(clusters)
+		updateResp, response, err := apiClient.AutoscalerApi.UpdateAutoscalerPolicy(ctx, accountId, projectId, clusterID.Value).
+			CreateAutoscalerPolicyRequestSpec(requestSpec).
+			Execute()
+		if err != nil {
+			resp.Diagnostics.AddError("Unable to update autoscaler policy", getErrorMessage(response, err))
+			return
+		}
+		policy = mapAutoscalerPolicyFromResponse(accountId, projectId, clusterID.Value, updateResp)
 	}
 
-	policy := mapAutoscalerPolicyFromResponse(accountId, projectId, clusterID.Value, updateResp)
-	tflog.Debug(ctx, "Autoscaler policy updated", map[string]interface{}{"policy": policy})
+	updatedPolicy, err := applyDesiredRegionStatuses(ctx, apiClient, accountId, projectId, clusterID.Value, clusters, policy)
+	if err != nil {
+		resp.Diagnostics.AddError("Unable to update autoscaler policy region status", err.Error())
+	}
 
-	diags := resp.State.Set(ctx, &policy)
+	tflog.Debug(ctx, "Autoscaler policy updated", map[string]interface{}{"policy": updatedPolicy})
+
+	// Persist whatever succeeded (policy PUT and/or prior state) even if region
+	// status update failed, so Terraform state matches the API after a partial update.
+	diags := resp.State.Set(ctx, &updatedPolicy)
 	resp.Diagnostics.Append(diags...)
 }
 
