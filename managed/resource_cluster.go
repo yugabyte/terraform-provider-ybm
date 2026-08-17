@@ -750,7 +750,7 @@ func (r resourceClusterType) GetSchema(_ context.Context) (tfsdk.Schema, diag.Di
 			},
 		},
 		"is_multi_cloud": {
-			Description: "Set to true to deploy a cluster that spans multiple cloud providers. Optional; defaults to false. Requires the MULTI_CLOUD_SUPPORT feature flag (YBM_FF_MULTI_CLOUD_SUPPORT=true).",
+			Description: "Set to true to deploy a cluster that spans multiple cloud providers. Optional; defaults to false. This value cannot be modified after the cluster is created.",
 			Type:        types.BoolType,
 			Optional:    true,
 			Computed:    true,
@@ -2258,6 +2258,15 @@ func (r resourceCluster) Read(ctx context.Context, req tfsdk.ReadResourceRequest
 	// set restore backup id for cluster (not returned by read api)
 	req.State.GetAttribute(ctx, path.Root("restore_backup_id"), &cluster.RestoreBackupID)
 
+	// Workaround: the read API currently always returns is_multi_cloud=false.
+	// Until that bug is fixed (tracked separately), keep the value already in state.
+	// It is null only on import, where the API value is all we have.
+	var stateIsMultiCloud types.Bool
+	req.State.GetAttribute(ctx, path.Root("is_multi_cloud"), &stateIsMultiCloud)
+	if !stateIsMultiCloud.IsNull() {
+		cluster.IsMultiCloud = stateIsMultiCloud
+	}
+
 	diags := resp.State.Set(ctx, &cluster)
 	resp.Diagnostics.Append(diags...)
 	if resp.Diagnostics.HasError() {
@@ -2749,6 +2758,18 @@ func (r resourceCluster) Update(ctx context.Context, req tfsdk.UpdateResourceReq
 				"Database credentials can be set only at the time of creation and cannot be modified after creation.")
 			return
 		}
+	}
+
+	// is_multi_cloud can not be modified after creation.
+	var stateIsMultiCloud types.Bool
+	req.State.GetAttribute(ctx, path.Root("is_multi_cloud"), &stateIsMultiCloud)
+	if !stateIsMultiCloud.IsNull() && !stateIsMultiCloud.IsUnknown() &&
+		!plan.IsMultiCloud.IsNull() && !plan.IsMultiCloud.IsUnknown() &&
+		stateIsMultiCloud.Value != plan.IsMultiCloud.Value {
+		resp.Diagnostics.AddError(
+			"is_multi_cloud cannot be modified after creation",
+			"The 'is_multi_cloud' field can be set only at the time of creation and cannot be modified after creation.")
+		return
 	}
 
 	// Resume the cluster if the desired state is set to 'Active' and it is paused currently
