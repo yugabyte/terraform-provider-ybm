@@ -1,3 +1,6 @@
+//go:build ignore_autoscaler
+// +build ignore_autoscaler
+
 /*
  * Copyright © 2022-present Yugabyte, Inc. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
