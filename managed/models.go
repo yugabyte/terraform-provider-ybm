@@ -559,40 +559,29 @@ type AutoscalerMetadata struct {
 }
 
 type AutoscalerPolicy struct {
-	AccountID types.String              `tfsdk:"account_id"`
-	ProjectID types.String              `tfsdk:"project_id"`
-	ClusterID types.String              `tfsdk:"cluster_id"`
-	PolicyID  types.String              `tfsdk:"policy_id"`
-	CreatedAt types.String              `tfsdk:"created_at"`
-	UpdatedAt types.String              `tfsdk:"updated_at"`
-	Clusters  []AutoscalerPolicyCluster `tfsdk:"clusters"`
+	AccountID                            types.String           `tfsdk:"account_id"`
+	ProjectID                            types.String           `tfsdk:"project_id"`
+	ClusterID                            types.String           `tfsdk:"cluster_id"`
+	Region                               types.String           `tfsdk:"region"`
+	Type                                 types.String           `tfsdk:"type"`
+	ScalableResource                     types.String           `tfsdk:"scalable_resource"`
+	Min                                  types.Int64            `tfsdk:"min"`
+	Max                                  types.Int64            `tfsdk:"max"`
+	ScaleInCooldownPeriodMinutes         types.Int64            `tfsdk:"scale_in_cooldown_period_minutes"`
+	ScaleOutCooldownPeriodMinutes        types.Int64            `tfsdk:"scale_out_cooldown_period_minutes"`
+	PostMaintenanceCooldownPeriodMinutes types.Int64            `tfsdk:"post_maintenance_cooldown_period_minutes"`
+	Status                               types.String           `tfsdk:"status"`
+	PolicyRules                          []AutoscalerPolicyRule `tfsdk:"policy_rules"`
+	PolicyID                             types.String           `tfsdk:"policy_id"`
+	CreatedAt                            types.String           `tfsdk:"created_at"`
+	UpdatedAt                            types.String           `tfsdk:"updated_at"`
 }
 
-type AutoscalerPolicyCluster struct {
-	ClusterID                            types.String                    `tfsdk:"cluster_id"`
-	Type                                 types.String                    `tfsdk:"type"`
-	ScaleInCooldownPeriodMinutes         types.Int64                     `tfsdk:"scale_in_cooldown_period_minutes"`
-	ScaleOutCooldownPeriodMinutes        types.Int64                     `tfsdk:"scale_out_cooldown_period_minutes"`
-	PostMaintenanceCooldownPeriodMinutes types.Int64                     `tfsdk:"post_maintenance_cooldown_period_minutes"`
-	Regions                              []AutoscalerPolicyClusterRegion `tfsdk:"regions"`
-	Metadata                             *AutoscalerMetadata             `tfsdk:"metadata"`
-}
-
-type AutoscalerPolicyClusterRegion struct {
-	Code     types.String                           `tfsdk:"code"`
-	Status   types.String                           `tfsdk:"status"`
-	Policies []AutoscalerClusterRegionScalingPolicy `tfsdk:"policies"`
-	Metadata *AutoscalerMetadata                    `tfsdk:"metadata"`
-}
-
-type AutoscalerClusterRegionScalingPolicy struct {
-	ScalableResource types.String            `tfsdk:"scalable_resource"`
-	Min              types.Int64             `tfsdk:"min"`
-	Max              types.Int64             `tfsdk:"max"`
-	ScalingType      types.String            `tfsdk:"scaling_type"`
-	Clause           types.String            `tfsdk:"clause"`
-	Rules            []AutoscalerScalingRule `tfsdk:"rules"`
-	Metadata         *AutoscalerMetadata     `tfsdk:"metadata"`
+type AutoscalerPolicyRule struct {
+	ScalingType types.String            `tfsdk:"scaling_type"`
+	Clause      types.String            `tfsdk:"clause"`
+	Rules       []AutoscalerScalingRule `tfsdk:"rules"`
+	Metadata    *AutoscalerMetadata     `tfsdk:"metadata"`
 }
 
 type AutoscalerScalingRule struct {

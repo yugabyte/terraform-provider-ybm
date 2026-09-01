@@ -1,6 +1,3 @@
-//go:build ignore_autoscaler
-// +build ignore_autoscaler
-
 /*
  * Copyright © 2022-present Yugabyte, Inc. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
@@ -12,10 +9,9 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-	"reflect"
+	"strings"
 	"time"
 
-	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
@@ -48,7 +44,8 @@ func autoscalerMetadataSchemaAttributes() map[string]tfsdk.Attribute {
 
 func (r resourceAutoscalerPolicyType) GetSchema(_ context.Context) (tfsdk.Schema, diag.Diagnostics) {
 	return tfsdk.Schema{
-		Description: `The resource to manage an autoscaler policy for a YugabyteDB Aeon cluster.
+		Description: `The resource to manage an autoscaler policy for a YugabyteDB Aeon cluster region.
+Each resource corresponds to one policy for a specific cluster, region, and cluster type (PRIMARY or READ_REPLICA).
 Requires the AUTOSCALING feature flag (YBM_FF_AUTOSCALING=true).`,
 		Attributes: map[string]tfsdk.Attribute{
 			"account_id": {
@@ -75,6 +72,129 @@ Requires the AUTOSCALING feature flag (YBM_FF_AUTOSCALING=true).`,
 					tfsdk.RequiresReplace(),
 				},
 			},
+			"region": {
+				Description: "Cloud region code this autoscaler policy applies to (for example, us-west1).",
+				Type:        types.StringType,
+				Required:    true,
+				PlanModifiers: []tfsdk.AttributePlanModifier{
+					tfsdk.RequiresReplace(),
+				},
+			},
+			"type": {
+				Description: "Cluster type: PRIMARY or READ_REPLICA.",
+				Type:        types.StringType,
+				Required:    true,
+				PlanModifiers: []tfsdk.AttributePlanModifier{
+					tfsdk.RequiresReplace(),
+				},
+			},
+			"scalable_resource": {
+				Description: "Resource type that can be scaled: NODE or CPU.",
+				Type:        types.StringType,
+				Required:    true,
+			},
+			"min": {
+				Description: "Minimum number of scalable resources.",
+				Type:        types.Int64Type,
+				Required:    true,
+			},
+			"max": {
+				Description: "Maximum number of scalable resources.",
+				Type:        types.Int64Type,
+				Required:    true,
+			},
+			"scale_in_cooldown_period_minutes": {
+				Description: "Cooldown period in minutes after a scale-in event.",
+				Type:        types.Int64Type,
+				Required:    true,
+			},
+			"scale_out_cooldown_period_minutes": {
+				Description: "Cooldown period in minutes after a scale-out event.",
+				Type:        types.Int64Type,
+				Required:    true,
+			},
+			"post_maintenance_cooldown_period_minutes": {
+				Description: "Cooldown period in minutes after maintenance completes.",
+				Type:        types.Int64Type,
+				Required:    true,
+			},
+			"status": {
+				Description: "Policy status used to enable or disable autoscaling. Valid values are ACTIVE or INACTIVE.",
+				Type:        types.StringType,
+				Optional:    true,
+				Computed:    true,
+				PlanModifiers: []tfsdk.AttributePlanModifier{
+					tfsdk.UseStateForUnknown(),
+				},
+			},
+			"policy_rules": {
+				Description: "Direction-specific scaling rules for the region policy.",
+				Required:    true,
+				Attributes: tfsdk.ListNestedAttributes(map[string]tfsdk.Attribute{
+					"scaling_type": {
+						Description: "Direction of scaling: SCALE_IN or SCALE_OUT.",
+						Type:        types.StringType,
+						Required:    true,
+					},
+					"clause": {
+						Description: "Logical operator for combining scaling rules: AND or OR.",
+						Type:        types.StringType,
+						Required:    true,
+					},
+					"rules": {
+						Description: "Rules that must be satisfied to trigger scaling.",
+						Required:    true,
+						Attributes: tfsdk.ListNestedAttributes(map[string]tfsdk.Attribute{
+							"name": {
+								Description: "Name of the scaling rule.",
+								Type:        types.StringType,
+								Required:    true,
+							},
+							"resource": {
+								Description: "Metric resource to evaluate: CPU or SQL_CONNECTION.",
+								Type:        types.StringType,
+								Required:    true,
+							},
+							"condition": {
+								Description: "Comparison operator for the metric threshold: GT or LT.",
+								Type:        types.StringType,
+								Required:    true,
+							},
+							"value": {
+								Description: "Threshold value for the metric.",
+								Type:        types.Float64Type,
+								Required:    true,
+							},
+							"evaluation_window": {
+								Description: "Duration over which the metric is evaluated (for example, 5m).",
+								Type:        types.StringType,
+								Required:    true,
+							},
+							"scaling_action": {
+								Description: "Scaling action to apply when this rule is satisfied.",
+								Required:    true,
+								Attributes: tfsdk.SingleNestedAttributes(map[string]tfsdk.Attribute{
+									"delta": {
+										Description: "Number of nodes to scale in or out.",
+										Type:        types.Int64Type,
+										Required:    true,
+									},
+								}),
+							},
+							"metadata": {
+								Description: "Metadata for the scaling rule.",
+								Computed:    true,
+								Attributes:  tfsdk.SingleNestedAttributes(autoscalerMetadataSchemaAttributes()),
+							},
+						}),
+					},
+					"metadata": {
+						Description: "Metadata for the direction-specific scaling policy.",
+						Computed:    true,
+						Attributes:  tfsdk.SingleNestedAttributes(autoscalerMetadataSchemaAttributes()),
+					},
+				}),
+			},
 			"policy_id": {
 				Description: "The ID of the autoscaler policy.",
 				Type:        types.StringType,
@@ -96,157 +216,6 @@ Requires the AUTOSCALING feature flag (YBM_FF_AUTOSCALING=true).`,
 				Type:        types.StringType,
 				Computed:    true,
 			},
-			"clusters": {
-				Description: "Cluster-level autoscaler policy configuration (PRIMARY and/or READ_REPLICA).",
-				Required:    true,
-				Attributes: tfsdk.ListNestedAttributes(map[string]tfsdk.Attribute{
-					"cluster_id": {
-						Description: "The ID of the cluster (PRIMARY or READ_REPLICA) this policy applies to.",
-						Type:        types.StringType,
-						Required:    true,
-					},
-					"type": {
-						Description: "Cluster type: PRIMARY or READ_REPLICA.",
-						Type:        types.StringType,
-						Required:    true,
-						Validators:  []tfsdk.AttributeValidator{stringvalidator.OneOf("PRIMARY", "READ_REPLICA")},
-					},
-					"scale_in_cooldown_period_minutes": {
-						Description: "Cooldown period in minutes after a scale-in event.",
-						Type:        types.Int64Type,
-						Required:    true,
-					},
-					"scale_out_cooldown_period_minutes": {
-						Description: "Cooldown period in minutes after a scale-out event.",
-						Type:        types.Int64Type,
-						Required:    true,
-					},
-					"post_maintenance_cooldown_period_minutes": {
-						Description: "Cooldown period in minutes after maintenance completes.",
-						Type:        types.Int64Type,
-						Required:    true,
-					},
-					"regions": {
-						Description: "Region-level autoscaler policy configuration.",
-						Required:    true,
-						Attributes: tfsdk.ListNestedAttributes(map[string]tfsdk.Attribute{
-							"code": {
-								Description: "Cloud region code (for example, us-west1).",
-								Type:        types.StringType,
-								Required:    true,
-							},
-							"status": {
-								Description: "Region policy status used to enable or disable autoscaling in this region. Valid values are ACTIVE or INACTIVE.",
-								Type:        types.StringType,
-								Optional:    true,
-								Computed:    true,
-								Validators:  []tfsdk.AttributeValidator{stringvalidator.OneOf("ACTIVE", "INACTIVE")},
-								PlanModifiers: []tfsdk.AttributePlanModifier{
-									tfsdk.UseStateForUnknown(),
-								},
-							},
-							"policies": {
-								Description: "Scaling policies for the region.",
-								Required:    true,
-								Attributes: tfsdk.ListNestedAttributes(map[string]tfsdk.Attribute{
-									"scalable_resource": {
-										Description: "Resource type that can be scaled: NODE or CPU.",
-										Type:        types.StringType,
-										Required:    true,
-										Validators:  []tfsdk.AttributeValidator{stringvalidator.OneOf("NODE", "CPU")},
-									},
-									"min": {
-										Description: "Minimum number of scalable resources.",
-										Type:        types.Int64Type,
-										Required:    true,
-									},
-									"max": {
-										Description: "Maximum number of scalable resources.",
-										Type:        types.Int64Type,
-										Required:    true,
-									},
-									"scaling_type": {
-										Description: "Direction of scaling: SCALE_IN or SCALE_OUT.",
-										Type:        types.StringType,
-										Required:    true,
-										Validators:  []tfsdk.AttributeValidator{stringvalidator.OneOf("SCALE_IN", "SCALE_OUT")},
-									},
-									"clause": {
-										Description: "Logical operator for combining scaling rules: AND or OR.",
-										Type:        types.StringType,
-										Required:    true,
-										Validators:  []tfsdk.AttributeValidator{stringvalidator.OneOf("AND", "OR")},
-									},
-									"rules": {
-										Description: "Rules that must be satisfied to trigger scaling.",
-										Required:    true,
-										Attributes: tfsdk.ListNestedAttributes(map[string]tfsdk.Attribute{
-											"name": {
-												Description: "Name of the scaling rule.",
-												Type:        types.StringType,
-												Required:    true,
-											},
-											"resource": {
-												Description: "Metric resource to evaluate: CPU or SQL_CONNECTION.",
-												Type:        types.StringType,
-												Required:    true,
-												Validators:  []tfsdk.AttributeValidator{stringvalidator.OneOf("CPU", "SQL_CONNECTION")},
-											},
-											"condition": {
-												Description: "Comparison operator for the metric threshold: GT or LT.",
-												Type:        types.StringType,
-												Required:    true,
-												Validators:  []tfsdk.AttributeValidator{stringvalidator.OneOf("GT", "LT")},
-											},
-											"value": {
-												Description: "Threshold value for the metric.",
-												Type:        types.Float64Type,
-												Required:    true,
-											},
-											"evaluation_window": {
-												Description: "Duration over which the metric is evaluated (for example, 5m).",
-												Type:        types.StringType,
-												Required:    true,
-											},
-											"scaling_action": {
-												Description: "Scaling action to apply when this rule is satisfied.",
-												Required:    true,
-												Attributes: tfsdk.SingleNestedAttributes(map[string]tfsdk.Attribute{
-													"delta": {
-														Description: "Number of nodes to scale in or out.",
-														Type:        types.Int64Type,
-														Required:    true,
-													},
-												}),
-											},
-											"metadata": {
-												Description: "Metadata for the scaling rule.",
-												Computed:    true,
-												Attributes:  tfsdk.SingleNestedAttributes(autoscalerMetadataSchemaAttributes()),
-											},
-										}),
-									},
-									"metadata": {
-										Description: "Metadata for the scaling policy.",
-										Computed:    true,
-										Attributes:  tfsdk.SingleNestedAttributes(autoscalerMetadataSchemaAttributes()),
-									},
-								}),
-							},
-							"metadata": {
-								Description: "Metadata for the region policy.",
-								Computed:    true,
-								Attributes:  tfsdk.SingleNestedAttributes(autoscalerMetadataSchemaAttributes()),
-							},
-						}),
-					},
-					"metadata": {
-						Description: "Metadata for the cluster-level policy.",
-						Computed:    true,
-						Attributes:  tfsdk.SingleNestedAttributes(autoscalerMetadataSchemaAttributes()),
-					},
-				}),
-			},
 		},
 	}, nil
 }
@@ -261,46 +230,54 @@ type resourceAutoscalerPolicy struct {
 	p provider
 }
 
-// errAutoscalerPolicyNotFound indicates the autoscaler policy no longer exists upstream.
 var errAutoscalerPolicyNotFound = errors.New("autoscaler policy not found")
+
+type autoscalerPolicyPathParams struct {
+	ClusterID   string
+	Region      string
+	ClusterType string
+}
 
 func getAutoscalerPolicyState(ctx context.Context, state tfsdk.State, policy *AutoscalerPolicy) {
 	state.GetAttribute(ctx, path.Root("account_id"), &policy.AccountID)
 	state.GetAttribute(ctx, path.Root("project_id"), &policy.ProjectID)
 	state.GetAttribute(ctx, path.Root("cluster_id"), &policy.ClusterID)
+	state.GetAttribute(ctx, path.Root("region"), &policy.Region)
+	state.GetAttribute(ctx, path.Root("type"), &policy.Type)
+	state.GetAttribute(ctx, path.Root("scalable_resource"), &policy.ScalableResource)
+	state.GetAttribute(ctx, path.Root("min"), &policy.Min)
+	state.GetAttribute(ctx, path.Root("max"), &policy.Max)
+	state.GetAttribute(ctx, path.Root("scale_in_cooldown_period_minutes"), &policy.ScaleInCooldownPeriodMinutes)
+	state.GetAttribute(ctx, path.Root("scale_out_cooldown_period_minutes"), &policy.ScaleOutCooldownPeriodMinutes)
+	state.GetAttribute(ctx, path.Root("post_maintenance_cooldown_period_minutes"), &policy.PostMaintenanceCooldownPeriodMinutes)
+	state.GetAttribute(ctx, path.Root("status"), &policy.Status)
+	state.GetAttribute(ctx, path.Root("policy_rules"), &policy.PolicyRules)
 	state.GetAttribute(ctx, path.Root("policy_id"), &policy.PolicyID)
 	state.GetAttribute(ctx, path.Root("created_at"), &policy.CreatedAt)
 	state.GetAttribute(ctx, path.Root("updated_at"), &policy.UpdatedAt)
-	state.GetAttribute(ctx, path.Root("clusters"), &policy.Clusters)
 }
 
 // Plan-only structs use types that can hold Unknown for computed nested fields.
 // Decoding Unknown metadata into *AutoscalerMetadata fails with "unhandled unknown value".
-type autoscalerPolicyClusterConfig struct {
-	ClusterID                            types.String                          `tfsdk:"cluster_id"`
-	Type                                 types.String                          `tfsdk:"type"`
-	ScaleInCooldownPeriodMinutes         types.Int64                           `tfsdk:"scale_in_cooldown_period_minutes"`
-	ScaleOutCooldownPeriodMinutes        types.Int64                           `tfsdk:"scale_out_cooldown_period_minutes"`
-	PostMaintenanceCooldownPeriodMinutes types.Int64                           `tfsdk:"post_maintenance_cooldown_period_minutes"`
-	Regions                              []autoscalerPolicyClusterRegionConfig `tfsdk:"regions"`
-	Metadata                             types.Object                          `tfsdk:"metadata"`
+type autoscalerPolicyPlanConfig struct {
+	ClusterID                            types.String                 `tfsdk:"cluster_id"`
+	Region                               types.String                 `tfsdk:"region"`
+	Type                                 types.String                 `tfsdk:"type"`
+	ScalableResource                     types.String                 `tfsdk:"scalable_resource"`
+	Min                                  types.Int64                  `tfsdk:"min"`
+	Max                                  types.Int64                  `tfsdk:"max"`
+	ScaleInCooldownPeriodMinutes         types.Int64                  `tfsdk:"scale_in_cooldown_period_minutes"`
+	ScaleOutCooldownPeriodMinutes        types.Int64                  `tfsdk:"scale_out_cooldown_period_minutes"`
+	PostMaintenanceCooldownPeriodMinutes types.Int64                  `tfsdk:"post_maintenance_cooldown_period_minutes"`
+	Status                               types.String                 `tfsdk:"status"`
+	PolicyRules                          []autoscalerPolicyRuleConfig `tfsdk:"policy_rules"`
 }
 
-type autoscalerPolicyClusterRegionConfig struct {
-	Code     types.String                                 `tfsdk:"code"`
-	Status   types.String                                 `tfsdk:"status"`
-	Policies []autoscalerClusterRegionScalingPolicyConfig `tfsdk:"policies"`
-	Metadata types.Object                                 `tfsdk:"metadata"`
-}
-
-type autoscalerClusterRegionScalingPolicyConfig struct {
-	ScalableResource types.String                  `tfsdk:"scalable_resource"`
-	Min              types.Int64                   `tfsdk:"min"`
-	Max              types.Int64                   `tfsdk:"max"`
-	ScalingType      types.String                  `tfsdk:"scaling_type"`
-	Clause           types.String                  `tfsdk:"clause"`
-	Rules            []autoscalerScalingRuleConfig `tfsdk:"rules"`
-	Metadata         types.Object                  `tfsdk:"metadata"`
+type autoscalerPolicyRuleConfig struct {
+	ScalingType types.String                  `tfsdk:"scaling_type"`
+	Clause      types.String                  `tfsdk:"clause"`
+	Rules       []autoscalerScalingRuleConfig `tfsdk:"rules"`
+	Metadata    types.Object                  `tfsdk:"metadata"`
 }
 
 type autoscalerScalingRuleConfig struct {
@@ -317,234 +294,86 @@ type autoscalerScalingActionConfig struct {
 	Delta types.Int64 `tfsdk:"delta"`
 }
 
-func getAutoscalerPolicyPlan(ctx context.Context, plan tfsdk.Plan, clusterID *types.String, clusters *[]autoscalerPolicyClusterConfig) diag.Diagnostics {
+func getAutoscalerPolicyPlan(ctx context.Context, plan tfsdk.Plan, config *autoscalerPolicyPlanConfig) diag.Diagnostics {
 	var diags diag.Diagnostics
-	diags.Append(plan.GetAttribute(ctx, path.Root("cluster_id"), clusterID)...)
-	diags.Append(plan.GetAttribute(ctx, path.Root("clusters"), clusters)...)
+	diags.Append(plan.GetAttribute(ctx, path.Root("cluster_id"), &config.ClusterID)...)
+	diags.Append(plan.GetAttribute(ctx, path.Root("region"), &config.Region)...)
+	diags.Append(plan.GetAttribute(ctx, path.Root("type"), &config.Type)...)
+	diags.Append(plan.GetAttribute(ctx, path.Root("scalable_resource"), &config.ScalableResource)...)
+	diags.Append(plan.GetAttribute(ctx, path.Root("min"), &config.Min)...)
+	diags.Append(plan.GetAttribute(ctx, path.Root("max"), &config.Max)...)
+	diags.Append(plan.GetAttribute(ctx, path.Root("scale_in_cooldown_period_minutes"), &config.ScaleInCooldownPeriodMinutes)...)
+	diags.Append(plan.GetAttribute(ctx, path.Root("scale_out_cooldown_period_minutes"), &config.ScaleOutCooldownPeriodMinutes)...)
+	diags.Append(plan.GetAttribute(ctx, path.Root("post_maintenance_cooldown_period_minutes"), &config.PostMaintenanceCooldownPeriodMinutes)...)
+	diags.Append(plan.GetAttribute(ctx, path.Root("status"), &config.Status)...)
+	diags.Append(plan.GetAttribute(ctx, path.Root("policy_rules"), &config.PolicyRules)...)
 	return diags
-}
-
-func buildCreateAutoscalerPolicyRequestSpec(clusters []autoscalerPolicyClusterConfig) openapiclient.CreateAutoscalerPolicyRequestSpec {
-	clusterSpecs := make([]openapiclient.AutoscalerClusterSpec, 0, len(clusters))
-	for _, cluster := range clusters {
-		regionSpecs := make([]openapiclient.AutoscalerClusterRegionSpec, 0, len(cluster.Regions))
-		for _, region := range cluster.Regions {
-			policySpecs := make([]openapiclient.AutoscalerClusterRegionPolicySpec, 0, len(region.Policies))
-			for _, policy := range region.Policies {
-				rules := make([]openapiclient.AutoscalerClusterRegionPolicyScalingRuleSpec, 0, len(policy.Rules))
-				for _, rule := range policy.Rules {
-					delta := int32(0)
-					if rule.ScalingAction != nil {
-						delta = int32(rule.ScalingAction.Delta.Value)
-					}
-					action := openapiclient.NewAutoscalerClusterRegionPolicyScalingActionSpec(delta)
-					ruleSpec := openapiclient.NewAutoscalerClusterRegionPolicyScalingRuleSpec(
-						rule.Name.Value,
-						rule.Resource.Value,
-						rule.Condition.Value,
-						rule.Value.Value,
-						rule.EvaluationWindow.Value,
-						*action,
-					)
-					rules = append(rules, *ruleSpec)
-				}
-
-				policySpec := openapiclient.NewAutoscalerClusterRegionPolicySpec(
-					openapiclient.AutoscalerScalingDimensionEnum(policy.ScalableResource.Value),
-					int32(policy.Min.Value),
-					int32(policy.Max.Value),
-					openapiclient.AutoscalerScalingDirectionEnum(policy.ScalingType.Value),
-					policy.Clause.Value,
-					rules,
-				)
-				policySpecs = append(policySpecs, *policySpec)
-			}
-
-			regionSpec := openapiclient.NewAutoscalerClusterRegionSpec(region.Code.Value, policySpecs)
-			regionSpecs = append(regionSpecs, *regionSpec)
-		}
-
-		clusterSpec := openapiclient.NewAutoscalerClusterSpec(
-			cluster.ClusterID.Value,
-			cluster.Type.Value,
-			int32(cluster.ScaleInCooldownPeriodMinutes.Value),
-			int32(cluster.ScaleOutCooldownPeriodMinutes.Value),
-			int32(cluster.PostMaintenanceCooldownPeriodMinutes.Value),
-			regionSpecs,
-		)
-		clusterSpecs = append(clusterSpecs, *clusterSpec)
-	}
-
-	return *openapiclient.NewCreateAutoscalerPolicyRequestSpec(clusterSpecs)
-}
-
-type autoscalerRegionKey struct {
-	clusterID string
-	code      string
-}
-
-type autoscalerRegionIdentity struct {
-	id     string
-	status string
 }
 
 func autoscalerStatusSpecified(status types.String) bool {
 	return !status.Unknown && !status.Null && status.Value != ""
 }
 
-func indexAutoscalerRegions(policy AutoscalerPolicy) map[autoscalerRegionKey]autoscalerRegionIdentity {
-	index := make(map[autoscalerRegionKey]autoscalerRegionIdentity)
-	for _, cluster := range policy.Clusters {
-		for _, region := range cluster.Regions {
-			identity := autoscalerRegionIdentity{status: region.Status.Value}
-			if region.Metadata != nil {
-				identity.id = region.Metadata.ID.Value
+func buildPolicyRulesSpec(rules []autoscalerPolicyRuleConfig) []openapiclient.AutoscalerClusterRegionPolicySpec {
+	policyRules := make([]openapiclient.AutoscalerClusterRegionPolicySpec, 0, len(rules))
+	for _, policyRule := range rules {
+		scalingRules := make([]openapiclient.AutoscalerClusterRegionPolicyScalingRuleSpec, 0, len(policyRule.Rules))
+		for _, rule := range policyRule.Rules {
+			delta := int32(0)
+			if rule.ScalingAction != nil {
+				delta = int32(rule.ScalingAction.Delta.Value)
 			}
-			index[autoscalerRegionKey{clusterID: cluster.ClusterID.Value, code: region.Code.Value}] = identity
+			action := openapiclient.NewAutoscalerClusterRegionPolicyScalingActionSpec(delta)
+			ruleSpec := openapiclient.NewAutoscalerClusterRegionPolicyScalingRuleSpec(
+				rule.Name.Value,
+				rule.Resource.Value,
+				rule.Condition.Value,
+				int32(rule.Value.Value),
+				rule.EvaluationWindow.Value,
+				*action,
+			)
+			scalingRules = append(scalingRules, *ruleSpec)
 		}
+
+		policyRules = append(policyRules, *openapiclient.NewAutoscalerClusterRegionPolicySpec(
+			openapiclient.AutoscalerScalingDirectionEnum(policyRule.ScalingType.Value),
+			policyRule.Clause.Value,
+			scalingRules,
+		))
 	}
-	return index
+	return policyRules
 }
 
-func buildRegionStatusUpdates(desired []autoscalerPolicyClusterConfig, current AutoscalerPolicy) ([]openapiclient.AutoscalerPolicyRegionStatusSpec, error) {
-	index := indexAutoscalerRegions(current)
-	updates := make([]openapiclient.AutoscalerPolicyRegionStatusSpec, 0)
-	for _, cluster := range desired {
-		for _, region := range cluster.Regions {
-			if !autoscalerStatusSpecified(region.Status) {
-				continue
-			}
-			key := autoscalerRegionKey{clusterID: cluster.ClusterID.Value, code: region.Code.Value}
-			identity, ok := index[key]
-			if !ok {
-				return nil, fmt.Errorf("unable to find autoscaler region policy for cluster %s region %s", key.clusterID, key.code)
-			}
-			if identity.id == "" {
-				return nil, fmt.Errorf("missing metadata ID for autoscaler region policy in cluster %s region %s", key.clusterID, key.code)
-			}
-			if identity.status == region.Status.Value {
-				continue
-			}
-			updates = append(updates, *openapiclient.NewAutoscalerPolicyRegionStatusSpec(
-				identity.id,
-				openapiclient.AutoscalerPolicyStatusEnum(region.Status.Value),
-			))
-		}
+func buildCreateAutoscalerPolicyRequestSpec(config autoscalerPolicyPlanConfig) openapiclient.CreateAutoscalerPolicyRequestSpec {
+	spec := openapiclient.NewCreateAutoscalerPolicyRequestSpec(
+		openapiclient.AutoscalerScalingDimensionEnum(config.ScalableResource.Value),
+		int32(config.Min.Value),
+		int32(config.Max.Value),
+		int32(config.ScaleInCooldownPeriodMinutes.Value),
+		int32(config.ScaleOutCooldownPeriodMinutes.Value),
+		int32(config.PostMaintenanceCooldownPeriodMinutes.Value),
+		buildPolicyRulesSpec(config.PolicyRules),
+	)
+	if autoscalerStatusSpecified(config.Status) {
+		spec.SetStatus(openapiclient.AutoscalerPolicyStatusEnum(config.Status.Value))
 	}
-	return updates, nil
+	return *spec
 }
 
-func applyRegionStatusToPolicy(policy AutoscalerPolicy, updates []openapiclient.AutoscalerPolicyRegionStatusSpec) AutoscalerPolicy {
-	idToStatus := make(map[string]string, len(updates))
-	for _, update := range updates {
-		idToStatus[update.Id] = string(update.Status)
+func buildUpdateAutoscalerPolicyRequestSpec(config autoscalerPolicyPlanConfig, fallbackStatus string) openapiclient.UpdateAutoscalerPolicyRequestSpec {
+	status := fallbackStatus
+	if autoscalerStatusSpecified(config.Status) {
+		status = config.Status.Value
 	}
-	for i := range policy.Clusters {
-		for j := range policy.Clusters[i].Regions {
-			metadata := policy.Clusters[i].Regions[j].Metadata
-			if metadata == nil {
-				continue
-			}
-			status, ok := idToStatus[metadata.ID.Value]
-			if !ok {
-				continue
-			}
-			policy.Clusters[i].Regions[j].Status = types.String{Value: status}
-		}
-	}
-	return policy
-}
-
-func applyDesiredRegionStatuses(
-	ctx context.Context,
-	apiClient *openapiclient.APIClient,
-	accountId string,
-	projectId string,
-	clusterId string,
-	desired []autoscalerPolicyClusterConfig,
-	current AutoscalerPolicy,
-) (AutoscalerPolicy, error) {
-	updates, err := buildRegionStatusUpdates(desired, current)
-	if err != nil {
-		return current, err
-	}
-	if len(updates) == 0 {
-		return current, nil
-	}
-
-	requestSpec := openapiclient.NewUpdateAutoscalerPolicyRegionStatusRequestSpec(updates)
-	response, err := apiClient.AutoscalerApi.UpdateAutoscalerPolicyRegionStatus(ctx, accountId, projectId, clusterId).
-		UpdateAutoscalerPolicyRegionStatusRequestSpec(*requestSpec).
-		Execute()
-	if err != nil {
-		return current, errors.New(getErrorMessage(response, err))
-	}
-
-	tflog.Debug(ctx, "Autoscaler policy region status updated", map[string]interface{}{
-		"cluster_id": clusterId,
-		"updates":    len(updates),
-	})
-
-	refreshed, err := resourceAutoscalerPolicyRead(ctx, clusterId, apiClient)
-	if err != nil {
-		return applyRegionStatusToPolicy(current, updates), nil
-	}
-	return refreshed, nil
-}
-
-func autoscalerPolicyClustersToConfig(clusters []AutoscalerPolicyCluster) []autoscalerPolicyClusterConfig {
-	result := make([]autoscalerPolicyClusterConfig, 0, len(clusters))
-	for _, cluster := range clusters {
-		regions := make([]autoscalerPolicyClusterRegionConfig, 0, len(cluster.Regions))
-		for _, region := range cluster.Regions {
-			policies := make([]autoscalerClusterRegionScalingPolicyConfig, 0, len(region.Policies))
-			for _, policy := range region.Policies {
-				rules := make([]autoscalerScalingRuleConfig, 0, len(policy.Rules))
-				for _, rule := range policy.Rules {
-					var action *autoscalerScalingActionConfig
-					if rule.ScalingAction != nil {
-						action = &autoscalerScalingActionConfig{Delta: rule.ScalingAction.Delta}
-					}
-					rules = append(rules, autoscalerScalingRuleConfig{
-						Name:             rule.Name,
-						Resource:         rule.Resource,
-						Condition:        rule.Condition,
-						Value:            rule.Value,
-						EvaluationWindow: rule.EvaluationWindow,
-						ScalingAction:    action,
-					})
-				}
-				policies = append(policies, autoscalerClusterRegionScalingPolicyConfig{
-					ScalableResource: policy.ScalableResource,
-					Min:              policy.Min,
-					Max:              policy.Max,
-					ScalingType:      policy.ScalingType,
-					Clause:           policy.Clause,
-					Rules:            rules,
-				})
-			}
-			regions = append(regions, autoscalerPolicyClusterRegionConfig{
-				Code:     region.Code,
-				Status:   region.Status,
-				Policies: policies,
-			})
-		}
-		result = append(result, autoscalerPolicyClusterConfig{
-			ClusterID:                            cluster.ClusterID,
-			Type:                                 cluster.Type,
-			ScaleInCooldownPeriodMinutes:         cluster.ScaleInCooldownPeriodMinutes,
-			ScaleOutCooldownPeriodMinutes:        cluster.ScaleOutCooldownPeriodMinutes,
-			PostMaintenanceCooldownPeriodMinutes: cluster.PostMaintenanceCooldownPeriodMinutes,
-			Regions:                              regions,
-		})
-	}
-	return result
-}
-
-func autoscalerPolicySpecChanged(plan []autoscalerPolicyClusterConfig, state []AutoscalerPolicyCluster) bool {
-	return !reflect.DeepEqual(
-		buildCreateAutoscalerPolicyRequestSpec(plan),
-		buildCreateAutoscalerPolicyRequestSpec(autoscalerPolicyClustersToConfig(state)),
+	return *openapiclient.NewUpdateAutoscalerPolicyRequestSpec(
+		openapiclient.AutoscalerScalingDimensionEnum(config.ScalableResource.Value),
+		int32(config.Min.Value),
+		int32(config.Max.Value),
+		int32(config.ScaleInCooldownPeriodMinutes.Value),
+		int32(config.ScaleOutCooldownPeriodMinutes.Value),
+		int32(config.PostMaintenanceCooldownPeriodMinutes.Value),
+		openapiclient.AutoscalerPolicyStatusEnum(status),
+		buildPolicyRulesSpec(config.PolicyRules),
 	)
 }
 
@@ -556,107 +385,96 @@ func mapAutoscalerMetadata(metadata openapiclient.AutoscalerMetadata) *Autoscale
 	}
 }
 
-func mapOptionalAutoscalerMetadata(metadata *openapiclient.AutoscalerMetadata) *AutoscalerMetadata {
-	if metadata == nil {
-		return nil
-	}
-	return mapAutoscalerMetadata(*metadata)
-}
-
 func mapAutoscalerPolicyFromResponse(
-	accountId string,
-	projectId string,
-	clusterId string,
+	accountID string,
+	projectID string,
+	params autoscalerPolicyPathParams,
 	response openapiclient.AutoscalerPolicyResponse,
-) AutoscalerPolicy {
+) (AutoscalerPolicy, error) {
 	data := response.GetData()
+	if data.GetRegion() != params.Region {
+		return AutoscalerPolicy{}, errors.New("autoscaler policy region in API response does not match resource region")
+	}
+	if data.GetType() != params.ClusterType {
+		return AutoscalerPolicy{}, errors.New("autoscaler policy type in API response does not match resource type")
+	}
+	if data.GetClusterId() != params.ClusterID {
+		return AutoscalerPolicy{}, errors.New("autoscaler policy cluster_id in API response does not match resource cluster_id")
+	}
+
 	metadata := data.GetMetadata()
-	policy := AutoscalerPolicy{
-		AccountID: types.String{Value: accountId},
-		ProjectID: types.String{Value: projectId},
-		ClusterID: types.String{Value: clusterId},
-		PolicyID:  types.String{Value: metadata.GetId()},
-		CreatedAt: types.String{Value: metadata.GetCreatedAt().UTC().Format(time.RFC3339)},
-		UpdatedAt: types.String{Value: metadata.GetUpdatedAt().UTC().Format(time.RFC3339)},
-		Clusters:  []AutoscalerPolicyCluster{},
-	}
 
-	for _, cluster := range data.GetClusters() {
-		tfCluster := AutoscalerPolicyCluster{
-			ClusterID:                            types.String{Value: cluster.GetClusterId()},
-			Type:                                 types.String{Value: cluster.GetType()},
-			ScaleInCooldownPeriodMinutes:         types.Int64{Value: int64(cluster.GetScaleInCooldownPeriodMinutes())},
-			ScaleOutCooldownPeriodMinutes:        types.Int64{Value: int64(cluster.GetScaleOutCooldownPeriodMinutes())},
-			PostMaintenanceCooldownPeriodMinutes: types.Int64{Value: int64(cluster.GetPostMaintenanceCooldownPeriodMinutes())},
-			Regions:                              []AutoscalerPolicyClusterRegion{},
-			Metadata:                             mapAutoscalerMetadata(cluster.GetMetadata()),
+	policyRules := make([]AutoscalerPolicyRule, 0, len(data.GetPolicyRules()))
+	for _, policyRule := range data.GetPolicyRules() {
+		tfRules := make([]AutoscalerScalingRule, 0, len(policyRule.GetRules()))
+		for _, rule := range policyRule.GetRules() {
+			scalingAction := rule.GetScalingAction()
+			ruleMetadata := rule.GetMetadata()
+			tfRules = append(tfRules, AutoscalerScalingRule{
+				Name:             types.String{Value: rule.GetName()},
+				Resource:         types.String{Value: rule.GetResource()},
+				Condition:        types.String{Value: rule.GetCondition()},
+				Value:            types.Float64{Value: rule.GetValue()},
+				EvaluationWindow: types.String{Value: rule.GetEvaluationWindow()},
+				ScalingAction: &AutoscalerScalingAction{
+					Delta: types.Int64{Value: int64(scalingAction.GetDelta())},
+				},
+				Metadata: mapAutoscalerMetadata(ruleMetadata),
+			})
 		}
 
-		for _, region := range cluster.GetRegions() {
-			tfRegion := AutoscalerPolicyClusterRegion{
-				Code:     types.String{Value: region.GetCode()},
-				Status:   types.String{Null: true},
-				Policies: []AutoscalerClusterRegionScalingPolicy{},
-				Metadata: mapOptionalAutoscalerMetadata(region.Metadata),
-			}
-			if region.HasStatus() {
-				tfRegion.Status = types.String{Value: string(region.GetStatus())}
-			}
-
-			for _, regionPolicy := range region.GetPolicies() {
-				tfRules := make([]AutoscalerScalingRule, 0, len(regionPolicy.GetRules()))
-				for _, rule := range regionPolicy.GetRules() {
-					scalingAction := rule.GetScalingAction()
-					tfRules = append(tfRules, AutoscalerScalingRule{
-						Name:             types.String{Value: rule.GetName()},
-						Resource:         types.String{Value: rule.GetResource()},
-						Condition:        types.String{Value: rule.GetCondition()},
-						Value:            types.Float64{Value: rule.GetValue()},
-						EvaluationWindow: types.String{Value: rule.GetEvaluationWindow()},
-						ScalingAction: &AutoscalerScalingAction{
-							Delta: types.Int64{Value: int64(scalingAction.GetDelta())},
-						},
-						Metadata: mapOptionalAutoscalerMetadata(rule.Metadata),
-					})
-				}
-
-				tfPolicy := AutoscalerClusterRegionScalingPolicy{
-					ScalableResource: types.String{Value: string(regionPolicy.GetScalableResource())},
-					Min:              types.Int64{Value: int64(regionPolicy.GetMin())},
-					Max:              types.Int64{Value: int64(regionPolicy.GetMax())},
-					ScalingType:      types.String{Value: string(regionPolicy.GetScalingType())},
-					Clause:           types.String{Value: regionPolicy.GetClause()},
-					Rules:            tfRules,
-					Metadata:         mapOptionalAutoscalerMetadata(regionPolicy.Metadata),
-				}
-				tfRegion.Policies = append(tfRegion.Policies, tfPolicy)
-			}
-
-			tfCluster.Regions = append(tfCluster.Regions, tfRegion)
-		}
-
-		policy.Clusters = append(policy.Clusters, tfCluster)
+		policyRuleMetadata := policyRule.GetMetadata()
+		policyRules = append(policyRules, AutoscalerPolicyRule{
+			ScalingType: types.String{Value: string(policyRule.GetScalingType())},
+			Clause:      types.String{Value: policyRule.GetClause()},
+			Rules:       tfRules,
+			Metadata:    mapAutoscalerMetadata(policyRuleMetadata),
+		})
 	}
 
-	return policy
+	return AutoscalerPolicy{
+		AccountID:                            types.String{Value: accountID},
+		ProjectID:                            types.String{Value: projectID},
+		ClusterID:                            types.String{Value: data.GetClusterId()},
+		Region:                               types.String{Value: data.GetRegion()},
+		Type:                                 types.String{Value: data.GetType()},
+		ScalableResource:                     types.String{Value: string(data.GetScalableResource())},
+		Min:                                  types.Int64{Value: int64(data.GetMin())},
+		Max:                                  types.Int64{Value: int64(data.GetMax())},
+		ScaleInCooldownPeriodMinutes:         types.Int64{Value: int64(data.GetScaleInCooldownPeriodMinutes())},
+		ScaleOutCooldownPeriodMinutes:        types.Int64{Value: int64(data.GetScaleOutCooldownPeriodMinutes())},
+		PostMaintenanceCooldownPeriodMinutes: types.Int64{Value: int64(data.GetPostMaintenanceCooldownPeriodMinutes())},
+		Status:                               types.String{Value: string(data.GetStatus())},
+		PolicyRules:                          policyRules,
+		PolicyID:                             types.String{Value: metadata.GetId()},
+		CreatedAt:                            types.String{Value: metadata.GetCreatedAt().UTC().Format(time.RFC3339)},
+		UpdatedAt:                            types.String{Value: metadata.GetUpdatedAt().UTC().Format(time.RFC3339)},
+	}, nil
 }
 
 func resourceAutoscalerPolicyRead(
 	ctx context.Context,
-	clusterId string,
+	params autoscalerPolicyPathParams,
 	apiClient *openapiclient.APIClient,
 ) (AutoscalerPolicy, error) {
-	accountId, getAccountOK, message := getAccountId(ctx, apiClient)
+	accountID, getAccountOK, message := getAccountId(ctx, apiClient)
 	if !getAccountOK {
 		return AutoscalerPolicy{}, errors.New(message)
 	}
 
-	projectId, getProjectOK, message := getProjectId(ctx, apiClient, accountId)
+	projectID, getProjectOK, message := getProjectId(ctx, apiClient, accountID)
 	if !getProjectOK {
 		return AutoscalerPolicy{}, errors.New(message)
 	}
 
-	resp, response, err := apiClient.AutoscalerApi.ListAutoscalerPolicies(ctx, accountId, projectId, clusterId).Execute()
+	resp, response, err := apiClient.AutoscalerApi.GetAutoscalerPolicy(
+		ctx,
+		accountID,
+		projectID,
+		params.ClusterID,
+		params.Region,
+		params.ClusterType,
+	).Execute()
 	if err != nil {
 		if response != nil && response.StatusCode == http.StatusNotFound {
 			return AutoscalerPolicy{}, errAutoscalerPolicyNotFound
@@ -664,7 +482,7 @@ func resourceAutoscalerPolicyRead(
 		return AutoscalerPolicy{}, errors.New(getErrorMessage(response, err))
 	}
 
-	return mapAutoscalerPolicyFromResponse(accountId, projectId, clusterId, resp), nil
+	return mapAutoscalerPolicyFromResponse(accountID, projectID, params, resp)
 }
 
 func (r resourceAutoscalerPolicy) Create(ctx context.Context, req tfsdk.CreateResourceRequest, resp *tfsdk.CreateResourceResponse) {
@@ -676,41 +494,48 @@ func (r resourceAutoscalerPolicy) Create(ctx context.Context, req tfsdk.CreateRe
 		return
 	}
 
-	var clusterID types.String
-	var clusters []autoscalerPolicyClusterConfig
-	resp.Diagnostics.Append(getAutoscalerPolicyPlan(ctx, req.Plan, &clusterID, &clusters)...)
+	var config autoscalerPolicyPlanConfig
+	resp.Diagnostics.Append(getAutoscalerPolicyPlan(ctx, req.Plan, &config)...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
 
 	apiClient := r.p.client
-
-	accountId, getAccountOK, message := getAccountId(ctx, apiClient)
+	accountID, getAccountOK, message := getAccountId(ctx, apiClient)
 	if !getAccountOK {
 		resp.Diagnostics.AddError("Unable to get account ID", message)
 		return
 	}
 
-	projectId, getProjectOK, message := getProjectId(ctx, apiClient, accountId)
+	projectID, getProjectOK, message := getProjectId(ctx, apiClient, accountID)
 	if !getProjectOK {
 		resp.Diagnostics.AddError("Unable to get project ID", message)
 		return
 	}
 
-	requestSpec := buildCreateAutoscalerPolicyRequestSpec(clusters)
-
-	createResp, response, err := apiClient.AutoscalerApi.CreateAutoscalerPolicy(ctx, accountId, projectId, clusterID.Value).
-		CreateAutoscalerPolicyRequestSpec(requestSpec).
-		Execute()
+	params := autoscalerPolicyPathParams{
+		ClusterID:   config.ClusterID.Value,
+		Region:      config.Region.Value,
+		ClusterType: config.Type.Value,
+	}
+	requestSpec := buildCreateAutoscalerPolicyRequestSpec(config)
+	createResp, response, err := apiClient.AutoscalerApi.CreateAutoscalerPolicy(
+		ctx,
+		accountID,
+		projectID,
+		params.ClusterID,
+		params.Region,
+		params.ClusterType,
+	).CreateAutoscalerPolicyRequestSpec(requestSpec).Execute()
 	if err != nil {
 		resp.Diagnostics.AddError("Unable to create autoscaler policy", getErrorMessage(response, err))
 		return
 	}
 
-	policy := mapAutoscalerPolicyFromResponse(accountId, projectId, clusterID.Value, createResp)
-	policy, err = applyDesiredRegionStatuses(ctx, apiClient, accountId, projectId, clusterID.Value, clusters, policy)
+	policy, err := mapAutoscalerPolicyFromResponse(accountID, projectID, params, createResp)
 	if err != nil {
-		resp.Diagnostics.AddError("Unable to update autoscaler policy region status", err.Error())
+		resp.Diagnostics.AddError("Unable to map autoscaler policy response", err.Error())
+		return
 	}
 
 	tflog.Debug(ctx, "Autoscaler policy created", map[string]interface{}{"policy": policy})
@@ -723,7 +548,12 @@ func (r resourceAutoscalerPolicy) Read(ctx context.Context, req tfsdk.ReadResour
 	var state AutoscalerPolicy
 	getAutoscalerPolicyState(ctx, req.State, &state)
 
-	policy, err := resourceAutoscalerPolicyRead(ctx, state.ClusterID.Value, r.p.client)
+	params := autoscalerPolicyPathParams{
+		ClusterID:   state.ClusterID.Value,
+		Region:      state.Region.Value,
+		ClusterType: state.Type.Value,
+	}
+	policy, err := resourceAutoscalerPolicyRead(ctx, params, r.p.client)
 	if err != nil {
 		if errors.Is(err, errAutoscalerPolicyNotFound) {
 			resp.State.RemoveResource(ctx)
@@ -746,9 +576,8 @@ func (r resourceAutoscalerPolicy) Update(ctx context.Context, req tfsdk.UpdateRe
 		return
 	}
 
-	var clusterID types.String
-	var clusters []autoscalerPolicyClusterConfig
-	resp.Diagnostics.Append(getAutoscalerPolicyPlan(ctx, req.Plan, &clusterID, &clusters)...)
+	var config autoscalerPolicyPlanConfig
+	resp.Diagnostics.Append(getAutoscalerPolicyPlan(ctx, req.Plan, &config)...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
@@ -757,42 +586,46 @@ func (r resourceAutoscalerPolicy) Update(ctx context.Context, req tfsdk.UpdateRe
 	getAutoscalerPolicyState(ctx, req.State, &state)
 
 	apiClient := r.p.client
-
-	accountId, getAccountOK, message := getAccountId(ctx, apiClient)
+	accountID, getAccountOK, message := getAccountId(ctx, apiClient)
 	if !getAccountOK {
 		resp.Diagnostics.AddError("Unable to get account ID", message)
 		return
 	}
 
-	projectId, getProjectOK, message := getProjectId(ctx, apiClient, accountId)
+	projectID, getProjectOK, message := getProjectId(ctx, apiClient, accountID)
 	if !getProjectOK {
 		resp.Diagnostics.AddError("Unable to get project ID", message)
 		return
 	}
 
-	policy := state
-	if autoscalerPolicySpecChanged(clusters, state.Clusters) {
-		requestSpec := buildCreateAutoscalerPolicyRequestSpec(clusters)
-		updateResp, response, err := apiClient.AutoscalerApi.UpdateAutoscalerPolicy(ctx, accountId, projectId, clusterID.Value).
-			CreateAutoscalerPolicyRequestSpec(requestSpec).
-			Execute()
-		if err != nil {
-			resp.Diagnostics.AddError("Unable to update autoscaler policy", getErrorMessage(response, err))
-			return
-		}
-		policy = mapAutoscalerPolicyFromResponse(accountId, projectId, clusterID.Value, updateResp)
+	params := autoscalerPolicyPathParams{
+		ClusterID:   config.ClusterID.Value,
+		Region:      config.Region.Value,
+		ClusterType: config.Type.Value,
 	}
-
-	updatedPolicy, err := applyDesiredRegionStatuses(ctx, apiClient, accountId, projectId, clusterID.Value, clusters, policy)
+	requestSpec := buildUpdateAutoscalerPolicyRequestSpec(config, state.Status.Value)
+	updateResp, response, err := apiClient.AutoscalerApi.UpdateAutoscalerPolicy(
+		ctx,
+		accountID,
+		projectID,
+		params.ClusterID,
+		params.Region,
+		params.ClusterType,
+	).UpdateAutoscalerPolicyRequestSpec(requestSpec).Execute()
 	if err != nil {
-		resp.Diagnostics.AddError("Unable to update autoscaler policy region status", err.Error())
+		resp.Diagnostics.AddError("Unable to update autoscaler policy", getErrorMessage(response, err))
+		return
 	}
 
-	tflog.Debug(ctx, "Autoscaler policy updated", map[string]interface{}{"policy": updatedPolicy})
+	policy, err := mapAutoscalerPolicyFromResponse(accountID, projectID, params, updateResp)
+	if err != nil {
+		resp.Diagnostics.AddError("Unable to map autoscaler policy response", err.Error())
+		return
+	}
 
-	// Persist whatever succeeded (policy PUT and/or prior state) even if region
-	// status update failed, so Terraform state matches the API after a partial update.
-	diags := resp.State.Set(ctx, &updatedPolicy)
+	tflog.Debug(ctx, "Autoscaler policy updated", map[string]interface{}{"policy": policy})
+
+	diags := resp.State.Set(ctx, &policy)
 	resp.Diagnostics.Append(diags...)
 }
 
@@ -801,20 +634,26 @@ func (r resourceAutoscalerPolicy) Delete(ctx context.Context, req tfsdk.DeleteRe
 	getAutoscalerPolicyState(ctx, req.State, &state)
 
 	apiClient := r.p.client
-
-	accountId, getAccountOK, message := getAccountId(ctx, apiClient)
+	accountID, getAccountOK, message := getAccountId(ctx, apiClient)
 	if !getAccountOK {
 		resp.Diagnostics.AddError("Unable to get account ID", message)
 		return
 	}
 
-	projectId, getProjectOK, message := getProjectId(ctx, apiClient, accountId)
+	projectID, getProjectOK, message := getProjectId(ctx, apiClient, accountID)
 	if !getProjectOK {
 		resp.Diagnostics.AddError("Unable to get project ID", message)
 		return
 	}
 
-	response, err := apiClient.AutoscalerApi.DeleteAutoscalerPolicy(ctx, accountId, projectId, state.ClusterID.Value).Execute()
+	response, err := apiClient.AutoscalerApi.DeleteAutoscalerPolicy(
+		ctx,
+		accountID,
+		projectID,
+		state.ClusterID.Value,
+		state.Region.Value,
+		state.Type.Value,
+	).Execute()
 	if err != nil {
 		if response != nil && response.StatusCode == http.StatusNotFound {
 			resp.State.RemoveResource(ctx)
@@ -824,11 +663,25 @@ func (r resourceAutoscalerPolicy) Delete(ctx context.Context, req tfsdk.DeleteRe
 		return
 	}
 
-	tflog.Debug(ctx, "Autoscaler policy deleted", map[string]interface{}{"cluster_id": state.ClusterID.Value})
+	tflog.Debug(ctx, "Autoscaler policy deleted", map[string]interface{}{
+		"cluster_id": state.ClusterID.Value,
+		"region":     state.Region.Value,
+		"type":       state.Type.Value,
+	})
 	resp.State.RemoveResource(ctx)
 }
 
 func (r resourceAutoscalerPolicy) ImportState(ctx context.Context, req tfsdk.ImportResourceStateRequest, resp *tfsdk.ImportResourceStateResponse) {
-	// Import ID is the cluster ID used in the autoscaler policies API path.
-	tfsdk.ResourceImportStatePassthroughID(ctx, path.Root("cluster_id"), req, resp)
+	idParts := strings.Split(req.ID, ",")
+	if len(idParts) != 3 || idParts[0] == "" || idParts[1] == "" || idParts[2] == "" {
+		resp.Diagnostics.AddError(
+			"Unexpected Import Identifier",
+			fmt.Sprintf("Expected import identifier with format: cluster_id,region,type. Got: %q", req.ID),
+		)
+		return
+	}
+
+	resp.State.SetAttribute(ctx, path.Root("cluster_id"), idParts[0])
+	resp.State.SetAttribute(ctx, path.Root("region"), idParts[1])
+	resp.State.SetAttribute(ctx, path.Root("type"), idParts[2])
 }

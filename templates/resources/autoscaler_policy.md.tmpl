@@ -1,0 +1,26 @@
+---
+page_title: "{{.Name}} {{.Type}} - {{.RenderedProviderName}}"
+description: |-
+{{ .Description | plainmarkdown | trimspace | prefixlines "  " }}
+---
+
+# {{.Name}} ({{.Type}})
+
+{{ .Description | trimspace }}
+
+Each resource manages one autoscaler policy for a specific cluster region and cluster type (`PRIMARY` or `READ_REPLICA`). Create a separate resource for each region (and read replica) that should have its own policy.
+
+## Example Usage
+
+{{ tffile "examples/resources/ybm_autoscaler_policy/resource.tf" }}
+
+{{ .SchemaMarkdown | trimspace }}
+{{- if .HasImport }}
+
+## Import
+
+Import is supported using the following syntax:
+
+{{ codefile "shell" "examples/resources/ybm_autoscaler_policy/import.sh" }}
+
+{{- end }}
