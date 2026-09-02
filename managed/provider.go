@@ -170,10 +170,9 @@ func (p *provider) GetResources(_ context.Context) (map[string]tfsdk.ResourceTyp
 	}
 
 	// Add autoscaler policy resource only if the feature flag is enabled
-	// Disabled: resource_autoscaler_policy.go requires a newer API client than the one in go.mod.
-	// if fflags.IsFeatureFlagEnabled(fflags.Autoscaling) {
-	// 	resources["ybm_autoscaler_policy"] = resourceAutoscalerPolicyType{}
-	// }
+	if fflags.IsFeatureFlagEnabled(fflags.Autoscaling) {
+		resources["ybm_autoscaler_policy"] = resourceAutoscalerPolicyType{}
+	}
 
 	return resources, nil
 }
