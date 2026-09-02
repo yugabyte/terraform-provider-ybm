@@ -101,6 +101,11 @@ func (r resourceClusterType) GetSchema(_ context.Context) (tfsdk.Schema, diag.Di
 					Type:     types.Int64Type,
 					Required: true,
 				},
+				"ignore_num_nodes_changes": {
+					Description: "When true, runtime changes to num_nodes made by the autoscaler are not treated as Terraform drift. Recommended for regions with an ACTIVE ybm_autoscaler_policy. The provider preserves the Terraform-managed num_nodes value in state on refresh. When num_nodes is not explicitly changed in configuration, edit cluster requests use the actual node count from YugabyteDB Aeon.",
+					Type:        types.BoolType,
+					Optional:    true,
+				},
 				"region": {
 					Type:     types.StringType,
 					Required: true,
@@ -1047,6 +1052,8 @@ func createClusterSpec(ctx context.Context, apiClient *openapiclient.APIClient, 
 	clusterType := plan.ClusterType.Value
 	isDefaultSet := false
 	pseInfoMap := make(map[string]openapiclient.PrivateServiceEndpointRegionSpec)
+	actualNumNodesMap := make(map[string]int32)
+	stateRegionsByCode := regionInfoByRegion(state.ClusterRegionInfo)
 	if clusterExists {
 		clusterResp, response, err := apiClient.ClusterApi.GetCluster(context.Background(), accountId, projectId, state.ClusterID.Value).Execute()
 		if err != nil {
@@ -1054,8 +1061,10 @@ func createClusterSpec(ctx context.Context, apiClient *openapiclient.APIClient, 
 			return nil, false, errMsg
 		}
 		for _, regionInfo := range clusterResp.Data.Spec.ClusterRegionInfo {
+			region := regionInfo.PlacementInfo.CloudInfo.GetRegion()
+			actualNumNodesMap[region] = regionInfo.PlacementInfo.GetNumNodes()
 			if slices.Contains(regionInfo.GetAccessibilityTypes(), openapiclient.ACCESSIBILITYTYPE_PRIVATE_SERVICE_ENDPOINT) {
-				pseInfoMap[regionInfo.PlacementInfo.CloudInfo.GetRegion()] = regionInfo.GetPrivateServiceEndpointInfo()
+				pseInfoMap[region] = regionInfo.GetPrivateServiceEndpointInfo()
 			}
 
 		}
@@ -1063,13 +1072,20 @@ func createClusterSpec(ctx context.Context, apiClient *openapiclient.APIClient, 
 	tflog.Debug(ctx, fmt.Sprintf("PSE info map is %v", pseInfoMap))
 
 	for _, regionInfo := range plan.ClusterRegionInfo {
-		regionNodes := regionInfo.NumNodes.Value
+		regionNodes := int32(regionInfo.NumNodes.Value)
+		if clusterExists {
+			stateRegion, hasStateRegion := stateRegionsByCode[regionInfo.Region.Value]
+			actualNumNodes, hasActualNumNodes := actualNumNodesMap[regionInfo.Region.Value]
+			if hasStateRegion && hasActualNumNodes {
+				regionNodes = resolveNumNodesForEdit(regionInfo, stateRegion, actualNumNodes)
+			}
+		}
 		totalNodes += int(regionNodes)
 		info := *openapiclient.NewClusterRegionInfo(
 			*openapiclient.NewPlacementInfo(
 				*openapiclient.NewCloudInfo(
 					openapiclient.CloudEnum(plan.CloudType.Value),
-					regionInfo.Region.Value), int32(regionNodes)),
+					regionInfo.Region.Value), regionNodes),
 		)
 		if vpcName := regionInfo.VPCName.Value; vpcName != "" {
 			vpcData, err := getVPCByName(context.Background(), accountId, projectId, vpcName, apiClient)
@@ -1957,6 +1973,8 @@ func (r resourceCluster) Create(ctx context.Context, req tfsdk.CreateResourceReq
 	// We need to make sure the region order is preserved to avoid terraform treating re-order as state mismatch
 	alignGcpBackupReplicationRegionOrder(&cluster, getGeoGcpReplicationRegionReferenceOrder(plan.BackupReplicationSpec))
 
+	applyIgnoredNumNodesChanges(&cluster, plan.ClusterRegionInfo)
+
 	diags := resp.State.Set(ctx, &cluster)
 	resp.Diagnostics.Append(diags...)
 	if resp.Diagnostics.HasError() {
@@ -2266,6 +2284,8 @@ func (r resourceCluster) Read(ctx context.Context, req tfsdk.ReadResourceRequest
 	if !stateIsMultiCloud.IsNull() {
 		cluster.IsMultiCloud = stateIsMultiCloud
 	}
+
+	applyIgnoredNumNodesChanges(&cluster, state.ClusterRegionInfo)
 
 	diags := resp.State.Set(ctx, &cluster)
 	resp.Diagnostics.Append(diags...)
@@ -3132,6 +3152,8 @@ func (r resourceCluster) Update(ctx context.Context, req tfsdk.UpdateResourceReq
 
 	// We need to make sure the region order is preserved to avoid terraform treating re-order as state mismatch
 	alignGcpBackupReplicationRegionOrder(&cluster, getGeoGcpReplicationRegionReferenceOrder(plan.BackupReplicationSpec))
+
+	applyIgnoredNumNodesChanges(&cluster, plan.ClusterRegionInfo)
 
 	diags := resp.State.Set(ctx, &cluster)
 	resp.Diagnostics.Append(diags...)

@@ -1,6 +1,8 @@
 # Autoscaler policy for a primary cluster region.
 # Create a separate ybm_autoscaler_policy for each region / READ_REPLICA that needs its own policy.
 # Set status = "ACTIVE" to enable autoscaling, or "INACTIVE" to disable it.
+# When status = "ACTIVE", set ignore_num_nodes_changes = true on the matching
+# ybm_cluster cluster_region_info entry to prevent Terraform drift after autoscaling.
 resource "ybm_autoscaler_policy" "example_autoscaler_policy" {
   cluster_id                               = "example-cluster-id"
   region                                   = "us-west1"
