@@ -1,0 +1,91 @@
+name: YB Managed Terraform Provider Tests
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+jobs:
+  test-suite:
+    name: Trigger Terraform Provider Test Suite
+    permissions:
+      contents: read
+      actions: write
+      id-token: write
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger TF Provider Test Suite Workflow
+        uses: actions/github-script@v6
+        with:
+          github-token: ${{ secrets.TERRAFORM_PROVIDER_TEST_SUITE_TOKEN }}
+          script: |
+            console.log('Triggering TF provider test suite workflow');
+             // Get the current branch name
+            const branch = context.payload.pull_request ? 
+              context.payload.pull_request.head.ref : 
+              context.ref.replace('refs/heads/', '');
+            console.log(`Current branch: ${branch}`);
+            
+            // Create the version object and stringify it properly
+            const cli_tf_version = {
+              cli_version: "Latest RC/Release",
+              tf_version: branch
+            };
+            
+            await github.rest.actions.createWorkflowDispatch({
+              owner: context.repo.owner,
+              repo: 'yugabyte-cloud',
+              workflow_id: 'integration-test.yaml',
+              ref: 'master',
+              inputs: {
+                tests: '["sit_tf"]',
+                cli_tf_version: JSON.stringify(cli_tf_version)
+              }
+            });
+      
+      - name: Wait for TF Test Suite Workflow
+        uses: actions/github-script@v6
+        with:
+          github-token: ${{ secrets.TERRAFORM_PROVIDER_TEST_SUITE_TOKEN }}
+          script: |
+            const MAX_ATTEMPTS = 240;  // 120 minutes
+            const POLL_INTERVAL = 30; // 30 seconds
+            
+            for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
+              console.log(`Checking TF provider test suite workflow status (attempt ${attempt + 1}/${MAX_ATTEMPTS})`);
+              
+              const runs = await github.rest.actions.listWorkflowRuns({
+                owner: context.repo.owner,
+                repo: 'yugabyte-cloud',
+                workflow_id: 'integration-test.yaml',
+                branch: 'master',
+                event: 'workflow_dispatch'
+              });
+              
+              const run = runs.data.workflow_runs.find(r => 
+                r.created_at > '${{ github.event.pull_request.updated_at || github.event.push.updated_at }}'
+              );
+              
+              if (run) {
+                console.log(`Found workflow run: ${run.html_url}`);
+                if (run.status === 'completed') {
+                  console.log(`Workflow completed with conclusion: ${run.conclusion}`);
+                  if (run.conclusion !== 'success') {
+                    core.setFailed(`TF provider test suite workflow failed: ${run.html_url}`);
+                  }
+                  break;
+                } else {
+                  console.log(`Current status: ${run.status}`);
+                }
+              } else {
+                console.log('No matching workflow run found yet');
+              }
+              
+              if (attempt === MAX_ATTEMPTS - 1) {
+                core.setFailed('Timed out waiting for TF provider test suite workflow to complete');
+                break;
+              }
+              
+              await new Promise(resolve => setTimeout(resolve, POLL_INTERVAL * 1000));
+            }
