@@ -68,6 +68,10 @@ To enable or disable backup replication on a cluster
 
 {{ tffile "examples/resources/ybm_cluster/backup-replication-enable-disable.tf" }}
 
+To prevent Terraform drift when a region uses an ACTIVE autoscaler policy
+
+{{ tffile "examples/resources/ybm_cluster/autoscaler-drift-handling.tf" }}
+
 
 {{ .SchemaMarkdown | trimspace }}
 

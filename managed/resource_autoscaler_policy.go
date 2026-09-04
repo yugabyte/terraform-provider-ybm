@@ -46,7 +46,8 @@ func (r resourceAutoscalerPolicyType) GetSchema(_ context.Context) (tfsdk.Schema
 	return tfsdk.Schema{
 		Description: `The resource to manage an autoscaler policy for a YugabyteDB Aeon cluster region.
 Each resource corresponds to one policy for a specific cluster, region, and cluster type (PRIMARY or READ_REPLICA).
-Requires the AUTOSCALING feature flag (YBM_FF_AUTOSCALING=true).`,
+Requires the AUTOSCALING feature flag (YBM_FF_AUTOSCALING=true).
+When status is ACTIVE, set ignore_num_nodes_changes = true on the matching ybm_cluster cluster_region_info entry to prevent Terraform drift from autoscaler-driven node count changes.`,
 		Attributes: map[string]tfsdk.Attribute{
 			"account_id": {
 				Description: "The ID of the account this autoscaler policy belongs to.",
@@ -119,7 +120,7 @@ Requires the AUTOSCALING feature flag (YBM_FF_AUTOSCALING=true).`,
 				Required:    true,
 			},
 			"status": {
-				Description: "Policy status used to enable or disable autoscaling. Valid values are ACTIVE or INACTIVE.",
+				Description: "Policy status used to enable or disable autoscaling. Valid values are ACTIVE or INACTIVE. When ACTIVE, set ignore_num_nodes_changes = true on the matching ybm_cluster region to prevent Terraform drift from autoscaler-driven num_nodes changes.",
 				Type:        types.StringType,
 				Optional:    true,
 				Computed:    true,
@@ -538,6 +539,7 @@ func (r resourceAutoscalerPolicy) Create(ctx context.Context, req tfsdk.CreateRe
 		return
 	}
 
+	appendAutoscalerDriftWarning(&resp.Diagnostics, policy.Status.Value)
 	tflog.Debug(ctx, "Autoscaler policy created", map[string]interface{}{"policy": policy})
 
 	diags := resp.State.Set(ctx, &policy)
@@ -623,6 +625,7 @@ func (r resourceAutoscalerPolicy) Update(ctx context.Context, req tfsdk.UpdateRe
 		return
 	}
 
+	appendAutoscalerDriftWarning(&resp.Diagnostics, policy.Status.Value)
 	tflog.Debug(ctx, "Autoscaler policy updated", map[string]interface{}{"policy": policy})
 
 	diags := resp.State.Set(ctx, &policy)
