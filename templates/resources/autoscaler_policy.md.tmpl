@@ -10,6 +10,8 @@ description: |-
 
 Each resource manages one autoscaler policy for a specific cluster region and cluster type (`PRIMARY` or `READ_REPLICA`). Create a separate resource for each region (and read replica) that should have its own policy.
 
+!> **Warning:** When `status = "ACTIVE"`, set `ignore_num_nodes_changes = true` on the matching `ybm_cluster` `cluster_region_info` region. Otherwise Terraform will treat autoscaler-driven `num_nodes` changes as drift. See the [ybm_cluster](cluster.md) `ignore_num_nodes_changes` attribute and the autoscaler-drift-handling example.
+
 ## Example Usage
 
 {{ tffile "examples/resources/ybm_autoscaler_policy/resource.tf" }}

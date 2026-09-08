@@ -4,6 +4,7 @@ description: |-
   The resource to manage an autoscaler policy for a YugabyteDB Aeon cluster region.
   Each resource corresponds to one policy for a specific cluster, region, and cluster type (PRIMARY or READ_REPLICA).
   Requires the AUTOSCALING feature flag (YBM_FF_AUTOSCALING=true).
+  When status is ACTIVE, set ignore_num_nodes_changes = true on the matching ybm_cluster cluster_region_info entry to prevent Terraform drift from autoscaler-driven node count changes.
 ---
 
 # ybm_autoscaler_policy (Resource)
@@ -11,8 +12,11 @@ description: |-
 The resource to manage an autoscaler policy for a YugabyteDB Aeon cluster region.
 Each resource corresponds to one policy for a specific cluster, region, and cluster type (PRIMARY or READ_REPLICA).
 Requires the AUTOSCALING feature flag (YBM_FF_AUTOSCALING=true).
+When status is ACTIVE, set ignore_num_nodes_changes = true on the matching ybm_cluster cluster_region_info entry to prevent Terraform drift from autoscaler-driven node count changes.
 
 Each resource manages one autoscaler policy for a specific cluster region and cluster type (`PRIMARY` or `READ_REPLICA`). Create a separate resource for each region (and read replica) that should have its own policy.
+
+!> **Warning:** When `status = "ACTIVE"`, set `ignore_num_nodes_changes = true` on the matching `ybm_cluster` `cluster_region_info` region. Otherwise Terraform will treat autoscaler-driven `num_nodes` changes as drift. See the [ybm_cluster](cluster.md) `ignore_num_nodes_changes` attribute and the autoscaler-drift-handling example.
 
 ## Example Usage
 
@@ -20,6 +24,8 @@ Each resource manages one autoscaler policy for a specific cluster region and cl
 # Autoscaler policy for a primary cluster region.
 # Create a separate ybm_autoscaler_policy for each region / READ_REPLICA that needs its own policy.
 # Set status = "ACTIVE" to enable autoscaling, or "INACTIVE" to disable it.
+# When status = "ACTIVE", set ignore_num_nodes_changes = true on the matching
+# ybm_cluster cluster_region_info entry to prevent Terraform drift after autoscaling.
 resource "ybm_autoscaler_policy" "example_autoscaler_policy" {
   cluster_id                               = "example-cluster-id"
   region                                   = "us-west1"
@@ -87,7 +93,7 @@ resource "ybm_autoscaler_policy" "example_autoscaler_policy" {
 
 ### Optional
 
-- `status` (String) Policy status used to enable or disable autoscaling. Valid values are ACTIVE or INACTIVE.
+- `status` (String) Policy status used to enable or disable autoscaling. Valid values are ACTIVE or INACTIVE. When ACTIVE, set ignore_num_nodes_changes = true on the matching ybm_cluster region to prevent Terraform drift from autoscaler-driven num_nodes changes.
 
 ### Read-Only
 
