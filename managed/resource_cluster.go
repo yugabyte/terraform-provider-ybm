@@ -3589,17 +3589,19 @@ func extractBackupReplicationExpiry(report openapiclient.GcpBackupReplicationReg
 }
 
 func extractNextTransferOperationTime(report openapiclient.GcpBackupReplicationRegionReport) types.String {
-	if report.TransferJobDetails != nil {
-		return timeToTypesString(report.TransferJobDetails.GetNextTransferOperationTime())
+	job, ok := report.GetTransferJobDetailsOk()
+	if !ok || job == nil {
+		return types.String{Null: true}
 	}
-	return types.String{Null: true}
+	return timeToTypesString(job.GetNextTransferOperationTime())
 }
 
 func buildLatestTransferDetails(report openapiclient.GcpBackupReplicationRegionReport) *GcpBackupReplicationLatestTransferOperationDetails {
-	if report.TransferJobDetails == nil {
+	job, ok := report.GetTransferJobDetailsOk()
+	if !ok || job == nil {
 		return nil
 	}
-	if details, ok := report.TransferJobDetails.GetLatestTransferOperationDetailsOk(); ok && details != nil {
+	if details, ok := job.GetLatestTransferOperationDetailsOk(); ok && details != nil {
 		return &GcpBackupReplicationLatestTransferOperationDetails{
 			StartTime: timeToTypesString(details.StartTime),
 			EndTime:   timeToTypesString(details.EndTime),
