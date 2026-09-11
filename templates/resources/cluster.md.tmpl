@@ -68,10 +68,17 @@ To enable or disable backup replication on a cluster
 
 {{ tffile "examples/resources/ybm_cluster/backup-replication-enable-disable.tf" }}
 
-To prevent Terraform drift when a region uses an ACTIVE autoscaler policy
+### Autoscaler drift handling
+
+When a region has an ACTIVE autoscaler policy, set `ignore_num_nodes_changes = true` on the corresponding `cluster_region_info` entry. This prevents node count changes made by the autoscaler from being treated as Terraform drift.
+
+Setting `ignore_num_nodes_changes = true` does not prevent intentional node count changes made in the Terraform configuration. If `num_nodes` is explicitly changed in the configuration, Terraform will apply the new value.
+
+To resume managing `num_nodes` with Terraform, set `ignore_num_nodes_changes = false` and review the resulting Terraform plan before applying.
 
 {{ tffile "examples/resources/ybm_cluster/autoscaler-drift-handling.tf" }}
 
+~> **Note:** When resizing a region to a node count outside the currently active autoscaling policy range, first update and apply the `ybm_autoscaler_policy` `min`/`max`. Then update `cluster_region_info[].num_nodes` and apply again. The cluster resize must be within the active policy range.
 
 {{ .SchemaMarkdown | trimspace }}
 
