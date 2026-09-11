@@ -1,7 +1,15 @@
 # Example: ignore autoscaler-driven num_nodes drift for a region under autoscaling.
+#
 # When ybm_autoscaler_policy.status = "ACTIVE", set ignore_num_nodes_changes = true
-# on the matching ybm_cluster region. Otherwise Terraform will detect drift after
-# the autoscaler changes the runtime node count.
+# on the matching ybm_cluster region. This prevents autoscaler-driven runtime
+# num_nodes changes from being treated as Terraform drift.
+#
+# Explicit num_nodes changes made in the Terraform configuration are still applied.
+#
+# Resizing outside the currently active autoscaling policy [min, max] requires
+# two applies:
+# 1) update the policy min/max and run terraform apply
+# 2) update the cluster num_nodes and run terraform apply again
 resource "ybm_cluster" "example_autoscaler_drift" {
   cluster_name    = "example-autoscaler-drift"
   cluster_type    = "SYNCHRONOUS"
@@ -9,6 +17,7 @@ resource "ybm_cluster" "example_autoscaler_drift" {
   cluster_tier    = "PAID"
   fault_tolerance = "NODE"
   database_track  = "Stable"
+
   cluster_region_info = [
     {
       region                   = "us-west1"

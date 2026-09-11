@@ -231,7 +231,28 @@ type resourceAutoscalerPolicy struct {
 	p provider
 }
 
+var _ tfsdk.ResourceWithModifyPlan = resourceAutoscalerPolicy{}
+
 var errAutoscalerPolicyNotFound = errors.New("autoscaler policy not found")
+
+// ModifyPlan emits the ignore_num_nodes_changes drift warning during terraform plan
+// (and again during apply) when the planned policy status is ACTIVE.
+func (r resourceAutoscalerPolicy) ModifyPlan(ctx context.Context, req tfsdk.ModifyResourcePlanRequest, resp *tfsdk.ModifyResourcePlanResponse) {
+	resp.Plan = req.Plan
+
+	// Destroy plans have a null planned state.
+	if req.Plan.Raw.IsNull() {
+		return
+	}
+
+	var status types.String
+	resp.Diagnostics.Append(req.Plan.GetAttribute(ctx, path.Root("status"), &status)...)
+	if resp.Diagnostics.HasError() || !autoscalerStatusSpecified(status) {
+		return
+	}
+
+	appendAutoscalerDriftWarning(&resp.Diagnostics, status.Value)
+}
 
 type autoscalerPolicyPathParams struct {
 	ClusterID   string
@@ -539,7 +560,6 @@ func (r resourceAutoscalerPolicy) Create(ctx context.Context, req tfsdk.CreateRe
 		return
 	}
 
-	appendAutoscalerDriftWarning(&resp.Diagnostics, policy.Status.Value)
 	tflog.Debug(ctx, "Autoscaler policy created", map[string]interface{}{"policy": policy})
 
 	diags := resp.State.Set(ctx, &policy)
@@ -625,7 +645,6 @@ func (r resourceAutoscalerPolicy) Update(ctx context.Context, req tfsdk.UpdateRe
 		return
 	}
 
-	appendAutoscalerDriftWarning(&resp.Diagnostics, policy.Status.Value)
 	tflog.Debug(ctx, "Autoscaler policy updated", map[string]interface{}{"policy": policy})
 
 	diags := resp.State.Set(ctx, &policy)

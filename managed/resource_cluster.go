@@ -102,7 +102,7 @@ func (r resourceClusterType) GetSchema(_ context.Context) (tfsdk.Schema, diag.Di
 					Required: true,
 				},
 				"ignore_num_nodes_changes": {
-					Description: "When true, runtime changes to num_nodes made by the autoscaler are not treated as Terraform drift. Recommended for regions with an ACTIVE ybm_autoscaler_policy. The provider preserves the Terraform-managed num_nodes value in state on refresh. When num_nodes is not explicitly changed in configuration, edit cluster requests use the actual node count from YugabyteDB Aeon.",
+					Description: "When true, Terraform ignores num_nodes changes made outside Terraform, such as changes made by an ACTIVE autoscaler policy. Explicit num_nodes changes in the Terraform configuration are still applied. Set this to true for regions managed by an ACTIVE autoscaler policy.",
 					Type:        types.BoolType,
 					Optional:    true,
 				},
