@@ -981,6 +981,82 @@ type resourceCluster struct {
 }
 
 var _ tfsdk.ResourceWithValidateConfig = resourceCluster{}
+var _ tfsdk.ResourceWithModifyPlan = resourceCluster{}
+
+// ModifyPlan blocks changing ignore_num_nodes_changes while the current YBM node
+// count differs from configured num_nodes. Node counts must be aligned before
+// changing Terraform's node-count management behavior.
+func (r resourceCluster) ModifyPlan(ctx context.Context, req tfsdk.ModifyResourcePlanRequest, resp *tfsdk.ModifyResourcePlanResponse) {
+	resp.Plan = req.Plan
+
+	// Destroy plans have a null planned state; create has no prior state to compare.
+	if req.Plan.Raw.IsNull() || req.State.Raw.IsNull() {
+		return
+	}
+
+	// Only decode the attributes we need. Full Cluster Get() fails on null nested
+	// attributes (credentials, cmk_spec, backup_replication_spec, etc.).
+	var configRegions []RegionInfo
+	var stateRegions []RegionInfo
+	resp.Diagnostics.Append(req.Config.GetAttribute(ctx, path.Root("cluster_region_info"), &configRegions)...)
+	resp.Diagnostics.Append(req.State.GetAttribute(ctx, path.Root("cluster_region_info"), &stateRegions)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	stateByRegion := regionInfoByRegion(stateRegions)
+
+	needsLiveNumNodes := false
+	for _, configRegion := range configRegions {
+		stateRegion, ok := stateByRegion[configRegion.Region.Value]
+		if !ok {
+			continue
+		}
+		if ignoreNumNodesChangesEnabled(stateRegion) && !ignoreNumNodesChangesEnabled(configRegion) {
+			needsLiveNumNodes = true
+			break
+		}
+	}
+
+	liveNumNodesByRegion := map[string]int64{}
+	if needsLiveNumNodes {
+		// Read masks node-count drift while ignore is enabled, so fetch the live
+		// count when disabling ignore.
+		var accountId, projectId, clusterId types.String
+		resp.Diagnostics.Append(req.State.GetAttribute(ctx, path.Root("account_id"), &accountId)...)
+		resp.Diagnostics.Append(req.State.GetAttribute(ctx, path.Root("project_id"), &projectId)...)
+		resp.Diagnostics.Append(req.State.GetAttribute(ctx, path.Root("cluster_id"), &clusterId)...)
+		if resp.Diagnostics.HasError() {
+			return
+		}
+		if accountId.IsNull() || accountId.IsUnknown() ||
+			projectId.IsNull() || projectId.IsUnknown() ||
+			clusterId.IsNull() || clusterId.IsUnknown() ||
+			r.p.client == nil {
+			resp.Diagnostics.AddError(
+				disableIgnoreNumNodesWithDriftErrorSummary,
+				"Unable to verify the current YugabyteDB Aeon node count while disabling ignore_num_nodes_changes. "+
+					"Ensure the cluster exists in state and the provider is configured, then retry.",
+			)
+			return
+		}
+
+		clusterResp, response, err := r.p.client.ClusterApi.GetCluster(ctx, accountId.Value, projectId.Value, clusterId.Value).Execute()
+		if err != nil {
+			resp.Diagnostics.AddError(
+				disableIgnoreNumNodesWithDriftErrorSummary,
+				"Unable to fetch the current cluster node count while disabling ignore_num_nodes_changes: "+getErrorMessage(response, err),
+			)
+			return
+		}
+		for _, regionInfo := range clusterResp.Data.Spec.ClusterRegionInfo {
+			region := regionInfo.PlacementInfo.CloudInfo.GetRegion()
+			liveNumNodesByRegion[region] = int64(regionInfo.PlacementInfo.GetNumNodes())
+		}
+	}
+
+	addIgnoreNumNodesDriftErrors(&resp.Diagnostics, configRegions, stateRegions, liveNumNodesByRegion)
+}
 
 func EditBackupSchedule(ctx context.Context, backupScheduleStruct BackupScheduleInfo, scheduleId string, backupDes string, accountId string, projectId string, clusterId string, apiClient *openapiclient.APIClient) error {
 	return editBackupScheduleV2(ctx, backupScheduleStruct, scheduleId, backupDes, accountId, projectId, clusterId, apiClient)
