@@ -449,6 +449,7 @@ type AssociateMetricsExporterCluster struct {
 	ConfigName  types.String `tfsdk:"config_name"`
 	ClusterID   types.String `tfsdk:"cluster_id"`
 	ClusterName types.String `tfsdk:"cluster_name"`
+	ExportState types.String `tfsdk:"export_state"`
 }
 
 type DbAuditLoggingConfig struct {

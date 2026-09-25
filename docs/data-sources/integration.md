@@ -49,9 +49,9 @@ Read-Only:
 - `bucket_name` (String) The S3 bucket name to export logs to
 - `file_prefix` (String) Prefix for exported file names
 - `partition_strategy` (String) Time-based partitioning: 'minute' or 'hour'
-- `path_prefix` (String) S3 path prefix for organizing objects
+- `path_prefix` (String) S3 path prefix for organizing objects. Exported objects use the `{path_prefix}/{cluster-id}/{node-name}/{partition}/` structure, for example `yugabyte-logs/cluster-123/node-1/2024/01/07/14/`.
 - `region` (String) AWS region where the S3 bucket is located
-- `secret_access_key` (String, Sensitive) AWS Secret Access Key for S3 access
+- `secret_access_key` (String, Sensitive) AWS Secret Access Key for S3 access. Use the Access Key ID and Secret Access Key of an IAM user with `s3:PutObject` permission for the S3 bucket. For more information, refer to [Managing access keys for IAM users](https://docs.aws.amazon.com/IAM/latest/UserGuide/id_credentials_access-keys.html) in the AWS documentation.
 
 
 <a id="nestedatt--datadog_spec"></a>

@@ -10,14 +10,58 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
+	retry "github.com/sethvargo/go-retry"
 	openapiclient "github.com/yugabyte/yugabytedb-managed-go-client-internal"
 )
 
 // Use to differentiate errors
 var ErrFailedTask = errors.New("the task failed")
+
+const minClusterRunningTaskOperationTimeout = 30 * time.Minute
+
+func clusterRunningTaskOperationTimeout(numNodes int) time.Duration {
+	if numNodes < 1 {
+		numNodes = 1
+	}
+	timeout := time.Duration(15*numNodes) * time.Minute
+	if timeout < minClusterRunningTaskOperationTimeout {
+		return minClusterRunningTaskOperationTimeout
+	}
+	return timeout
+}
+
+func getClusterTotalNodeCount(ctx context.Context, accountId, projectId, clusterId string, apiClient *openapiclient.APIClient) (int, error) {
+	clusterResp, resp, err := apiClient.ClusterApi.GetCluster(ctx, accountId, projectId, clusterId).Execute()
+	if err != nil {
+		return 0, fmt.Errorf(getErrorMessage(resp, err))
+	}
+	totalNodes := 0
+	for _, regionInfo := range clusterResp.Data.Spec.ClusterRegionInfo {
+		totalNodes += int(regionInfo.PlacementInfo.GetNumNodes())
+	}
+	if totalNodes < 1 {
+		totalNodes = 1
+	}
+	return totalNodes, nil
+}
+
+func clusterRunningTaskOperationTimeoutForCluster(ctx context.Context, accountId, projectId, clusterId string, apiClient *openapiclient.APIClient) time.Duration {
+	numNodes, err := getClusterTotalNodeCount(ctx, accountId, projectId, clusterId, apiClient)
+	if err != nil {
+		tflog.Warn(ctx, "Unable to get cluster node count for operation timeout, using minimum timeout: "+err.Error())
+		return minClusterRunningTaskOperationTimeout
+	}
+	return clusterRunningTaskOperationTimeout(numNodes)
+}
+
+func clusterRunningTaskRetryPolicy(ctx context.Context, accountId, projectId, clusterId string, apiClient *openapiclient.APIClient) retry.Backoff {
+	timeout := clusterRunningTaskOperationTimeoutForCluster(ctx, accountId, projectId, clusterId, apiClient)
+	return retry.WithMaxDuration(timeout, retry.NewConstant(10*time.Second))
+}
 
 func getProjectId(ctx context.Context, apiClient *openapiclient.APIClient, accountId string) (projectId string, projectIdOK bool, errorMessage string) {
 	accountResp, resp, err := apiClient.AccountApi.GetCurrentAccount(ctx).Execute()

@@ -242,13 +242,13 @@ func (r dataSourceIntegrationType) GetSchema(_ context.Context) (tfsdk.Schema, d
 						Sensitive:   true,
 					},
 					"secret_access_key": {
-						Description: "AWS Secret Access Key for S3 access",
+						Description: "AWS Secret Access Key for S3 access. Use the Access Key ID and Secret Access Key of an IAM user with `s3:PutObject` permission for the S3 bucket. For more information, refer to [Managing access keys for IAM users](https://docs.aws.amazon.com/IAM/latest/UserGuide/id_credentials_access-keys.html) in the AWS documentation.",
 						Type:        types.StringType,
 						Computed:    true,
 						Sensitive:   true,
 					},
 					"path_prefix": {
-						Description: "S3 path prefix for organizing objects",
+						Description: "S3 path prefix for organizing objects. Exported objects use the `{path_prefix}/{cluster-id}/{node-name}/{partition}/` structure, for example `yugabyte-logs/cluster-123/node-1/2024/01/07/14/`.",
 						Type:        types.StringType,
 						Computed:    true,
 					},
