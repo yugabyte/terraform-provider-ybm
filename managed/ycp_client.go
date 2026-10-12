@@ -210,14 +210,32 @@ type ampEndpointSpec struct {
 	Password     string                   `json:"password,omitempty"`
 	Resources    *ampEndpointResources    `json:"resources,omitempty"`
 	Connectivity *ampEndpointConnectivity `json:"connectivity,omitempty"`
+	// A pointer so an emptied map is still sent: an update replaces the whole map.
+	PgSettings *map[string]string `json:"pg_settings,omitempty"`
+}
+
+type ampBranchSpec struct {
+	ParentBranchID string             `json:"parent_branch_id,omitempty"`
+	ForkPointLsn   string             `json:"fork_point_lsn,omitempty"`
+	PgSettings     *map[string]string `json:"pg_settings,omitempty"`
+	Extensions     []string           `json:"extensions,omitempty"`
 }
 
 func ampClusterName(pool, cluster string) string {
 	return pool + "/" + cluster
 }
 
+func ampBranchName(pool, cluster, branch string) string {
+	return strings.Join([]string{pool, cluster, branch}, "/")
+}
+
+func ampEndpointPath(pool, cluster, branch, endpoint string) string {
+	return strings.Join([]string{pool, cluster, branch, endpoint}, "/")
+}
+
+// ampEndpointName is the path of the read-write endpoint the cluster resources create.
 func ampEndpointName(pool, cluster string) string {
-	return strings.Join([]string{pool, cluster, ampDefaultBranch, ampPrimaryEndpoint}, "/")
+	return ampEndpointPath(pool, cluster, ampDefaultBranch, ampPrimaryEndpoint)
 }
 
 func findAmpDesired(resources []ampResource, kind, name string) (ampResource, bool) {
@@ -236,29 +254,6 @@ func findAmpObserved(observed []ampObserved, kind, name string) (ampObserved, bo
 		}
 	}
 	return ampObserved{}, false
-}
-
-// ampEndpointProgress reports whether the cluster's primary endpoint has converged on its desired
-// generation, or the error that stops it ever converging.
-func ampEndpointProgress(desired []ampResource, observed []ampObserved, pool, cluster string) (bool, error) {
-	endpointName := ampEndpointName(pool, cluster)
-	for _, kn := range [][2]string{{ampKindCluster, ampClusterName(pool, cluster)}, {ampKindEndpoint, endpointName}} {
-		if o, ok := findAmpObserved(observed, kn[0], kn[1]); ok && ampTerminalStates[o.State] {
-			return false, fmt.Errorf("%s %s is %s: %s", kn[0], kn[1], o.State, o.Error)
-		}
-	}
-	o, ok := findAmpObserved(observed, ampKindEndpoint, endpointName)
-	if !ok || o.State != ampStateReady || o.Attrs["address"] == "" {
-		return false, nil
-	}
-	// generation is omitted while 0, and applied_generation only appears once the controller has
-	// echoed one back, so the comparison applies only when both are present.
-	if d, ok := findAmpDesired(desired, ampKindEndpoint, endpointName); ok && d.Generation > 0 {
-		if applied, ok := o.Attrs["applied_generation"]; ok && applied != fmt.Sprint(d.Generation) {
-			return false, nil
-		}
-	}
-	return true, nil
 }
 
 // splitHostPort splits an AMP endpoint address of the form host:port.

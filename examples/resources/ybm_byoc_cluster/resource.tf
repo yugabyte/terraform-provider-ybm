@@ -9,4 +9,10 @@ resource "ybm_byoc_cluster" "example" {
   memory            = "32Gi"
   connectivity_mode = "nlb_internal"
   allowed_cidrs     = ["10.0.0.0/16"]
+
+  # PostgreSQL settings of the read-write endpoint; can be changed in place
+  pg_settings = {
+    work_mem        = "64MB"
+    max_connections = "200"
+  }
 }

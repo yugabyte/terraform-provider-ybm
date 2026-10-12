@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
+	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/yugabyte/terraform-provider-ybm/managed/plan_modifier"
@@ -24,82 +25,75 @@ const (
 	ampDefaultCpu              = "2"
 	ampDefaultConnectivityMode = "cluster_ip"
 
+	ampRoleReadWrite = "read_write"
+	ampRoleReadOnly  = "read_only"
+
 	ampOperationTimeout = 60 * time.Minute
 )
 
 // A var so tests can poll without waiting.
 var ampPollInterval = 10 * time.Second
 
-// Cluster names become a segment of the resource path, so they cannot contain a slash.
+// Names become a segment of the resource path, so they cannot contain a slash.
 var ampNamePattern = regexp.MustCompile(`^[a-z0-9][a-z0-9-]{0,62}$`)
+
+const ampNameRule = "must be lowercase letters, digits and hyphens, starting with a letter or digit"
 
 var ampEngines = []string{"postgres", "aidb", "oracle", "sqlserver", "documentdb"}
 var ampConnectivityModes = []string{"cluster_ip", "ingress_internal", "ingress_external", "nlb_internal", "nlb_external"}
 
-// ampClusterAttributes are the attributes shared by the shared (AMP Managed) and BYOC cluster
-// resources: an AMP cluster plus the read-write endpoint the provider creates on its main branch.
-func ampClusterAttributes() map[string]tfsdk.Attribute {
+func ampNameAttribute(description string) tfsdk.Attribute {
+	return tfsdk.Attribute{
+		Description:   description,
+		Type:          types.StringType,
+		Required:      true,
+		Validators:    []tfsdk.AttributeValidator{stringvalidator.RegexMatches(ampNamePattern, ampNameRule)},
+		PlanModifiers: []tfsdk.AttributePlanModifier{tfsdk.RequiresReplace()},
+	}
+}
+
+func ampPgSettingsAttribute(description string) tfsdk.Attribute {
+	return tfsdk.Attribute{
+		Description: description,
+		Type:        types.MapType{ElemType: types.StringType},
+		Optional:    true,
+	}
+}
+
+// ampEndpointAttributes are the attributes of an endpoint: the cluster resources' read-write
+// endpoint and the ybm_amp_endpoint resource.
+func ampEndpointAttributes(passwordRequired bool) map[string]tfsdk.Attribute {
+	password := tfsdk.Attribute{
+		Description:   "The password of the cloud_admin user, 8 to 128 printable ASCII characters. It cannot be changed after creation.",
+		Type:          types.StringType,
+		Sensitive:     true,
+		Validators:    []tfsdk.AttributeValidator{stringvalidator.LengthBetween(8, 128)},
+		PlanModifiers: []tfsdk.AttributePlanModifier{planmodifier.ImmutableFieldModifier{}},
+	}
+	if passwordRequired {
+		password.Required = true
+	} else {
+		password.Description += " Required for a read_write endpoint and not allowed for a read_only one."
+		password.Optional = true
+	}
 	return map[string]tfsdk.Attribute{
-		"account_id": {
-			Description:   "The ID of the account this cluster belongs to.",
-			Type:          types.StringType,
-			Computed:      true,
-			PlanModifiers: []tfsdk.AttributePlanModifier{tfsdk.UseStateForUnknown()},
-		},
-		"cluster_name": {
-			Description:   "The name of the cluster. Must be unique within the account's storage pool. Changing it forces a new cluster.",
-			Type:          types.StringType,
-			Required:      true,
-			Validators:    []tfsdk.AttributeValidator{stringvalidator.RegexMatches(ampNamePattern, "must be lowercase letters, digits and hyphens, starting with a letter or digit")},
-			PlanModifiers: []tfsdk.AttributePlanModifier{tfsdk.RequiresReplace()},
-		},
-		"pg_version": {
-			Description:   fmt.Sprintf("The PostgreSQL major version. Defaults to %d. Changing it forces a new cluster.", ampDefaultPgVersion),
-			Type:          types.Int64Type,
-			Optional:      true,
-			Computed:      true,
-			PlanModifiers: []tfsdk.AttributePlanModifier{tfsdk.UseStateForUnknown(), tfsdk.RequiresReplace()},
-		},
-		"engine": {
-			Description:   "The database engine: " + strings.Join(ampEngines, ", ") + ". Defaults to postgres. Changing it forces a new cluster.",
-			Type:          types.StringType,
-			Optional:      true,
-			Computed:      true,
-			Validators:    []tfsdk.AttributeValidator{stringvalidator.OneOf(ampEngines...)},
-			PlanModifiers: []tfsdk.AttributePlanModifier{tfsdk.UseStateForUnknown(), tfsdk.RequiresReplace()},
-		},
-		"extensions": {
-			Description:   "Extensions to install in the cluster. Changing it forces a new cluster.",
-			Type:          types.ListType{ElemType: types.StringType},
-			Optional:      true,
-			PlanModifiers: []tfsdk.AttributePlanModifier{tfsdk.RequiresReplace()},
-		},
-		"password": {
-			Description: "The password of the cloud_admin user, 8 to 128 printable ASCII characters. It cannot be changed after creation.",
-			Type:        types.StringType,
-			Required:    true,
-			Sensitive:   true,
-			Validators: []tfsdk.AttributeValidator{
-				stringvalidator.LengthBetween(8, 128),
-			},
-			PlanModifiers: []tfsdk.AttributePlanModifier{planmodifier.ImmutableFieldModifier{}},
-		},
+		"password": password,
 		"cpu": {
-			Description:   "The CPU of the read-write endpoint as a Kubernetes quantity, such as 2 or 500m. Defaults to 2.",
+			Description:   "The CPU of the endpoint as a Kubernetes quantity, such as 2 or 500m. Defaults to 2. Can be changed in place to resize the endpoint.",
 			Type:          types.StringType,
 			Optional:      true,
 			Computed:      true,
 			PlanModifiers: []tfsdk.AttributePlanModifier{tfsdk.UseStateForUnknown()},
 		},
 		"memory": {
-			Description: "The memory of the read-write endpoint as a Kubernetes quantity in Mi or larger units, such as 16Gi. " +
-				"Must be at least 8Gi per vCPU. Defaults to 8Gi per vCPU.",
+			Description: "The memory of the endpoint as a Kubernetes quantity in Mi or larger units, such as 16Gi. " +
+				"Must be at least 8Gi per vCPU. Defaults to 8Gi per vCPU. Can be changed in place to resize the endpoint.",
 			Type:     types.StringType,
 			Optional: true,
 			Computed: true,
 		},
 		"connectivity_mode": {
-			Description:   "How the read-write endpoint is exposed: " + strings.Join(ampConnectivityModes, ", ") + ". Defaults to cluster_ip. Changing it forces a new cluster.",
+			Description:   "How the endpoint is exposed: " + strings.Join(ampConnectivityModes, ", ") + ". Defaults to cluster_ip. Changing it forces a replacement.",
 			Type:          types.StringType,
 			Optional:      true,
 			Computed:      true,
@@ -107,28 +101,23 @@ func ampClusterAttributes() map[string]tfsdk.Attribute {
 			PlanModifiers: []tfsdk.AttributePlanModifier{tfsdk.UseStateForUnknown(), tfsdk.RequiresReplace()},
 		},
 		"allowed_cidrs": {
-			Description: "CIDR blocks allowed to connect to the read-write endpoint.",
+			Description: "CIDR blocks allowed to connect to the endpoint.",
 			Type:        types.ListType{ElemType: types.StringType},
 			Optional:    true,
 		},
-		"cluster_id": {
-			Description:   "The ID of the cluster.",
-			Type:          types.StringType,
-			Computed:      true,
-			PlanModifiers: []tfsdk.AttributePlanModifier{tfsdk.UseStateForUnknown()},
-		},
+		"pg_settings": ampPgSettingsAttribute("PostgreSQL settings of the endpoint's compute, such as work_mem. Can be changed in place."),
 		"state": {
-			Description: "The state the read-write endpoint last reported, such as ready or provisioning.",
+			Description: "The state the endpoint last reported, such as ready or provisioning.",
 			Type:        types.StringType,
 			Computed:    true,
 		},
 		"host": {
-			Description: "The host of the read-write endpoint.",
+			Description: "The host of the endpoint.",
 			Type:        types.StringType,
 			Computed:    true,
 		},
 		"port": {
-			Description: "The port of the read-write endpoint.",
+			Description: "The port of the endpoint.",
 			Type:        types.StringType,
 			Computed:    true,
 		},
@@ -152,35 +141,79 @@ func ampClusterAttributes() map[string]tfsdk.Attribute {
 	}
 }
 
-// ampClusterConfig is the configuration of an AMP cluster with its read-write endpoint, with
-// defaults applied.
-type ampClusterConfig struct {
-	PgVersion        int64
-	Engine           string
-	Extensions       []string
+// ampClusterAttributes are the attributes shared by the shared (AMP Managed) and BYOC cluster
+// resources: an AMP cluster plus the read-write endpoint the provider creates on its main branch.
+func ampClusterAttributes() map[string]tfsdk.Attribute {
+	attributes := ampEndpointAttributes(true)
+	attributes["account_id"] = tfsdk.Attribute{
+		Description:   "The ID of the account this cluster belongs to.",
+		Type:          types.StringType,
+		Computed:      true,
+		PlanModifiers: []tfsdk.AttributePlanModifier{tfsdk.UseStateForUnknown()},
+	}
+	attributes["cluster_name"] = ampNameAttribute("The name of the cluster. Must be unique within the account's storage pool. Changing it forces a new cluster.")
+	attributes["pg_version"] = tfsdk.Attribute{
+		Description:   fmt.Sprintf("The PostgreSQL major version. Defaults to %d. Changing it forces a new cluster.", ampDefaultPgVersion),
+		Type:          types.Int64Type,
+		Optional:      true,
+		Computed:      true,
+		PlanModifiers: []tfsdk.AttributePlanModifier{tfsdk.UseStateForUnknown(), tfsdk.RequiresReplace()},
+	}
+	attributes["engine"] = tfsdk.Attribute{
+		Description:   "The database engine: " + strings.Join(ampEngines, ", ") + ". Defaults to postgres. Changing it forces a new cluster.",
+		Type:          types.StringType,
+		Optional:      true,
+		Computed:      true,
+		Validators:    []tfsdk.AttributeValidator{stringvalidator.OneOf(ampEngines...)},
+		PlanModifiers: []tfsdk.AttributePlanModifier{tfsdk.UseStateForUnknown(), tfsdk.RequiresReplace()},
+	}
+	attributes["extensions"] = tfsdk.Attribute{
+		Description:   "Extensions to install in the cluster. Changing it forces a new cluster; use ybm_amp_branch to add extensions to a branch in place.",
+		Type:          types.ListType{ElemType: types.StringType},
+		Optional:      true,
+		PlanModifiers: []tfsdk.AttributePlanModifier{tfsdk.RequiresReplace()},
+	}
+	attributes["cluster_id"] = tfsdk.Attribute{
+		Description:   "The ID of the cluster.",
+		Type:          types.StringType,
+		Computed:      true,
+		PlanModifiers: []tfsdk.AttributePlanModifier{tfsdk.UseStateForUnknown()},
+	}
+	// The cluster's endpoint is the read-write one on the main branch, so say so.
+	pg := attributes["pg_settings"]
+	pg.Description = "PostgreSQL settings of the read-write endpoint's compute, such as work_mem. Can be changed in place."
+	attributes["pg_settings"] = pg
+	return attributes
+}
+
+// ampEndpointConfig is the configuration of an endpoint, with defaults applied.
+type ampEndpointConfig struct {
+	Role             string
 	Password         string
 	Cpu              string
 	Memory           string
 	ConnectivityMode string
 	AllowedCidrs     []string
+	PgSettings       map[string]string
 }
 
-func newAmpClusterConfig(pgVersion types.Int64, engine types.String, extensions []types.String, password types.String,
-	cpu types.String, memory types.String, mode types.String, allowedCidrs []types.String) (ampClusterConfig, error) {
-	c := ampClusterConfig{
-		PgVersion:        ampDefaultPgVersion,
-		Engine:           ampDefaultEngine,
-		Extensions:       stringsFromTf(extensions),
+// ampClusterConfig is the configuration of an AMP cluster with its read-write endpoint.
+type ampClusterConfig struct {
+	PgVersion  int64
+	Engine     string
+	Extensions []string
+	Endpoint   ampEndpointConfig
+}
+
+func newAmpEndpointConfig(role string, password types.String, cpu types.String, memory types.String,
+	mode types.String, allowedCidrs []types.String, pgSettings types.Map) (ampEndpointConfig, error) {
+	c := ampEndpointConfig{
+		Role:             role,
 		Password:         password.Value,
 		Cpu:              ampDefaultCpu,
 		ConnectivityMode: ampDefaultConnectivityMode,
 		AllowedCidrs:     stringsFromTf(allowedCidrs),
-	}
-	if known(pgVersion.Null, pgVersion.Unknown) {
-		c.PgVersion = pgVersion.Value
-	}
-	if known(engine.Null, engine.Unknown) {
-		c.Engine = engine.Value
+		PgSettings:       mapFromTf(pgSettings),
 	}
 	if known(cpu.Null, cpu.Unknown) {
 		c.Cpu = cpu.Value
@@ -200,6 +233,24 @@ func newAmpClusterConfig(pgVersion types.Int64, engine types.String, extensions 
 		c.Memory = m
 	}
 	return c, nil
+}
+
+func newAmpClusterConfig(pgVersion types.Int64, engine types.String, extensions []types.String, password types.String,
+	cpu types.String, memory types.String, mode types.String, allowedCidrs []types.String, pgSettings types.Map) (ampClusterConfig, error) {
+	c := ampClusterConfig{
+		PgVersion:  ampDefaultPgVersion,
+		Engine:     ampDefaultEngine,
+		Extensions: stringsFromTf(extensions),
+	}
+	if known(pgVersion.Null, pgVersion.Unknown) {
+		c.PgVersion = pgVersion.Value
+	}
+	if known(engine.Null, engine.Unknown) {
+		c.Engine = engine.Value
+	}
+	endpoint, err := newAmpEndpointConfig(ampRoleReadWrite, password, cpu, memory, mode, allowedCidrs, pgSettings)
+	c.Endpoint = endpoint
+	return c, err
 }
 
 func known(null, unknown bool) bool {
@@ -228,6 +279,31 @@ func stringsToTf(values []string) []types.String {
 	return out
 }
 
+// mapFromTf returns the map's values, empty rather than nil so an emptied map is still sent.
+func mapFromTf(m types.Map) map[string]string {
+	out := map[string]string{}
+	if m.Null || m.Unknown {
+		return out
+	}
+	for k, v := range m.Elems {
+		if s, ok := v.(types.String); ok {
+			out[k] = s.Value
+		}
+	}
+	return out
+}
+
+func mapToTf(m map[string]string) types.Map {
+	if len(m) == 0 {
+		return types.Map{ElemType: types.StringType, Null: true}
+	}
+	elems := make(map[string]attr.Value, len(m))
+	for k, v := range m {
+		elems[k] = types.String{Value: v}
+	}
+	return types.Map{ElemType: types.StringType, Elems: elems}
+}
+
 // ampDefaultMemory returns 8Gi per vCPU of the given Kubernetes CPU quantity.
 func ampDefaultMemory(cpu string) (string, error) {
 	if strings.HasSuffix(cpu, "m") {
@@ -248,34 +324,95 @@ func (c ampClusterConfig) clusterSpec() ampClusterSpec {
 	return ampClusterSpec{PgVersion: c.PgVersion, Engine: c.Engine, Extensions: c.Extensions}
 }
 
-// endpointSpec returns the read-write endpoint's spec. A full spec carries the create-time fields;
-// otherwise only the fields AMP can change in place are sent. The connectivity map is always sent
-// whole, since an update replaces nested maps rather than merging them.
-func (c ampClusterConfig) endpointSpec(full bool) ampEndpointSpec {
+// spec returns the endpoint's spec. A full spec carries the create-time fields; otherwise only the
+// fields AMP can change in place are sent. Nested maps are always sent whole, since an update
+// replaces them rather than merging them.
+func (c ampEndpointConfig) spec(full bool) ampEndpointSpec {
 	cidrs := c.AllowedCidrs
 	if cidrs == nil {
 		cidrs = []string{}
 	}
+	pg := c.PgSettings
+	if pg == nil {
+		pg = map[string]string{}
+	}
 	spec := ampEndpointSpec{
 		Resources:    &ampEndpointResources{CPU: c.Cpu, Memory: c.Memory},
 		Connectivity: &ampEndpointConnectivity{Mode: c.ConnectivityMode, AllowedCidrs: cidrs},
+		PgSettings:   &pg,
 	}
 	if full {
-		spec.Role = "read_write"
+		spec.Role = c.Role
 		spec.Password = c.Password
 	}
 	return spec
 }
 
-// ampClusterStatus is what the provider reads back for a cluster: its configuration from the
+// ampEndpointStatus is what the provider reads back for an endpoint: its configuration from the
 // desired state and its status and connection details from the observed state.
-type ampClusterStatus struct {
-	Config           ampClusterConfig
-	ClusterID        string
+type ampEndpointStatus struct {
+	Config           ampEndpointConfig
+	EndpointID       string
 	State            string
 	Host             string
 	Port             string
 	TlsCaCertificate string
+}
+
+func readAmpEndpoint(desired []ampResource, observed []ampObserved, path string) (ampEndpointStatus, bool, error) {
+	var s ampEndpointStatus
+	res, ok := findAmpDesired(desired, ampKindEndpoint, path)
+	if !ok {
+		return s, false, nil
+	}
+	if len(res.Spec) > 0 {
+		var es ampEndpointSpec
+		if err := json.Unmarshal(res.Spec, &es); err != nil {
+			return s, true, fmt.Errorf("unable to parse the spec of endpoint %s: %v", path, err)
+		}
+		s.Config.Role = es.Role
+		s.Config.Password = es.Password
+		if es.Resources != nil {
+			s.Config.Cpu = es.Resources.CPU
+			s.Config.Memory = es.Resources.Memory
+		}
+		if es.Connectivity != nil {
+			s.Config.ConnectivityMode = es.Connectivity.Mode
+			s.Config.AllowedCidrs = es.Connectivity.AllowedCidrs
+		}
+		if es.PgSettings != nil {
+			s.Config.PgSettings = *es.PgSettings
+		}
+	}
+	if s.Config.Role == "" {
+		s.Config.Role = ampRoleReadWrite
+	}
+	if o, ok := findAmpObserved(observed, ampKindEndpoint, path); ok {
+		s.EndpointID = o.Attrs["id"]
+		s.State = o.State
+		s.Host, s.Port = splitHostPort(o.Attrs["address"])
+		s.TlsCaCertificate = o.Attrs["tls_ca_crt"]
+		// The observed size is what AMP applied, so it fills in a desired spec that omitted it.
+		if s.Config.Cpu == "" {
+			s.Config.Cpu = o.Attrs["cpu"]
+		}
+		if s.Config.Memory == "" {
+			s.Config.Memory = o.Attrs["memory"]
+		}
+		if s.Config.ConnectivityMode == "" {
+			s.Config.ConnectivityMode = o.Attrs["connectivity_mode"]
+		}
+	} else {
+		s.State = "creating"
+	}
+	return s, true, nil
+}
+
+// ampClusterStatus is what the provider reads back for a cluster and its read-write endpoint.
+type ampClusterStatus struct {
+	Config    ampClusterConfig
+	ClusterID string
+	Endpoint  ampEndpointStatus
 }
 
 // readAmpCluster finds the cluster in a storage pool's desired and observed state.
@@ -300,44 +437,36 @@ func readAmpCluster(desired []ampResource, observed []ampObserved, pool, cluster
 		s.Config.Engine = ampDefaultEngine
 	}
 	s.Config.Extensions = cs.Extensions
-
-	if endpointRes, ok := findAmpDesired(desired, ampKindEndpoint, ampEndpointName(pool, cluster)); ok && len(endpointRes.Spec) > 0 {
-		var es ampEndpointSpec
-		if err := json.Unmarshal(endpointRes.Spec, &es); err != nil {
-			return s, true, fmt.Errorf("unable to parse the endpoint spec of cluster %s: %v", cluster, err)
-		}
-		s.Config.Password = es.Password
-		if es.Resources != nil {
-			s.Config.Cpu = es.Resources.CPU
-			s.Config.Memory = es.Resources.Memory
-		}
-		if es.Connectivity != nil {
-			s.Config.ConnectivityMode = es.Connectivity.Mode
-			s.Config.AllowedCidrs = es.Connectivity.AllowedCidrs
-		}
-	}
-
 	if o, ok := findAmpObserved(observed, ampKindCluster, ampClusterName(pool, cluster)); ok {
 		s.ClusterID = o.Attrs["id"]
 	}
-	if o, ok := findAmpObserved(observed, ampKindEndpoint, ampEndpointName(pool, cluster)); ok {
-		s.State = o.State
-		s.Host, s.Port = splitHostPort(o.Attrs["address"])
-		s.TlsCaCertificate = o.Attrs["tls_ca_crt"]
-		// The observed size is what AMP applied, so it wins over a desired spec that omitted it.
-		if s.Config.Cpu == "" {
-			s.Config.Cpu = o.Attrs["cpu"]
-		}
-		if s.Config.Memory == "" {
-			s.Config.Memory = o.Attrs["memory"]
-		}
-		if s.Config.ConnectivityMode == "" {
-			s.Config.ConnectivityMode = o.Attrs["connectivity_mode"]
-		}
-	} else {
-		s.State = "creating"
+
+	endpoint, ok, err := readAmpEndpoint(desired, observed, ampEndpointName(pool, cluster))
+	if err != nil {
+		return s, true, err
 	}
+	if !ok {
+		endpoint.State = "creating"
+	}
+	s.Endpoint = endpoint
+	s.Config.Endpoint = endpoint.Config
 	return s, true, nil
+}
+
+// ampCreateClusterItems are the resources a cluster resource creates: the cluster and its
+// read-write endpoint on the default branch.
+func ampCreateClusterItems(pool, clusterName string, config ampClusterConfig) []ampPatchItem {
+	return []ampPatchItem{
+		{Kind: ampKindCluster, Name: ampClusterName(pool, clusterName), Spec: config.clusterSpec()},
+		{Kind: ampKindEndpoint, Name: ampEndpointName(pool, clusterName), Spec: config.Endpoint.spec(true)},
+	}
+}
+
+func ampClusterTargets(pool, clusterName string) []ampTarget {
+	return []ampTarget{
+		{Kind: ampKindCluster, Name: ampClusterName(pool, clusterName)},
+		{Kind: ampKindEndpoint, Name: ampEndpointName(pool, clusterName)},
+	}
 }
 
 func tfString(v string) types.String {

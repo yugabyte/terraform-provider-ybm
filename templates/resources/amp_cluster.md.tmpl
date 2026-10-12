@@ -10,7 +10,7 @@ description: |-
 
 ~> **Note:** This resource is behind a feature flag. Set the environment variable `YBM_FF_AMP=true` to use it.
 
-Updating `cpu`, `memory` or `allowed_cidrs` changes the cluster in place. Changing `cluster_name`, `region`, `pg_version`, `engine`, `extensions` or `connectivity_mode` replaces the cluster, which deletes its data. `password` cannot be changed after creation.
+Updating `cpu`, `memory`, `allowed_cidrs` or `pg_settings` changes the cluster in place. Manage branches and additional endpoints with `ybm_amp_branch` and `ybm_amp_endpoint`. Changing `cluster_name`, `region`, `pg_version`, `engine`, `extensions` or `connectivity_mode` replaces the cluster, which deletes its data. `password` cannot be changed after creation.
 
 Connect as `username` to `database` at `host`:`port` with `password`.
 

@@ -612,6 +612,7 @@ type AmpCluster struct {
 	Memory           types.String   `tfsdk:"memory"`
 	ConnectivityMode types.String   `tfsdk:"connectivity_mode"`
 	AllowedCidrs     []types.String `tfsdk:"allowed_cidrs"`
+	PgSettings       types.Map      `tfsdk:"pg_settings"`
 	ClusterID        types.String   `tfsdk:"cluster_id"`
 	EnvironmentID    types.String   `tfsdk:"environment_id"`
 	State            types.String   `tfsdk:"state"`
@@ -634,6 +635,7 @@ type ByocCluster struct {
 	Memory           types.String   `tfsdk:"memory"`
 	ConnectivityMode types.String   `tfsdk:"connectivity_mode"`
 	AllowedCidrs     []types.String `tfsdk:"allowed_cidrs"`
+	PgSettings       types.Map      `tfsdk:"pg_settings"`
 	ClusterID        types.String   `tfsdk:"cluster_id"`
 	State            types.String   `tfsdk:"state"`
 	Host             types.String   `tfsdk:"host"`
@@ -654,4 +656,39 @@ type ByocEnvironment struct {
 	K8sVersion    types.String `tfsdk:"k8s_version"`
 	AgentApiKey   types.String `tfsdk:"agent_api_key"`
 	InstallHint   types.String `tfsdk:"install_hint"`
+}
+
+type AmpBranch struct {
+	AccountID     types.String   `tfsdk:"account_id"`
+	EnvironmentID types.String   `tfsdk:"environment_id"`
+	ClusterName   types.String   `tfsdk:"cluster_name"`
+	BranchName    types.String   `tfsdk:"branch_name"`
+	ParentBranch  types.String   `tfsdk:"parent_branch"`
+	ForkPointLsn  types.String   `tfsdk:"fork_point_lsn"`
+	PgSettings    types.Map      `tfsdk:"pg_settings"`
+	Extensions    []types.String `tfsdk:"extensions"`
+	BranchID      types.String   `tfsdk:"branch_id"`
+	State         types.String   `tfsdk:"state"`
+}
+
+type AmpEndpoint struct {
+	AccountID        types.String   `tfsdk:"account_id"`
+	EnvironmentID    types.String   `tfsdk:"environment_id"`
+	ClusterName      types.String   `tfsdk:"cluster_name"`
+	BranchName       types.String   `tfsdk:"branch_name"`
+	EndpointName     types.String   `tfsdk:"endpoint_name"`
+	Role             types.String   `tfsdk:"role"`
+	Password         types.String   `tfsdk:"password"`
+	Cpu              types.String   `tfsdk:"cpu"`
+	Memory           types.String   `tfsdk:"memory"`
+	ConnectivityMode types.String   `tfsdk:"connectivity_mode"`
+	AllowedCidrs     []types.String `tfsdk:"allowed_cidrs"`
+	PgSettings       types.Map      `tfsdk:"pg_settings"`
+	EndpointID       types.String   `tfsdk:"endpoint_id"`
+	State            types.String   `tfsdk:"state"`
+	Host             types.String   `tfsdk:"host"`
+	Port             types.String   `tfsdk:"port"`
+	Username         types.String   `tfsdk:"username"`
+	Database         types.String   `tfsdk:"database"`
+	TlsCaCertificate types.String   `tfsdk:"tls_ca_certificate"`
 }

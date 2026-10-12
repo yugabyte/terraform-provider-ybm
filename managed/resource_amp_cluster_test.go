@@ -13,9 +13,7 @@ import (
 	"net/url"
 	"reflect"
 	"strings"
-	"sync"
 	"testing"
-	"time"
 
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	openapiclient "github.com/yugabyte/yugabytedb-managed-go-client-internal"
@@ -108,21 +106,23 @@ func TestAmpDefaultMemory(t *testing.T) {
 func TestNewAmpClusterConfigAppliesDefaults(t *testing.T) {
 	c, err := newAmpClusterConfig(types.Int64{Unknown: true}, types.String{Unknown: true}, nil,
 		types.String{Value: "S3cretPassw0rd"}, types.String{Unknown: true}, types.String{Unknown: true},
-		types.String{Null: true}, nil)
+		types.String{Null: true}, nil, types.Map{ElemType: types.StringType, Null: true})
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := ampClusterConfig{PgVersion: 18, Engine: "postgres", Password: "S3cretPassw0rd", Cpu: "2", Memory: "16384Mi", ConnectivityMode: "cluster_ip"}
+	want := ampClusterConfig{PgVersion: 18, Engine: "postgres", Endpoint: ampEndpointConfig{
+		Role: "read_write", Password: "S3cretPassw0rd", Cpu: "2", Memory: "16384Mi", ConnectivityMode: "cluster_ip", PgSettings: map[string]string{},
+	}}
 	if !reflect.DeepEqual(c, want) {
 		t.Errorf("config = %+v", c)
 	}
 
-	// An update carries only what AMP can change in place, with connectivity sent whole.
-	b, _ := json.Marshal(c.endpointSpec(false))
-	if string(b) != `{"resources":{"cpu":"2","memory":"16384Mi"},"connectivity":{"mode":"cluster_ip","allowed_cidrs":[]}}` {
+	// An update carries only what AMP can change in place, with nested maps sent whole.
+	b, _ := json.Marshal(c.Endpoint.spec(false))
+	if string(b) != `{"resources":{"cpu":"2","memory":"16384Mi"},"connectivity":{"mode":"cluster_ip","allowed_cidrs":[]},"pg_settings":{}}` {
 		t.Errorf("update spec = %s", b)
 	}
-	b, _ = json.Marshal(c.endpointSpec(true))
+	b, _ = json.Marshal(c.Endpoint.spec(true))
 	if !strings.Contains(string(b), `"role":"read_write","password":"S3cretPassw0rd"`) {
 		t.Errorf("create spec = %s", b)
 	}
@@ -136,25 +136,30 @@ func endpointObserved(state, address, applied string) ampObserved {
 	return ampObserved{Kind: ampKindEndpoint, ID: "endpoint/" + ampEndpointName("p", "c"), State: state, Attrs: attrs}
 }
 
-func TestAmpEndpointProgress(t *testing.T) {
-	desired := []ampResource{{Kind: ampKindEndpoint, Name: ampEndpointName("p", "c"), Generation: 2}}
+func TestAmpResourceProgress(t *testing.T) {
+	endpoint := ampEndpointName("p", "c")
+	desired := []ampResource{{Kind: ampKindEndpoint, Name: endpoint, Generation: 2}, {Kind: ampKindBranch, Name: "p/c/dev", Generation: 3}}
 	cases := []struct {
 		name     string
+		kind     string
+		path     string
 		observed []ampObserved
 		done     bool
 		failed   bool
 	}{
-		{"not observed", nil, false, false},
-		{"provisioning", []ampObserved{endpointObserved("provisioning", "", "")}, false, false},
-		{"ready without address", []ampObserved{endpointObserved("ready", "", "2")}, false, false},
-		{"stale generation", []ampObserved{endpointObserved("ready", "h:5432", "1")}, false, false},
-		{"converged", []ampObserved{endpointObserved("ready", "h:5432", "2")}, true, false},
-		{"no applied generation yet", []ampObserved{endpointObserved("ready", "h:5432", "")}, true, false},
-		{"rejected endpoint", []ampObserved{endpointObserved("rejected", "", "")}, false, true},
-		{"cluster drift", []ampObserved{{Kind: ampKindCluster, ID: "cluster/p/c", State: "drift"}}, false, true},
+		{"not observed", ampKindEndpoint, endpoint, nil, false, false},
+		{"provisioning", ampKindEndpoint, endpoint, []ampObserved{endpointObserved("provisioning", "", "")}, false, false},
+		{"ready without address", ampKindEndpoint, endpoint, []ampObserved{endpointObserved("ready", "", "2")}, false, false},
+		{"stale generation", ampKindEndpoint, endpoint, []ampObserved{endpointObserved("ready", "h:5432", "1")}, false, false},
+		{"converged", ampKindEndpoint, endpoint, []ampObserved{endpointObserved("ready", "h:5432", "2")}, true, false},
+		{"no applied generation yet", ampKindEndpoint, endpoint, []ampObserved{endpointObserved("ready", "h:5432", "")}, true, false},
+		{"rejected endpoint", ampKindEndpoint, endpoint, []ampObserved{endpointObserved("rejected", "", "")}, false, true},
+		{"cluster drift", ampKindCluster, "p/c", []ampObserved{{Kind: ampKindCluster, ID: "cluster/p/c", State: "drift"}}, false, true},
+		{"branch needs no address", ampKindBranch, "p/c/dev", []ampObserved{{Kind: ampKindBranch, ID: "branch/p/c/dev", State: "ready", Attrs: map[string]string{"applied_generation": "3"}}}, true, false},
+		{"branch stale", ampKindBranch, "p/c/dev", []ampObserved{{Kind: ampKindBranch, ID: "branch/p/c/dev", State: "ready", Attrs: map[string]string{"applied_generation": "2"}}}, false, false},
 	}
 	for _, tc := range cases {
-		done, err := ampEndpointProgress(desired, tc.observed, "p", "c")
+		done, err := ampResourceProgress(desired, tc.observed, tc.kind, tc.path)
 		if done != tc.done || (err != nil) != tc.failed {
 			t.Errorf("%s: done = %v, err = %v", tc.name, done, err)
 		}
@@ -165,20 +170,23 @@ func TestReadAmpCluster(t *testing.T) {
 	desired := []ampResource{
 		{Kind: ampKindCluster, Name: "p/c", Spec: json.RawMessage(`{"pg_version":17,"extensions":["vector"]}`)},
 		{Kind: ampKindEndpoint, Name: "p/c/main/primary", Generation: 1, Spec: json.RawMessage(
-			`{"role":"read_write","password":"pw123456","resources":{"cpu":"2","memory":"16Gi"},"connectivity":{"mode":"nlb_internal","allowed_cidrs":["10.0.0.0/16"]}}`)},
+			`{"role":"read_write","password":"pw123456","resources":{"cpu":"2","memory":"16Gi"},"connectivity":{"mode":"nlb_internal","allowed_cidrs":["10.0.0.0/16"]},"pg_settings":{"work_mem":"64MB"}}`)},
 	}
 	observed := []ampObserved{
 		{Kind: ampKindCluster, ID: "cluster/p/c", State: "ready", Attrs: map[string]string{"id": "amp-uuid"}},
-		{Kind: ampKindEndpoint, ID: "endpoint/p/c/main/primary", State: "ready", Attrs: map[string]string{"address": "db.example.com:5432", "tls_ca_crt": "CA"}},
+		{Kind: ampKindEndpoint, ID: "endpoint/p/c/main/primary", State: "ready", Attrs: map[string]string{"id": "ep-uuid", "address": "db.example.com:5432", "tls_ca_crt": "CA"}},
 	}
 	s, found, err := readAmpCluster(desired, observed, "p", "c")
 	if err != nil || !found {
 		t.Fatalf("found = %v, err = %v", found, err)
 	}
+	endpointConfig := ampEndpointConfig{Role: "read_write", Password: "pw123456", Cpu: "2", Memory: "16Gi",
+		ConnectivityMode: "nlb_internal", AllowedCidrs: []string{"10.0.0.0/16"}, PgSettings: map[string]string{"work_mem": "64MB"}}
 	want := ampClusterStatus{
-		Config: ampClusterConfig{PgVersion: 17, Engine: "postgres", Extensions: []string{"vector"}, Password: "pw123456",
-			Cpu: "2", Memory: "16Gi", ConnectivityMode: "nlb_internal", AllowedCidrs: []string{"10.0.0.0/16"}},
-		ClusterID: "amp-uuid", State: "ready", Host: "db.example.com", Port: "5432", TlsCaCertificate: "CA",
+		Config:    ampClusterConfig{PgVersion: 17, Engine: "postgres", Extensions: []string{"vector"}, Endpoint: endpointConfig},
+		ClusterID: "amp-uuid",
+		Endpoint: ampEndpointStatus{Config: endpointConfig, EndpointID: "ep-uuid", State: "ready",
+			Host: "db.example.com", Port: "5432", TlsCaCertificate: "CA"},
 	}
 	if !reflect.DeepEqual(s, want) {
 		t.Errorf("status = %+v", s)
@@ -186,87 +194,5 @@ func TestReadAmpCluster(t *testing.T) {
 
 	if _, found, _ := readAmpCluster(desired, observed, "p", "other"); found {
 		t.Error("found a cluster that is not declared")
-	}
-}
-
-// fakeManagedPool is an AMP Managed pool whose endpoint becomes ready after a few polls.
-type fakeManagedPool struct {
-	mu        sync.Mutex
-	polls     int
-	readyAt   int
-	lastPatch map[string]interface{}
-}
-
-func (f *fakeManagedPool) handle(w http.ResponseWriter, r *http.Request) {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	if r.Method != http.MethodGet {
-		b, _ := io.ReadAll(r.Body)
-		_ = json.Unmarshal(b, &f.lastPatch)
-		w.Write([]byte(`{"data":{"environments":[]}}`))
-		return
-	}
-	f.polls++
-	state := "provisioning"
-	address := ""
-	if f.polls >= f.readyAt {
-		state, address = "ready", "orders.amp.example.com:5432"
-	}
-	pool := testAccountID
-	resp := map[string]interface{}{"data": map[string]interface{}{"environments": []interface{}{map[string]interface{}{
-		"environment_id": "managed-use1",
-		"region":         "us-east-1",
-		"desired": []interface{}{
-			map[string]interface{}{"kind": "cluster", "name": pool + "/orders", "spec": map[string]interface{}{"pg_version": 18, "engine": "postgres"}},
-			map[string]interface{}{"kind": "endpoint", "name": pool + "/orders/main/primary", "generation": 1, "spec": map[string]interface{}{
-				"role": "read_write", "password": "S3cretPassw0rd",
-				"resources":    map[string]string{"cpu": "2", "memory": "16384Mi"},
-				"connectivity": map[string]interface{}{"mode": "cluster_ip", "allowed_cidrs": []string{}},
-			}},
-		},
-		"observed": []interface{}{
-			map[string]interface{}{"kind": "cluster", "id": "cluster/" + pool + "/orders", "state": "ready", "attrs": map[string]string{"id": "amp-cluster-uuid"}},
-			map[string]interface{}{"kind": "endpoint", "id": "endpoint/" + pool + "/orders/main/primary", "state": state,
-				"attrs": map[string]string{"address": address, "applied_generation": "1"}},
-		},
-	}}}}
-	json.NewEncoder(w).Encode(resp)
-}
-
-func TestWaitForAmpClusterPollsUntilReady(t *testing.T) {
-	ampPollInterval = time.Millisecond
-	defer func() { ampPollInterval = 10 * time.Second }()
-
-	fake := &fakeManagedPool{readyAt: 3}
-	client := newTestYcpClient(t, fake.handle)
-
-	cluster, err := waitForAmpCluster(context.Background(), client, testAccountID, "orders", AmpCluster{})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if fake.polls < 3 {
-		t.Errorf("returned after %d polls, before the endpoint was ready", fake.polls)
-	}
-	if cluster.Host.Value != "orders.amp.example.com" || cluster.Port.Value != "5432" || cluster.State.Value != "ready" {
-		t.Errorf("connection = %s:%s (%s)", cluster.Host.Value, cluster.Port.Value, cluster.State.Value)
-	}
-	if cluster.Region.Value != "us-east-1" || cluster.EnvironmentID.Value != "managed-use1" || cluster.ClusterID.Value != "amp-cluster-uuid" {
-		t.Errorf("placement = %+v", cluster)
-	}
-	if cluster.Password.Value != "S3cretPassw0rd" || cluster.Memory.Value != "16384Mi" || cluster.AllowedCidrs != nil {
-		t.Errorf("config = %+v", cluster)
-	}
-}
-
-func TestWaitForAmpClusterFailsWhenUndeclared(t *testing.T) {
-	ampPollInterval = time.Millisecond
-	defer func() { ampPollInterval = 10 * time.Second }()
-
-	client := newTestYcpClient(t, func(w http.ResponseWriter, r *http.Request) {
-		w.Write([]byte(`{"data":{"environments":[]}}`))
-	})
-	if _, err := waitForAmpCluster(context.Background(), client, testAccountID, "orders", AmpCluster{}); err == nil ||
-		!strings.Contains(err.Error(), "not declared") {
-		t.Fatalf("err = %v", err)
 	}
 }

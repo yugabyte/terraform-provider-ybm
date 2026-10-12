@@ -1,0 +1,30 @@
+---
+page_title: "{{.Name}} {{.Type}} - {{.RenderedProviderName}}"
+description: |-
+{{ .Description | plainmarkdown | trimspace | prefixlines "  " }}
+---
+
+# {{.Name}} ({{.Type}})
+
+{{ .Description | trimspace }}
+
+~> **Note:** This resource is behind a feature flag. Set the environment variable `YBM_FF_AMP=true` to use it.
+
+Set `environment_id` for a cluster in a BYOC environment; leave it unset for a shared cluster.
+
+`cpu`, `memory`, `allowed_cidrs` and `pg_settings` can be changed in place. Changing `cluster_name`, `branch_name`, `endpoint_name`, `role`, `connectivity_mode` or `environment_id` replaces the endpoint. A `read_write` endpoint requires `password`, which cannot be changed after creation; a `read_only` endpoint takes none. A branch has at most one `read_write` endpoint, and the cluster resources already create one, named `primary`, on `main`.
+
+## Example Usage
+
+{{ tffile "examples/resources/ybm_amp_endpoint/resource.tf" }}
+
+{{ .SchemaMarkdown | trimspace }}
+{{- if .HasImport }}
+
+## Import
+
+Import is supported using the following syntax:
+
+{{ codefile "shell" "examples/resources/ybm_amp_endpoint/import.sh" }}
+
+{{- end }}

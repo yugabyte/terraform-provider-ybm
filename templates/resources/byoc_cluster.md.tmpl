@@ -12,7 +12,7 @@ description: |-
 
 The environment's agent must have enrolled before a cluster can be created in it. An apply that creates the cluster fails immediately while the environment is still `PENDING`; install the agent with the environment's `install_hint` and apply again.
 
-Updating `cpu`, `memory` or `allowed_cidrs` changes the cluster in place. Changing `environment_id`, `cluster_name`, `pg_version`, `engine`, `extensions` or `connectivity_mode` replaces the cluster, which deletes its data. `password` cannot be changed after creation.
+Updating `cpu`, `memory`, `allowed_cidrs` or `pg_settings` changes the cluster in place. Manage branches and additional endpoints with `ybm_amp_branch` and `ybm_amp_endpoint`. Changing `environment_id`, `cluster_name`, `pg_version`, `engine`, `extensions` or `connectivity_mode` replaces the cluster, which deletes its data. `password` cannot be changed after creation.
 
 ## Example Usage
 

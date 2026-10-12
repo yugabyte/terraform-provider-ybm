@@ -7,7 +7,6 @@ package managed
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -18,7 +17,6 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
-	retry "github.com/sethvargo/go-retry"
 	openapiclient "github.com/yugabyte/yugabytedb-managed-go-client-internal"
 )
 
@@ -42,7 +40,8 @@ func (r resourceByocClusterType) GetSchema(_ context.Context) (tfsdk.Schema, dia
 	}
 	return tfsdk.Schema{
 		Description: `The resource to create a PostgreSQL cluster in a BYOC environment registered with ybm_byoc_environment. ` +
-			`The cluster is created with one read-write endpoint once the environment's agent picks it up.`,
+			`The cluster is created with one read-write endpoint on its main branch once the environment's agent picks it up. ` +
+			`Add branches and endpoints with ybm_amp_branch and ybm_amp_endpoint.`,
 		Attributes: attributes,
 	}, nil
 }
@@ -107,69 +106,29 @@ func updateByocDesired(ctx context.Context, apiClient *openapiclient.APIClient, 
 }
 
 func mustMarshal(v interface{}) json.RawMessage {
+	if raw, ok := v.(json.RawMessage); ok {
+		return raw
+	}
 	b, _ := json.Marshal(v)
 	return b
 }
 
-// withByocCluster returns desired with the cluster and its endpoint set to config. The pool is the
-// account ID, as for AMP Managed clusters, and is declared once for every cluster in it.
-func withByocCluster(desired []ampResource, pool string, clusterName string, config ampClusterConfig, create bool) ([]ampResource, error) {
-	clusterPath := ampClusterName(pool, clusterName)
-	endpointPath := ampEndpointName(pool, clusterName)
-	_, exists := findAmpDesired(desired, ampKindCluster, clusterPath)
-	if create && exists {
-		return nil, fmt.Errorf("cluster %s already exists in the environment", clusterName)
+// requireActiveByocEnvironment fails fast, rather than waiting out the timeout, for an environment
+// whose agent will not act on desired state.
+func requireActiveByocEnvironment(ctx context.Context, apiClient *openapiclient.APIClient, accountId string, environmentId string) error {
+	env, err := getByocEnvironment(ctx, apiClient, accountId, environmentId)
+	if err != nil {
+		return err
 	}
-	if !create && !exists {
-		return nil, fmt.Errorf("cluster %s no longer exists in the environment", clusterName)
+	if reason, inactive := byocInactiveStates[env.State]; inactive {
+		return fmt.Errorf("environment %s is %s: %s", environmentId, env.State, reason)
 	}
-
-	if _, ok := findAmpDesired(desired, ampKindStoragePool, pool); !ok {
-		desired = append(desired, ampResource{Kind: ampKindStoragePool, Name: pool, Spec: mustMarshal(map[string]string{"owner_user_id": pool})})
-	}
-	if create {
-		desired = append(desired, ampResource{Kind: ampKindCluster, Name: clusterPath, Spec: mustMarshal(config.clusterSpec())})
-	}
-	endpointSpec := mustMarshal(config.endpointSpec(true))
-	for i := range desired {
-		if desired[i].Kind == ampKindEndpoint && desired[i].Name == endpointPath {
-			desired[i].Spec = endpointSpec
-			return desired, nil
-		}
-	}
-	return append(desired, ampResource{Kind: ampKindEndpoint, Name: endpointPath, Spec: endpointSpec}), nil
-}
-
-// withoutByocCluster returns desired without the cluster and everything under it, and without the
-// pool once no cluster is left in it.
-func withoutByocCluster(desired []ampResource, pool string, clusterName string) []ampResource {
-	clusterPath := ampClusterName(pool, clusterName)
-	kept := make([]ampResource, 0, len(desired))
-	poolUsed := false
-	for _, r := range desired {
-		if r.Name == clusterPath || strings.HasPrefix(r.Name, clusterPath+"/") {
-			continue
-		}
-		if strings.HasPrefix(r.Name, pool+"/") {
-			poolUsed = true
-		}
-		kept = append(kept, r)
-	}
-	if poolUsed {
-		return kept
-	}
-	out := kept[:0]
-	for _, r := range kept {
-		if !(r.Kind == ampKindStoragePool && r.Name == pool) {
-			out = append(out, r)
-		}
-	}
-	return out
+	return nil
 }
 
 func byocClusterConfigFromPlan(plan ByocCluster) (ampClusterConfig, error) {
 	return newAmpClusterConfig(plan.PgVersion, plan.Engine, plan.Extensions, plan.Password,
-		plan.Cpu, plan.Memory, plan.ConnectivityMode, plan.AllowedCidrs)
+		plan.Cpu, plan.Memory, plan.ConnectivityMode, plan.AllowedCidrs, plan.PgSettings)
 }
 
 func (r resourceByocCluster) Create(ctx context.Context, req tfsdk.CreateResourceRequest, resp *tfsdk.CreateResourceResponse) {
@@ -186,9 +145,7 @@ func (r resourceByocCluster) Create(ctx context.Context, req tfsdk.CreateResourc
 	if resp.Diagnostics.HasError() {
 		return
 	}
-	apiClient := r.p.client
-
-	accountId, getAccountOK, message := getAccountId(ctx, apiClient)
+	accountId, getAccountOK, message := getAccountId(ctx, r.p.client)
 	if !getAccountOK {
 		resp.Diagnostics.AddError("Unable to get account ID", message)
 		return
@@ -200,107 +157,63 @@ func (r resourceByocCluster) Create(ctx context.Context, req tfsdk.CreateResourc
 	}
 	environmentId := plan.EnvironmentID.Value
 	clusterName := plan.ClusterName.Value
-
-	// Fail now rather than wait out the timeout for an agent that will not act.
-	env, err := getByocEnvironment(ctx, apiClient, accountId, environmentId)
-	if err != nil {
-		resp.Diagnostics.AddError("Unable to read environment "+environmentId, err.Error())
-		return
-	}
-	if reason, inactive := byocInactiveStates[env.State]; inactive {
-		resp.Diagnostics.AddError("Environment "+environmentId+" cannot run clusters",
-			fmt.Sprintf("The environment is %s: %s.", env.State, reason))
+	if err := requireActiveByocEnvironment(ctx, r.p.client, accountId, environmentId); err != nil {
+		resp.Diagnostics.AddError("Environment "+environmentId+" cannot run clusters", err.Error())
 		return
 	}
 
-	err = updateByocDesired(ctx, apiClient, accountId, environmentId, func(desired []ampResource) ([]ampResource, error) {
-		return withByocCluster(desired, accountId, clusterName, config, true)
-	})
-	if err != nil {
+	scope := newAmpScope(r.p.client, accountId, environmentId)
+	if err := scope.apply(ctx, "", ampIntentCreate, ampCreateClusterItems(scope.pool(), clusterName, config)); err != nil {
 		resp.Diagnostics.AddError("Unable to create cluster "+clusterName, err.Error())
 		return
 	}
-
-	cluster, err := waitForByocCluster(ctx, apiClient, accountId, environmentId, clusterName, plan)
-	if err != nil {
+	if err := waitForAmp(ctx, scope, ampClusterTargets(scope.pool(), clusterName)); err != nil {
 		resp.Diagnostics.AddError("Cluster "+clusterName+" did not become ready", err.Error())
+		return
+	}
+	cluster, _, err := resourceByocClusterRead(ctx, scope, clusterName, plan)
+	if err != nil {
+		resp.Diagnostics.AddError("Unable to read the state of cluster "+clusterName, err.Error())
 		return
 	}
 	resp.Diagnostics.Append(resp.State.Set(ctx, &cluster)...)
 }
 
-func resourceByocClusterRead(ctx context.Context, apiClient *openapiclient.APIClient, accountId string, environmentId string, clusterName string, prior ByocCluster) (cluster ByocCluster, found bool, err error) {
-	desired, err := getByocDesired(ctx, apiClient, accountId, environmentId)
+func resourceByocClusterRead(ctx context.Context, scope ampScope, clusterName string, prior ByocCluster) (cluster ByocCluster, found bool, err error) {
+	snap, err := scope.snapshot(ctx)
 	if err != nil {
 		return cluster, false, err
 	}
-	env, err := getByocEnvironment(ctx, apiClient, accountId, environmentId)
-	if err != nil {
-		return cluster, false, err
-	}
-	status, ok, err := readAmpCluster(desired, env.Resources, accountId, clusterName)
+	status, ok, err := readAmpCluster(snap[0].Desired, snap[0].Observed, scope.pool(), clusterName)
 	if err != nil || !ok {
 		return cluster, ok, err
 	}
+	ep := status.Endpoint
 	cluster = ByocCluster{
-		AccountID:        types.String{Value: accountId},
-		EnvironmentID:    types.String{Value: environmentId},
+		AccountID:        types.String{Value: scope.accountId},
+		EnvironmentID:    types.String{Value: scope.environmentId},
 		ClusterName:      types.String{Value: clusterName},
 		PgVersion:        types.Int64{Value: status.Config.PgVersion},
 		Engine:           types.String{Value: status.Config.Engine},
 		Extensions:       stringsToTf(status.Config.Extensions),
-		Password:         tfString(status.Config.Password),
-		Cpu:              tfString(status.Config.Cpu),
-		Memory:           tfString(status.Config.Memory),
-		ConnectivityMode: tfString(status.Config.ConnectivityMode),
-		AllowedCidrs:     stringsToTf(status.Config.AllowedCidrs),
+		Password:         tfString(ep.Config.Password),
+		Cpu:              tfString(ep.Config.Cpu),
+		Memory:           tfString(ep.Config.Memory),
+		ConnectivityMode: tfString(ep.Config.ConnectivityMode),
+		AllowedCidrs:     stringsToTf(ep.Config.AllowedCidrs),
+		PgSettings:       mapToTf(ep.Config.PgSettings),
 		ClusterID:        tfString(status.ClusterID),
-		State:            tfString(status.State),
-		Host:             tfString(status.Host),
-		Port:             tfString(status.Port),
+		State:            tfString(ep.State),
+		Host:             tfString(ep.Host),
+		Port:             tfString(ep.Port),
 		Username:         types.String{Value: ampUsername},
 		Database:         types.String{Value: ampDatabase},
-		TlsCaCertificate: tfString(status.TlsCaCertificate),
+		TlsCaCertificate: tfString(ep.TlsCaCertificate),
 	}
 	if cluster.Password.Null && !prior.Password.Null {
 		cluster.Password = prior.Password
 	}
 	return cluster, true, nil
-}
-
-// waitForByocCluster polls until the environment's agent reports the cluster's read-write
-// endpoint as converged, then returns the cluster as read.
-func waitForByocCluster(ctx context.Context, apiClient *openapiclient.APIClient, accountId string, environmentId string, clusterName string, prior ByocCluster) (ByocCluster, error) {
-	var terminal error
-	retryPolicy := retry.WithMaxDuration(ampOperationTimeout, retry.NewConstant(ampPollInterval))
-	err := retry.Do(ctx, retryPolicy, func(ctx context.Context) error {
-		desired, err := getByocDesired(ctx, apiClient, accountId, environmentId)
-		if err != nil {
-			return retry.RetryableError(err)
-		}
-		env, err := getByocEnvironment(ctx, apiClient, accountId, environmentId)
-		if err != nil {
-			return retry.RetryableError(err)
-		}
-		done, err := ampEndpointProgress(desired, env.Resources, accountId, clusterName)
-		if err != nil {
-			terminal = err
-			return err
-		}
-		if done {
-			return nil
-		}
-		tflog.Debug(ctx, fmt.Sprintf("Cluster %s has not converged yet; environment %s is %s", clusterName, environmentId, env.State))
-		return retry.RetryableError(errors.New("the cluster is not ready yet"))
-	})
-	if terminal != nil {
-		return ByocCluster{}, terminal
-	}
-	if err != nil {
-		return ByocCluster{}, fmt.Errorf("timed out after %v waiting for the environment's agent to bring the cluster up; check that the agent is running", ampOperationTimeout)
-	}
-	cluster, _, err := resourceByocClusterRead(ctx, apiClient, accountId, environmentId, clusterName, prior)
-	return cluster, err
 }
 
 func (r resourceByocCluster) Read(ctx context.Context, req tfsdk.ReadResourceRequest, resp *tfsdk.ReadResourceResponse) {
@@ -320,7 +233,8 @@ func (r resourceByocCluster) Read(ctx context.Context, req tfsdk.ReadResourceReq
 		}
 	}
 
-	cluster, found, err := resourceByocClusterRead(ctx, r.p.client, accountId, state.EnvironmentID.Value, state.ClusterName.Value, state)
+	scope := newAmpScope(r.p.client, accountId, state.EnvironmentID.Value)
+	cluster, found, err := resourceByocClusterRead(ctx, scope, state.ClusterName.Value, state)
 	if isYcpNotFound(err) || (err == nil && !found) {
 		tflog.Warn(ctx, "Cluster "+state.ClusterName.Value+" no longer exists; removing it from state")
 		resp.State.RemoveResource(ctx)
@@ -340,9 +254,7 @@ func (r resourceByocCluster) Update(ctx context.Context, req tfsdk.UpdateResourc
 	if resp.Diagnostics.HasError() {
 		return
 	}
-	apiClient := r.p.client
-	accountId := state.AccountID.Value
-	environmentId := state.EnvironmentID.Value
+	scope := newAmpScope(r.p.client, state.AccountID.Value, state.EnvironmentID.Value)
 	clusterName := state.ClusterName.Value
 
 	config, err := byocClusterConfigFromPlan(plan)
@@ -350,17 +262,18 @@ func (r resourceByocCluster) Update(ctx context.Context, req tfsdk.UpdateResourc
 		resp.Diagnostics.AddError("Invalid cluster configuration", err.Error())
 		return
 	}
-	err = updateByocDesired(ctx, apiClient, accountId, environmentId, func(desired []ampResource) ([]ampResource, error) {
-		return withByocCluster(desired, accountId, clusterName, config, false)
-	})
-	if err != nil {
+	items := []ampPatchItem{{Kind: ampKindEndpoint, Name: ampEndpointName(scope.pool(), clusterName), Spec: config.Endpoint.spec(false)}}
+	if err := scope.apply(ctx, "", ampIntentUpdate, items); err != nil {
 		resp.Diagnostics.AddError("Unable to update cluster "+clusterName, err.Error())
 		return
 	}
-
-	cluster, err := waitForByocCluster(ctx, apiClient, accountId, environmentId, clusterName, plan)
-	if err != nil {
+	if err := waitForAmp(ctx, scope, ampClusterTargets(scope.pool(), clusterName)); err != nil {
 		resp.Diagnostics.AddError("Cluster "+clusterName+" did not converge", err.Error())
+		return
+	}
+	cluster, _, err := resourceByocClusterRead(ctx, scope, clusterName, plan)
+	if err != nil {
+		resp.Diagnostics.AddError("Unable to read the state of cluster "+clusterName, err.Error())
 		return
 	}
 	resp.Diagnostics.Append(resp.State.Set(ctx, &cluster)...)
@@ -372,14 +285,11 @@ func (r resourceByocCluster) Delete(ctx context.Context, req tfsdk.DeleteResourc
 	if resp.Diagnostics.HasError() {
 		return
 	}
-	apiClient := r.p.client
-	accountId := state.AccountID.Value
-	environmentId := state.EnvironmentID.Value
+	scope := newAmpScope(r.p.client, state.AccountID.Value, state.EnvironmentID.Value)
 	clusterName := state.ClusterName.Value
+	clusterPath := ampClusterName(scope.pool(), clusterName)
 
-	err := updateByocDesired(ctx, apiClient, accountId, environmentId, func(desired []ampResource) ([]ampResource, error) {
-		return withoutByocCluster(desired, accountId, clusterName), nil
-	})
+	err := scope.apply(ctx, "", ampIntentDelete, []ampPatchItem{{Kind: ampKindCluster, Name: clusterPath}})
 	if isYcpNotFound(err) {
 		resp.State.RemoveResource(ctx)
 		return
@@ -388,23 +298,8 @@ func (r resourceByocCluster) Delete(ctx context.Context, req tfsdk.DeleteResourc
 		resp.Diagnostics.AddError("Unable to delete cluster "+clusterName, err.Error())
 		return
 	}
-
 	// The agent garbage-collects what desired state no longer declares.
-	retryPolicy := retry.WithMaxDuration(ampOperationTimeout, retry.NewConstant(ampPollInterval))
-	err = retry.Do(ctx, retryPolicy, func(ctx context.Context) error {
-		env, err := getByocEnvironment(ctx, apiClient, accountId, environmentId)
-		if isYcpNotFound(err) {
-			return nil
-		}
-		if err != nil {
-			return retry.RetryableError(err)
-		}
-		if _, ok := findAmpObserved(env.Resources, ampKindCluster, ampClusterName(accountId, clusterName)); ok {
-			return retry.RetryableError(errors.New("the cluster is still being deleted"))
-		}
-		return nil
-	})
-	if err != nil {
+	if err := waitForAmpGone(ctx, scope, ampKindCluster, clusterPath); err != nil {
 		resp.Diagnostics.AddError("Unable to delete cluster "+clusterName, "The operation timed out waiting for the environment's agent to delete the cluster.")
 		return
 	}

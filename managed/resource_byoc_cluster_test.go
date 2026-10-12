@@ -7,7 +7,6 @@ package managed
 import (
 	"context"
 	"encoding/json"
-	"io"
 	"net/http"
 	"strings"
 	"sync"
@@ -22,20 +21,26 @@ func desiredNames(resources []ampResource) []string {
 	return names
 }
 
-func TestWithByocClusterAddsPoolOnceAndKeepsOtherResources(t *testing.T) {
-	config := ampClusterConfig{PgVersion: 18, Engine: "postgres", Password: "pw123456", Cpu: "2", Memory: "16Gi", ConnectivityMode: "cluster_ip"}
+func TestApplyAmpIntentMatchesManagedPatchSemantics(t *testing.T) {
 	foreign := ampResource{Kind: ampKindCluster, Name: "other-pool/legacy", Spec: json.RawMessage(`{"pg_version":16}`), Generation: 4}
+	desired := []ampResource{foreign}
 
-	desired, err := withByocCluster([]ampResource{foreign}, "p", "a", config, true)
-	if err != nil {
-		t.Fatal(err)
+	create := func(kind, name string, spec interface{}) {
+		t.Helper()
+		var err error
+		desired, err = applyAmpIntent(desired, "p", ampIntentCreate, []ampPatchItem{{Kind: kind, Name: name, Spec: spec}})
+		if err != nil {
+			t.Fatal(err)
+		}
 	}
-	desired, err = withByocCluster(desired, "p", "b", config, true)
-	if err != nil {
-		t.Fatal(err)
-	}
+	create(ampKindCluster, "p/a", map[string]int{"pg_version": 18})
+	create(ampKindEndpoint, "p/a/main/primary", map[string]interface{}{"role": "read_write", "resources": map[string]string{"cpu": "2", "memory": "16Gi"}})
+	create(ampKindBranch, "p/a/dev", map[string]interface{}{})
+	create(ampKindEndpoint, "p/a/dev/rw", map[string]interface{}{})
+	create(ampKindCluster, "p/ab", map[string]int{"pg_version": 18})
+
 	got := strings.Join(desiredNames(desired), ",")
-	want := "cluster:other-pool/legacy,storage-pool:p,cluster:p/a,endpoint:p/a/main/primary,cluster:p/b,endpoint:p/b/main/primary"
+	want := "cluster:other-pool/legacy,storage-pool:p,cluster:p/a,endpoint:p/a/main/primary,branch:p/a/dev,endpoint:p/a/dev/rw,cluster:p/ab"
 	if got != want {
 		t.Errorf("desired = %s", got)
 	}
@@ -43,78 +48,45 @@ func TestWithByocClusterAddsPoolOnceAndKeepsOtherResources(t *testing.T) {
 		t.Errorf("foreign resource changed: %+v", desired[0])
 	}
 
-	if _, err := withByocCluster(desired, "p", "a", config, true); err == nil {
-		t.Error("created a cluster twice")
+	// A create of an existing resource is a conflict, an update of a missing one is not found.
+	_, err := applyAmpIntent(desired, "p", ampIntentCreate, []ampPatchItem{{Kind: ampKindCluster, Name: "p/a", Spec: map[string]int{}}})
+	if e, ok := err.(*ycpError); !ok || e.StatusCode != http.StatusConflict {
+		t.Errorf("duplicate create: %v", err)
 	}
-	if _, err := withByocCluster(desired, "p", "missing", config, false); err == nil {
-		t.Error("updated a cluster that does not exist")
+	_, err = applyAmpIntent(desired, "p", ampIntentUpdate, []ampPatchItem{{Kind: ampKindBranch, Name: "p/a/missing", Spec: map[string]int{}}})
+	if !isYcpNotFound(err) {
+		t.Errorf("update of a missing resource: %v", err)
 	}
 
-	config.Cpu, config.Memory = "4", "32Gi"
-	updated, err := withByocCluster(desired, "p", "a", config, false)
+	// An update merges top-level keys and replaces nested maps whole.
+	desired, err = applyAmpIntent(desired, "p", ampIntentUpdate, []ampPatchItem{{Kind: ampKindEndpoint, Name: "p/a/main/primary",
+		Spec: map[string]interface{}{"resources": map[string]string{"cpu": "4"}}}})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(updated) != len(desired) {
-		t.Fatalf("update changed the resource count: %v", desiredNames(updated))
+	ep, _ := findAmpDesired(desired, ampKindEndpoint, "p/a/main/primary")
+	if string(ep.Spec) != `{"resources":{"cpu":"4"},"role":"read_write"}` {
+		t.Errorf("merged spec = %s", ep.Spec)
 	}
-	ep, _ := findAmpDesired(updated, ampKindEndpoint, "p/a/main/primary")
-	if !strings.Contains(string(ep.Spec), `"cpu":"4","memory":"32Gi"`) || !strings.Contains(string(ep.Spec), `"password":"pw123456"`) {
-		t.Errorf("endpoint spec = %s", ep.Spec)
+
+	// A delete cascades, is a no-op for a missing resource, and drops the pool once it is empty.
+	desired, _ = applyAmpIntent(desired, "p", ampIntentDelete, []ampPatchItem{{Kind: ampKindBranch, Name: "p/a/dev"}})
+	desired, _ = applyAmpIntent(desired, "p", ampIntentDelete, []ampPatchItem{{Kind: ampKindBranch, Name: "p/a/dev"}})
+	if got := strings.Join(desiredNames(desired), ","); got != "cluster:other-pool/legacy,storage-pool:p,cluster:p/a,endpoint:p/a/main/primary,cluster:p/ab" {
+		t.Errorf("after deleting the branch: %s", got)
+	}
+	desired, _ = applyAmpIntent(desired, "p", ampIntentDelete, []ampPatchItem{{Kind: ampKindCluster, Name: "p/a"}})
+	desired, _ = applyAmpIntent(desired, "p", ampIntentDelete, []ampPatchItem{{Kind: ampKindCluster, Name: "p/ab"}})
+	if got := strings.Join(desiredNames(desired), ","); got != "cluster:other-pool/legacy" {
+		t.Errorf("after deleting both clusters: %s", got)
 	}
 }
 
-func TestWithoutByocClusterDropsDescendantsAndUnusedPool(t *testing.T) {
-	desired := []ampResource{
-		{Kind: ampKindStoragePool, Name: "p"},
-		{Kind: ampKindCluster, Name: "p/a"},
-		{Kind: ampKindBranch, Name: "p/a/dev"},
-		{Kind: ampKindEndpoint, Name: "p/a/main/primary"},
-		{Kind: ampKindCluster, Name: "p/ab"},
-		{Kind: ampKindEndpoint, Name: "p/ab/main/primary"},
-		{Kind: ampKindCluster, Name: "q/x"},
-	}
-
-	desired = withoutByocCluster(desired, "p", "a")
-	if got := strings.Join(desiredNames(desired), ","); got != "storage-pool:p,cluster:p/ab,endpoint:p/ab/main/primary,cluster:q/x" {
-		t.Errorf("after removing a: %s", got)
-	}
-	desired = withoutByocCluster(desired, "p", "ab")
-	if got := strings.Join(desiredNames(desired), ","); got != "cluster:q/x" {
-		t.Errorf("after removing ab: %s", got)
-	}
-}
-
-// fakeByocEnvironment stores desired state the way YCP does, replacing it on every POST.
-type fakeByocEnvironment struct {
-	mu      sync.Mutex
-	desired []ampResource
-	posts   []map[string]interface{}
-}
-
-func (f *fakeByocEnvironment) handle(w http.ResponseWriter, r *http.Request) {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	if r.Method == http.MethodPost {
-		b, _ := io.ReadAll(r.Body)
-		var body map[string]interface{}
-		_ = json.Unmarshal(b, &body)
-		f.posts = append(f.posts, body)
-		var parsed struct {
-			Resources []ampResource `json:"resources"`
-		}
-		_ = json.Unmarshal(b, &parsed)
-		f.desired = parsed.Resources
-		w.WriteHeader(http.StatusAccepted)
-		return
-	}
-	json.NewEncoder(w).Encode(map[string]interface{}{"data": map[string]interface{}{"resources": f.desired}})
-}
-
-func TestUpdateByocDesiredSerializesConcurrentWriters(t *testing.T) {
-	fake := &fakeByocEnvironment{}
-	client := newTestYcpClient(t, fake.handle)
-	config := ampClusterConfig{PgVersion: 18, Engine: "postgres", Password: "pw123456", Cpu: "2", Memory: "16Gi", ConnectivityMode: "cluster_ip"}
+func TestByocScopeApplySerializesConcurrentWriters(t *testing.T) {
+	fake := newFakeYcp()
+	fake.addByocEnv("env", "READY")
+	client := newTestYcpClient(t, fake.ServeHTTP)
+	scope := newAmpScope(client, testAccountID, "env")
 
 	var wg sync.WaitGroup
 	names := []string{"a", "b", "c", "d", "e", "f", "g", "h"}
@@ -122,10 +94,8 @@ func TestUpdateByocDesiredSerializesConcurrentWriters(t *testing.T) {
 		wg.Add(1)
 		go func(name string) {
 			defer wg.Done()
-			err := updateByocDesired(context.Background(), client, testAccountID, "env", func(d []ampResource) ([]ampResource, error) {
-				return withByocCluster(d, "p", name, config, true)
-			})
-			if err != nil {
+			items := []ampPatchItem{{Kind: ampKindCluster, Name: ampClusterName(scope.pool(), name), Spec: map[string]int{"pg_version": 18}}}
+			if err := scope.apply(context.Background(), "", ampIntentCreate, items); err != nil {
 				t.Error(err)
 			}
 		}(name)
@@ -133,21 +103,8 @@ func TestUpdateByocDesiredSerializesConcurrentWriters(t *testing.T) {
 	wg.Wait()
 
 	for _, name := range names {
-		if _, ok := findAmpDesired(fake.desired, ampKindCluster, "p/"+name); !ok {
+		if _, ok := findAmpDesired(fake.byoc["env"].desired, ampKindCluster, ampClusterName(scope.pool(), name)); !ok {
 			t.Errorf("cluster %s was lost to a concurrent write", name)
 		}
-	}
-
-	// Removing every cluster leaves an empty desired state, which YCP accepts only when asked to.
-	for _, name := range names {
-		if err := updateByocDesired(context.Background(), client, testAccountID, "env", func(d []ampResource) ([]ampResource, error) {
-			return withoutByocCluster(d, "p", name), nil
-		}); err != nil {
-			t.Fatal(err)
-		}
-	}
-	last := fake.posts[len(fake.posts)-1]
-	if len(fake.desired) != 0 || last["allow_empty"] != true {
-		t.Errorf("last post = %v", last)
 	}
 }
