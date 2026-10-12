@@ -174,6 +174,13 @@ func (p *provider) GetResources(_ context.Context) (map[string]tfsdk.ResourceTyp
 		resources["ybm_autoscaler_policy"] = resourceAutoscalerPolicyType{}
 	}
 
+	// Add AMP PostgreSQL resources only if the feature flag is enabled
+	if fflags.IsFeatureFlagEnabled(fflags.AMP) {
+		resources["ybm_amp_cluster"] = resourceAmpClusterType{}
+		resources["ybm_byoc_environment"] = resourceByocEnvironmentType{}
+		resources["ybm_byoc_cluster"] = resourceByocClusterType{}
+	}
+
 	return resources, nil
 }
 

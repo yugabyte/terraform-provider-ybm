@@ -1,0 +1,17 @@
+# A shared PostgreSQL cluster in the account's AMP Managed storage pool
+resource "ybm_amp_cluster" "example" {
+  cluster_name = "orders"
+  region       = "us-east-1"
+  password     = var.amp_password # 8 to 128 printable ASCII characters
+
+  # Optional
+  pg_version        = 18
+  cpu               = "2"
+  memory            = "16Gi" # at least 8Gi per vCPU; defaults to 8Gi per vCPU
+  connectivity_mode = "nlb_internal"
+  allowed_cidrs     = ["10.0.0.0/16"]
+}
+
+output "amp_connection" {
+  value = "postgresql://${ybm_amp_cluster.example.username}@${ybm_amp_cluster.example.host}:${ybm_amp_cluster.example.port}/${ybm_amp_cluster.example.database}"
+}

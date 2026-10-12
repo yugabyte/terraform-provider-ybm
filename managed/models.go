@@ -599,3 +599,59 @@ type AutoscalerScalingRule struct {
 type AutoscalerScalingAction struct {
 	Delta types.Int64 `tfsdk:"delta"`
 }
+
+type AmpCluster struct {
+	AccountID        types.String   `tfsdk:"account_id"`
+	ClusterName      types.String   `tfsdk:"cluster_name"`
+	Region           types.String   `tfsdk:"region"`
+	PgVersion        types.Int64    `tfsdk:"pg_version"`
+	Engine           types.String   `tfsdk:"engine"`
+	Extensions       []types.String `tfsdk:"extensions"`
+	Password         types.String   `tfsdk:"password"`
+	Cpu              types.String   `tfsdk:"cpu"`
+	Memory           types.String   `tfsdk:"memory"`
+	ConnectivityMode types.String   `tfsdk:"connectivity_mode"`
+	AllowedCidrs     []types.String `tfsdk:"allowed_cidrs"`
+	ClusterID        types.String   `tfsdk:"cluster_id"`
+	EnvironmentID    types.String   `tfsdk:"environment_id"`
+	State            types.String   `tfsdk:"state"`
+	Host             types.String   `tfsdk:"host"`
+	Port             types.String   `tfsdk:"port"`
+	Username         types.String   `tfsdk:"username"`
+	Database         types.String   `tfsdk:"database"`
+	TlsCaCertificate types.String   `tfsdk:"tls_ca_certificate"`
+}
+
+type ByocCluster struct {
+	AccountID        types.String   `tfsdk:"account_id"`
+	EnvironmentID    types.String   `tfsdk:"environment_id"`
+	ClusterName      types.String   `tfsdk:"cluster_name"`
+	PgVersion        types.Int64    `tfsdk:"pg_version"`
+	Engine           types.String   `tfsdk:"engine"`
+	Extensions       []types.String `tfsdk:"extensions"`
+	Password         types.String   `tfsdk:"password"`
+	Cpu              types.String   `tfsdk:"cpu"`
+	Memory           types.String   `tfsdk:"memory"`
+	ConnectivityMode types.String   `tfsdk:"connectivity_mode"`
+	AllowedCidrs     []types.String `tfsdk:"allowed_cidrs"`
+	ClusterID        types.String   `tfsdk:"cluster_id"`
+	State            types.String   `tfsdk:"state"`
+	Host             types.String   `tfsdk:"host"`
+	Port             types.String   `tfsdk:"port"`
+	Username         types.String   `tfsdk:"username"`
+	Database         types.String   `tfsdk:"database"`
+	TlsCaCertificate types.String   `tfsdk:"tls_ca_certificate"`
+}
+
+type ByocEnvironment struct {
+	AccountID     types.String `tfsdk:"account_id"`
+	EnvironmentID types.String `tfsdk:"environment_id"`
+	Name          types.String `tfsdk:"name"`
+	Region        types.String `tfsdk:"region"`
+	Placement     types.String `tfsdk:"placement"`
+	State         types.String `tfsdk:"state"`
+	Provider      types.String `tfsdk:"cloud_provider"`
+	K8sVersion    types.String `tfsdk:"k8s_version"`
+	AgentApiKey   types.String `tfsdk:"agent_api_key"`
+	InstallHint   types.String `tfsdk:"install_hint"`
+}
