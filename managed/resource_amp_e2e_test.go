@@ -11,6 +11,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/hashicorp/terraform-plugin-go/tftypes"
 )
@@ -29,6 +30,13 @@ func managedSpec(t *testing.T, h *tfHarness, region, kind, name string) map[stri
 	var spec map[string]interface{}
 	_ = json.Unmarshal(r.Spec, &spec)
 	return spec
+}
+
+func managedDeclared(h *tfHarness, region, kind, name string) bool {
+	h.fake.mu.Lock()
+	defer h.fake.mu.Unlock()
+	_, ok := findAmpDesired(h.fake.managed[region], kind, name)
+	return ok
 }
 
 func byocSpec(t *testing.T, h *tfHarness, env, kind, name string) (map[string]interface{}, bool) {
@@ -62,14 +70,41 @@ func requirePlanNoop(t *testing.T, h *tfHarness, name string, state tftypes.Valu
 	}
 }
 
+func requirePlanError(t *testing.T, h *tfHarness, name string, state tftypes.Value, config map[string]interface{}, want string) {
+	t.Helper()
+	if state.Type() == nil {
+		state = tftypes.NewValue(h.resourceType(name), nil)
+	}
+	if p := h.plan(name, state, config); !strings.Contains(diagText(p.diags), want) {
+		t.Errorf("plan %s: want an error containing %q, got %q", name, want, diagText(p.diags))
+	}
+}
+
+func withAttrs(config map[string]interface{}, changes map[string]interface{}) map[string]interface{} {
+	out := map[string]interface{}{}
+	for k, v := range config {
+		out[k] = v
+	}
+	for k, v := range changes {
+		out[k] = v
+	}
+	return out
+}
+
+func creds(password string) map[string]interface{} {
+	return map[string]interface{}{"password": password}
+}
+
 func TestAmpClusterLifecycle(t *testing.T) {
 	h := newTfHarness(t)
 	pool := testAccountID
 	config := map[string]interface{}{
-		"cluster_name": "orders",
-		"region":       "us-east-1",
-		"password":     "S3cretPassw0rd",
-		"pg_settings":  map[string]string{"work_mem": "64MB"},
+		"cluster_name":         "orders",
+		"region":               "us-east-1",
+		"credentials":          creds("S3cretPassw0rd"),
+		"branch_pg_settings":   map[string]string{"work_mem": "32MB"},
+		"endpoint_pg_settings": map[string]string{"work_mem": "64MB"},
+		"allowed_cidrs":        []string{},
 	}
 	state := mustApply(t, h, "ybm_amp_cluster", tftypes.Value{}, config)
 
@@ -82,15 +117,19 @@ func TestAmpClusterLifecycle(t *testing.T) {
 			t.Errorf("%s = %q, want %q", attr, got, want)
 		}
 	}
-	if got := attrStringMap(t, state, "pg_settings"); !reflect.DeepEqual(got, map[string]string{"work_mem": "64MB"}) {
-		t.Errorf("pg_settings = %v", got)
+	// The two levels of settings go to the main branch and the read-write endpoint.
+	if spec := managedSpec(t, h, "us-east-1", ampKindBranch, pool+"/orders/main"); fmt.Sprint(spec["pg_settings"]) != "map[work_mem:32MB]" {
+		t.Errorf("main branch spec = %v", spec)
+	}
+	if spec := managedSpec(t, h, "us-east-1", ampKindEndpoint, ampEndpointName(pool, "orders")); fmt.Sprint(spec["pg_settings"]) != "map[work_mem:64MB]" {
+		t.Errorf("endpoint spec = %v", spec)
 	}
 	requirePlanNoop(t, h, "ybm_amp_cluster", state, config)
 	requirePlanNoop(t, h, "ybm_amp_cluster", h.read("ybm_amp_cluster", state), config)
 
 	// Resize in place; memory follows cpu when it is not set.
 	config["cpu"] = "4"
-	config["pg_settings"] = map[string]string{"work_mem": "128MB", "max_connections": "200"}
+	config["endpoint_pg_settings"] = map[string]string{"work_mem": "128MB", "max_connections": "200"}
 	if p := h.plan("ybm_amp_cluster", state, config); p.requiresReplace {
 		t.Fatal("a resize forces a replacement")
 	}
@@ -107,43 +146,83 @@ func TestAmpClusterLifecycle(t *testing.T) {
 	}
 	requirePlanNoop(t, h, "ybm_amp_cluster", state, config)
 
-	// Clearing pg_settings sends an empty map, which replaces the stored one.
-	delete(config, "pg_settings")
+	// Removing a key drops it from the spec, so AMP resets the setting.
+	config["endpoint_pg_settings"] = map[string]string{"max_connections": "200"}
+	state = mustApply(t, h, "ybm_amp_cluster", state, config)
+	if spec := managedSpec(t, h, "us-east-1", ampKindEndpoint, ampEndpointName(pool, "orders")); fmt.Sprint(spec["pg_settings"]) != "map[max_connections:200]" {
+		t.Errorf("the removed key is still set: %v", spec["pg_settings"])
+	}
+
+	// Emptied maps clear every setting, and read back empty rather than null.
+	config["endpoint_pg_settings"] = map[string]string{}
+	config["branch_pg_settings"] = map[string]string{}
 	state = mustApply(t, h, "ybm_amp_cluster", state, config)
 	if spec := managedSpec(t, h, "us-east-1", ampKindEndpoint, ampEndpointName(pool, "orders")); fmt.Sprint(spec["pg_settings"]) != "map[]" {
-		t.Errorf("pg_settings were not cleared: %v", spec["pg_settings"])
+		t.Errorf("endpoint pg_settings were not cleared: %v", spec["pg_settings"])
 	}
+	if spec := managedSpec(t, h, "us-east-1", ampKindBranch, pool+"/orders/main"); fmt.Sprint(spec["pg_settings"]) != "map[]" {
+		t.Errorf("branch pg_settings were not cleared: %v", spec["pg_settings"])
+	}
+	requirePlanNoop(t, h, "ybm_amp_cluster", state, config)
+	requirePlanNoop(t, h, "ybm_amp_cluster", h.read("ybm_amp_cluster", state), config)
+
+	// Unsetting them clears them too.
+	delete(config, "endpoint_pg_settings")
+	delete(config, "branch_pg_settings")
+	state = mustApply(t, h, "ybm_amp_cluster", state, config)
 	requirePlanNoop(t, h, "ybm_amp_cluster", state, config)
 
 	// The password cannot change, and a new PG version replaces the cluster.
-	changed := map[string]interface{}{}
-	for k, v := range config {
-		changed[k] = v
-	}
-	changed["password"] = "AnotherPassw0rd"
-	if p := h.plan("ybm_amp_cluster", state, changed); !hasErrors(p.diags) {
-		t.Error("a password change was planned")
-	}
-	changed["password"] = config["password"]
-	changed["pg_version"] = 17
-	if p := h.plan("ybm_amp_cluster", state, changed); !p.requiresReplace {
+	requirePlanError(t, h, "ybm_amp_cluster", state, withAttrs(config, map[string]interface{}{"credentials": creds("AnotherPassw0rd")}), "Password cannot be changed")
+	if p := h.plan("ybm_amp_cluster", state, withAttrs(config, map[string]interface{}{"pg_version": 17})); !p.requiresReplace {
 		t.Error("a PG version change does not force a replacement")
 	}
 
 	if diags := h.destroy("ybm_amp_cluster", state); hasErrors(diags) {
 		t.Fatal(diagText(diags))
 	}
-	if _, ok := findAmpDesired(h.fake.managed["us-east-1"], ampKindCluster, pool+"/orders"); ok {
+	if managedDeclared(h, "us-east-1", ampKindCluster, pool+"/orders") || managedDeclared(h, "us-east-1", ampKindBranch, pool+"/orders/main") {
 		t.Error("the cluster was not deleted")
 	}
+}
+
+func TestAmpPlaceholdersAreRejectedAtPlanTime(t *testing.T) {
+	h := newTfHarness(t)
+	cluster := map[string]interface{}{"cluster_name": "orders", "region": "us-east-1", "credentials": creds("S3cretPassw0rd")}
+
+	requirePlanError(t, h, "ybm_amp_cluster", tftypes.Value{}, withAttrs(cluster, map[string]interface{}{"suspend_timeout_seconds": 300}), "cannot suspend")
+	requirePlanError(t, h, "ybm_amp_cluster", tftypes.Value{}, withAttrs(cluster, map[string]interface{}{
+		"credentials": map[string]interface{}{"password_wo": "S3cretPassw0rd", "password_wo_version": 1},
+	}), "Write-only passwords")
+	requirePlanError(t, h, "ybm_amp_cluster", tftypes.Value{}, withAttrs(cluster, map[string]interface{}{
+		"credentials": map[string]interface{}{"username": "app", "password": "S3cretPassw0rd"},
+	}), "Only the cloud_admin user")
+	requirePlanError(t, h, "ybm_amp_cluster", tftypes.Value{}, withAttrs(cluster, map[string]interface{}{"credentials": map[string]interface{}{}}),
+		"requires credentials.password")
+	requirePlanError(t, h, "ybm_amp_branch", tftypes.Value{}, map[string]interface{}{"cluster_name": "orders", "branch_name": "dev", "ttl": "24h"}, "cannot expire")
+	requirePlanError(t, h, "ybm_amp_endpoint", tftypes.Value{}, map[string]interface{}{
+		"cluster_name": "orders", "endpoint_name": "replica", "suspend_timeout_seconds": 300,
+	}, "cannot suspend")
+	requirePlanError(t, h, "ybm_amp_branch", tftypes.Value{}, map[string]interface{}{
+		"environment_id": "acme", "cluster_name": "orders", "branch_name": "dev",
+	}, "need its storage_pool")
+	requirePlanError(t, h, "ybm_amp_endpoint", tftypes.Value{}, map[string]interface{}{
+		"storage_pool": "payments", "cluster_name": "orders", "endpoint_name": "replica",
+	}, "only with environment_id")
+
+	// Naming the default user explicitly is fine.
+	config := withAttrs(cluster, map[string]interface{}{
+		"credentials": map[string]interface{}{"username": "cloud_admin", "password": "S3cretPassw0rd"},
+	})
+	state := mustApply(t, h, "ybm_amp_cluster", tftypes.Value{}, config)
+	requirePlanNoop(t, h, "ybm_amp_cluster", h.read("ybm_amp_cluster", state), config)
 }
 
 func TestAmpBranchesAndEndpoints(t *testing.T) {
 	h := newTfHarness(t)
 	pool := testAccountID
-	mustApply(t, h, "ybm_amp_cluster", tftypes.Value{}, map[string]interface{}{
-		"cluster_name": "orders", "region": "us-east-1", "password": "S3cretPassw0rd",
-	})
+	clusterConfig := map[string]interface{}{"cluster_name": "orders", "region": "us-east-1", "credentials": creds("S3cretPassw0rd")}
+	cluster := mustApply(t, h, "ybm_amp_cluster", tftypes.Value{}, clusterConfig)
 
 	branchConfig := map[string]interface{}{
 		"cluster_name": "orders",
@@ -179,42 +258,42 @@ func TestAmpBranchesAndEndpoints(t *testing.T) {
 	}
 	requirePlanNoop(t, h, "ybm_amp_branch", branch, branchConfig)
 
-	branchConfig["pg_settings"] = map[string]string{"work_mem": "256MB"}
+	branchConfig["pg_settings"] = map[string]string{}
 	branchConfig["extensions"] = []string{"vector", "postgis"}
 	branch = mustApply(t, h, "ybm_amp_branch", branch, branchConfig)
 	if got := attrStrings(t, branch, "extensions"); !reflect.DeepEqual(got, []string{"vector", "postgis"}) {
 		t.Errorf("extensions = %v", got)
 	}
-	branchConfig["extensions"] = []string{"postgis"}
-	if _, diags := h.apply("ybm_amp_branch", branch, branchConfig); !strings.Contains(diagText(diags), "cannot be removed") {
+	requirePlanNoop(t, h, "ybm_amp_branch", h.read("ybm_amp_branch", branch), branchConfig)
+	if _, diags := h.apply("ybm_amp_branch", branch, withAttrs(branchConfig, map[string]interface{}{"extensions": []string{"postgis"}})); !strings.Contains(diagText(diags), "cannot be removed") {
 		t.Errorf("removing an extension was allowed: %s", diagText(diags))
 	}
-	branchConfig["extensions"] = []string{"vector", "postgis"}
 
-	// A branch forked from another branch resolves its parent's ID.
-	child := mustApply(t, h, "ybm_amp_branch", tftypes.Value{}, map[string]interface{}{
-		"cluster_name": "orders", "branch_name": "feature", "parent_branch": "dev",
-	})
+	// A branch forked from another branch resolves its parent's ID, and reads it back from the spec.
+	childConfig := map[string]interface{}{"cluster_name": "orders", "branch_name": "feature", "parent_branch": "dev"}
+	child := mustApply(t, h, "ybm_amp_branch", tftypes.Value{}, childConfig)
 	if spec := managedSpec(t, h, "us-east-1", ampKindBranch, pool+"/orders/feature"); spec["parent_branch_id"] != fakeID(pool+"/orders/dev") {
 		t.Errorf("child spec = %v", spec)
 	}
-	if attrString(t, child, "parent_branch") != "dev" {
-		t.Errorf("parent_branch = %s", attrString(t, child, "parent_branch"))
+	imported := h.read("ybm_amp_branch", tfObject(t, h.resourceType("ybm_amp_branch"), map[string]interface{}{"cluster_name": "orders", "branch_name": "feature"}))
+	if attrString(t, imported, "parent_branch") != "dev" {
+		t.Errorf("imported parent_branch = %s", attrString(t, imported, "parent_branch"))
 	}
 
 	// Endpoints: a read-only replica of main and the read-write endpoint of dev.
-	if _, diags := h.apply("ybm_amp_endpoint", tftypes.Value{}, map[string]interface{}{
-		"cluster_name": "orders", "endpoint_name": "replica", "password": "S3cretPassw0rd",
-	}); !strings.Contains(diagText(diags), "does not take a password") {
-		t.Errorf("a read_only endpoint took a password: %s", diagText(diags))
-	}
-	replicaConfig := map[string]interface{}{"cluster_name": "orders", "endpoint_name": "replica", "cpu": "1"}
+	requirePlanError(t, h, "ybm_amp_endpoint", tftypes.Value{}, map[string]interface{}{
+		"cluster_name": "orders", "endpoint_name": "replica", "credentials": creds("S3cretPassw0rd"),
+	}, "does not take a password")
+	replicaConfig := map[string]interface{}{"cluster_name": "orders", "endpoint_name": "replica", "cpu": "1", "allowed_cidrs": []string{}}
 	replica := mustApply(t, h, "ybm_amp_endpoint", tftypes.Value{}, replicaConfig)
 	if attrString(t, replica, "role") != "read_only" || attrString(t, replica, "branch_name") != "main" ||
 		attrString(t, replica, "host") != "replica.amp.example.com" || attrString(t, replica, "memory") != "8192Mi" {
 		t.Errorf("replica = %v", replica)
 	}
 	requirePlanNoop(t, h, "ybm_amp_endpoint", replica, replicaConfig)
+	// A password cannot be added to a read_only endpoint later either.
+	requirePlanError(t, h, "ybm_amp_endpoint", replica, withAttrs(replicaConfig, map[string]interface{}{"credentials": creds("S3cretPassw0rd")}),
+		"does not take a password")
 	replicaConfig["cpu"] = "2"
 	replicaConfig["memory"] = "32Gi"
 	replica = mustApply(t, h, "ybm_amp_endpoint", replica, replicaConfig)
@@ -222,46 +301,78 @@ func TestAmpBranchesAndEndpoints(t *testing.T) {
 		t.Errorf("replica spec = %v", spec)
 	}
 
-	if _, diags := h.apply("ybm_amp_endpoint", tftypes.Value{}, map[string]interface{}{
-		"cluster_name": "orders", "branch_name": "dev", "endpoint_name": "rw", "role": "read_write",
-	}); !strings.Contains(diagText(diags), "requires a password") {
-		t.Errorf("a read_write endpoint was created without a password: %s", diagText(diags))
-	}
-	rw := mustApply(t, h, "ybm_amp_endpoint", tftypes.Value{}, map[string]interface{}{
-		"cluster_name": "orders", "branch_name": "dev", "endpoint_name": "rw", "role": "read_write", "password": "DevPassw0rd!",
-	})
+	rwConfig := map[string]interface{}{"cluster_name": "orders", "branch_name": "dev", "endpoint_name": "rw", "role": "read_write"}
+	requirePlanError(t, h, "ybm_amp_endpoint", tftypes.Value{}, rwConfig, "requires credentials.password")
+	rwConfig["credentials"] = creds("DevPassw0rd!")
+	rw := mustApply(t, h, "ybm_amp_endpoint", tftypes.Value{}, rwConfig)
 	if attrString(t, rw, "host") != "rw.amp.example.com" {
 		t.Errorf("rw = %v", rw)
 	}
+	// Removing the password of a read_write endpoint is refused at plan time.
+	requirePlanError(t, h, "ybm_amp_endpoint", rw, withAttrs(rwConfig, map[string]interface{}{"credentials": nil}), "requires credentials.password")
 
-	// Deleting a branch takes its endpoints with it.
+	// A branch with endpoints or forks, and a cluster with branches, refuse deletion unless forced.
+	if diags := h.destroy("ybm_amp_branch", branch); !strings.Contains(diagText(diags), "endpoint "+pool+"/orders/dev/rw") ||
+		!strings.Contains(diagText(diags), "branch "+pool+"/orders/feature") {
+		t.Errorf("a branch with endpoints and forks was deleted: %s", diagText(diags))
+	}
+	if diags := h.destroy("ybm_amp_cluster", cluster); !strings.Contains(diagText(diags), "force_destroy") {
+		t.Errorf("a cluster with branches was deleted: %s", diagText(diags))
+	}
+	if !managedDeclared(h, "us-east-1", ampKindBranch, pool+"/orders/dev") {
+		t.Fatal("a refused deletion deleted the branch")
+	}
+
+	// Forced, deleting a branch takes its endpoints and forks with it.
+	branchConfig["force_destroy"] = true
+	branch = mustApply(t, h, "ybm_amp_branch", branch, branchConfig)
 	if diags := h.destroy("ybm_amp_branch", branch); hasErrors(diags) {
 		t.Fatal(diagText(diags))
 	}
-	if _, ok := findAmpDesired(h.fake.managed["us-east-1"], ampKindEndpoint, pool+"/orders/dev/rw"); ok {
-		t.Error("the branch's endpoint survived its deletion")
+	for _, name := range []string{pool + "/orders/dev/rw", pool + "/orders/feature"} {
+		if managedDeclared(h, "us-east-1", ampKindEndpoint, name) || managedDeclared(h, "us-east-1", ampKindBranch, name) {
+			t.Errorf("%s survived its branch's deletion", name)
+		}
 	}
-	if diags := h.destroy("ybm_amp_endpoint", rw); hasErrors(diags) {
-		t.Fatalf("destroying an endpoint already gone: %s", diagText(diags))
+	for _, r := range []struct {
+		name  string
+		state tftypes.Value
+	}{{"ybm_amp_endpoint", rw}, {"ybm_amp_branch", child}} {
+		if diags := h.destroy(r.name, r.state); hasErrors(diags) {
+			t.Fatalf("destroying a %s already gone: %s", r.name, diagText(diags))
+		}
 	}
 	if diags := h.destroy("ybm_amp_endpoint", replica); hasErrors(diags) {
 		t.Fatal(diagText(diags))
 	}
-	if _, ok := findAmpDesired(h.fake.managed["us-east-1"], ampKindEndpoint, pool+"/orders/main/replica"); ok {
+	if managedDeclared(h, "us-east-1", ampKindEndpoint, pool+"/orders/main/replica") {
 		t.Error("the replica was not deleted")
+	}
+	// With only what the cluster resource owns left, the cluster deletes without force.
+	if diags := h.destroy("ybm_amp_cluster", cluster); hasErrors(diags) {
+		t.Fatal(diagText(diags))
 	}
 }
 
-func TestByocClustersBranchesAndEndpoints(t *testing.T) {
+func TestByocStoragePoolsAndClusters(t *testing.T) {
 	h := newTfHarness(t)
-	pool := testAccountID
 	h.fake.addByocEnv("acme", "READY")
-	h.fake.addByocEnv("fresh", "PENDING")
 
+	poolConfig := map[string]interface{}{"environment_id": "acme", "name": "payments"}
+	pool := mustApply(t, h, "ybm_byoc_storage_pool", tftypes.Value{}, poolConfig)
+	if spec, ok := byocSpec(t, h, "acme", ampKindStoragePool, "payments"); !ok || spec["owner_user_id"] != testAccountID {
+		t.Errorf("pool spec = %v", spec)
+	}
+	if attrString(t, pool, "owner_user_id") != testAccountID || attrString(t, pool, "state") != "ready" {
+		t.Errorf("pool = %v", pool)
+	}
+	requirePlanNoop(t, h, "ybm_byoc_storage_pool", pool, poolConfig)
+
+	// A cluster in a pool that does not exist fails, and points at ybm_byoc_storage_pool.
 	if _, diags := h.apply("ybm_byoc_cluster", tftypes.Value{}, map[string]interface{}{
-		"environment_id": "fresh", "cluster_name": "orders", "password": "S3cretPassw0rd",
-	}); !strings.Contains(diagText(diags), "install the agent") {
-		t.Errorf("a cluster was created in a PENDING environment: %s", diagText(diags))
+		"environment_id": "acme", "storage_pool": "missing", "cluster_name": "orders", "credentials": creds("S3cretPassw0rd"),
+	}); !strings.Contains(diagText(diags), "ybm_byoc_storage_pool") {
+		t.Errorf("a cluster was created in a missing pool: %s", diagText(diags))
 	}
 
 	// Parallel creates in one environment must not drop each other's clusters.
@@ -273,8 +384,8 @@ func TestByocClustersBranchesAndEndpoints(t *testing.T) {
 		go func(i int, name string) {
 			defer wg.Done()
 			state, diags := h.apply("ybm_byoc_cluster", tftypes.Value{}, map[string]interface{}{
-				"environment_id": "acme", "cluster_name": name, "password": "S3cretPassw0rd",
-				"pg_settings": map[string]string{"work_mem": "64MB"},
+				"environment_id": "acme", "storage_pool": "payments", "cluster_name": name, "credentials": creds("S3cretPassw0rd"),
+				"endpoint_pg_settings": map[string]string{"work_mem": "64MB"},
 			})
 			if hasErrors(diags) {
 				t.Errorf("create %s: %s", name, diagText(diags))
@@ -284,43 +395,46 @@ func TestByocClustersBranchesAndEndpoints(t *testing.T) {
 	}
 	wg.Wait()
 	for _, name := range names {
-		if _, ok := byocSpec(t, h, "acme", ampKindCluster, pool+"/"+name); !ok {
+		if _, ok := byocSpec(t, h, "acme", ampKindCluster, "payments/"+name); !ok {
 			t.Errorf("cluster %s was lost", name)
 		}
 	}
-	if attrString(t, states[0], "host") != "primary.amp.example.com" {
+	if attrString(t, states[0], "host") != "primary.amp.example.com" || attrString(t, states[0], "storage_pool") != "payments" {
 		t.Errorf("cluster = %v", states[0])
 	}
-	if _, ok := byocSpec(t, h, "acme", ampKindStoragePool, pool); !ok {
-		t.Error("the storage pool was not declared")
-	}
 
-	branch := mustApply(t, h, "ybm_amp_branch", tftypes.Value{}, map[string]interface{}{
-		"environment_id": "acme", "cluster_name": "a", "branch_name": "dev", "extensions": []string{"vector"},
-	})
-	if spec, _ := byocSpec(t, h, "acme", ampKindBranch, pool+"/a/dev"); fmt.Sprint(spec["extensions"]) != "[vector]" {
+	branchConfig := map[string]interface{}{
+		"environment_id": "acme", "storage_pool": "payments", "cluster_name": "a", "branch_name": "dev", "extensions": []string{"vector"},
+	}
+	branch := mustApply(t, h, "ybm_amp_branch", tftypes.Value{}, branchConfig)
+	if spec, _ := byocSpec(t, h, "acme", ampKindBranch, "payments/a/dev"); fmt.Sprint(spec["extensions"]) != "[vector]" {
 		t.Errorf("branch spec = %v", spec)
 	}
 	endpoint := mustApply(t, h, "ybm_amp_endpoint", tftypes.Value{}, map[string]interface{}{
-		"environment_id": "acme", "cluster_name": "a", "branch_name": "dev", "endpoint_name": "replica",
+		"environment_id": "acme", "storage_pool": "payments", "cluster_name": "a", "branch_name": "dev", "endpoint_name": "replica",
 	})
 	if attrString(t, endpoint, "host") != "replica.amp.example.com" {
 		t.Errorf("endpoint = %v", endpoint)
 	}
 
 	// Resize a BYOC cluster in place.
-	state := mustApply(t, h, "ybm_byoc_cluster", states[0], map[string]interface{}{
-		"environment_id": "acme", "cluster_name": "a", "password": "S3cretPassw0rd", "cpu": "4", "memory": "64Gi",
-	})
-	if spec, _ := byocSpec(t, h, "acme", ampKindEndpoint, ampEndpointName(pool, "a")); fmt.Sprint(spec["resources"]) != "map[cpu:4 memory:64Gi]" || spec["password"] != "S3cretPassw0rd" {
+	clusterConfig := map[string]interface{}{
+		"environment_id": "acme", "storage_pool": "payments", "cluster_name": "a", "credentials": creds("S3cretPassw0rd"), "cpu": "4", "memory": "64Gi",
+	}
+	state := mustApply(t, h, "ybm_byoc_cluster", states[0], clusterConfig)
+	if spec, _ := byocSpec(t, h, "acme", ampKindEndpoint, ampEndpointName("payments", "a")); fmt.Sprint(spec["resources"]) != "map[cpu:4 memory:64Gi]" || spec["password"] != "S3cretPassw0rd" {
 		t.Errorf("endpoint spec = %v", spec)
 	}
 
-	// Deleting the cluster removes its branches and endpoints too; destroying them after is a no-op.
+	// Deleting a cluster with branches needs force_destroy; then its branches and endpoints go too.
+	if diags := h.destroy("ybm_byoc_cluster", state); !strings.Contains(diagText(diags), "force_destroy") {
+		t.Errorf("a cluster with branches was deleted: %s", diagText(diags))
+	}
+	state = mustApply(t, h, "ybm_byoc_cluster", state, withAttrs(clusterConfig, map[string]interface{}{"force_destroy": true}))
 	if diags := h.destroy("ybm_byoc_cluster", state); hasErrors(diags) {
 		t.Fatal(diagText(diags))
 	}
-	for _, name := range []string{pool + "/a", pool + "/a/dev", pool + "/a/dev/replica"} {
+	for _, name := range []string{"payments/a", "payments/a/dev", "payments/a/dev/replica"} {
 		for _, kind := range []string{ampKindCluster, ampKindBranch, ampKindEndpoint} {
 			if _, ok := byocSpec(t, h, "acme", kind, name); ok {
 				t.Errorf("%s %s survived the cluster's deletion", kind, name)
@@ -338,18 +452,52 @@ func TestByocClustersBranchesAndEndpoints(t *testing.T) {
 			t.Fatal(diagText(diags))
 		}
 	}
-	h.fake.mu.Lock()
-	defer h.fake.mu.Unlock()
-	if left := h.fake.byoc["acme"].desired; len(left) != 0 {
-		t.Errorf("desired state is not empty after destroying everything: %v", left)
+
+	// Destroying the pool leaves it declared, as AMP does not delete pools, and creating it again
+	// adopts it.
+	diags := h.destroy("ybm_byoc_storage_pool", pool)
+	if hasErrors(diags) || !strings.Contains(diagText(diags), "was not deleted") {
+		t.Errorf("destroy pool: %s", diagText(diags))
 	}
-	// The final write empties the desired state, which YCP accepts only when asked to.
-	for i := len(h.fake.requests) - 1; i >= 0; i-- {
-		if strings.HasPrefix(h.fake.requests[i], "POST") {
-			if h.fake.bodies[i]["allow_empty"] != true {
-				t.Errorf("emptying desired state did not set allow_empty: %v", h.fake.bodies[i])
-			}
-			break
-		}
+	h.fake.mu.Lock()
+	left := desiredNames(h.fake.byoc["acme"].desired)
+	h.fake.mu.Unlock()
+	if strings.Join(left, ",") != "storage-pool:payments" {
+		t.Errorf("desired state after destroying everything: %v", left)
+	}
+	mustApply(t, h, "ybm_byoc_storage_pool", tftypes.Value{}, poolConfig)
+	if _, diags := h.apply("ybm_byoc_storage_pool", tftypes.Value{}, withAttrs(poolConfig, map[string]interface{}{
+		"owner_user_id": "11111111-2222-3333-4444-555555555555",
+	})); !strings.Contains(diagText(diags), "already exists with owner") {
+		t.Errorf("a pool was adopted with another owner: %s", diagText(diags))
+	}
+}
+
+func TestByocClusterWaitsForTheAgentToEnroll(t *testing.T) {
+	h := newTfHarness(t)
+	h.fake.addByocEnv("fresh", "PENDING")
+	h.fake.addByocPool("fresh", "payments")
+	h.fake.addByocEnv("paused", "SUSPENDED")
+	h.fake.addByocPool("paused", "payments")
+
+	// The agent enrolls while the cluster waits, as when helm_release installs it in the same apply.
+	go func() {
+		time.Sleep(20 * time.Millisecond)
+		h.fake.setByocState("fresh", "ENROLLING")
+		time.Sleep(20 * time.Millisecond)
+		h.fake.setByocState("fresh", "READY")
+	}()
+	state := mustApply(t, h, "ybm_byoc_cluster", tftypes.Value{}, map[string]interface{}{
+		"environment_id": "fresh", "storage_pool": "payments", "cluster_name": "orders", "credentials": creds("S3cretPassw0rd"),
+	})
+	if attrString(t, state, "state") != "ready" {
+		t.Errorf("cluster = %v", state)
+	}
+
+	// An environment whose agent will never act fails at once.
+	if _, diags := h.apply("ybm_byoc_cluster", tftypes.Value{}, map[string]interface{}{
+		"environment_id": "paused", "storage_pool": "payments", "cluster_name": "orders", "credentials": creds("S3cretPassw0rd"),
+	}); !strings.Contains(diagText(diags), "SUSPENDED") {
+		t.Errorf("a cluster was created in a suspended environment: %s", diagText(diags))
 	}
 }

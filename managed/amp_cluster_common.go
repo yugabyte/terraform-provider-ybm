@@ -5,6 +5,7 @@
 package managed
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"regexp"
@@ -14,9 +15,10 @@ import (
 
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/attr"
+	"github.com/hashicorp/terraform-plugin-framework/diag"
+	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
 	"github.com/hashicorp/terraform-plugin-framework/types"
-	"github.com/yugabyte/terraform-provider-ybm/managed/plan_modifier"
 )
 
 const (
@@ -27,12 +29,13 @@ const (
 
 	ampRoleReadWrite = "read_write"
 	ampRoleReadOnly  = "read_only"
-
-	ampOperationTimeout = 60 * time.Minute
 )
 
-// A var so tests can poll without waiting.
-var ampPollInterval = 10 * time.Second
+// Vars so tests can poll without waiting.
+var (
+	ampPollInterval     = 10 * time.Second
+	ampOperationTimeout = 60 * time.Minute
+)
 
 // Names become a segment of the resource path, so they cannot contain a slash.
 var ampNamePattern = regexp.MustCompile(`^[a-z0-9][a-z0-9-]{0,62}$`)
@@ -41,6 +44,8 @@ const ampNameRule = "must be lowercase letters, digits and hyphens, starting wit
 
 var ampEngines = []string{"postgres", "aidb", "oracle", "sqlserver", "documentdb"}
 var ampConnectivityModes = []string{"cluster_ip", "ingress_internal", "ingress_external", "nlb_internal", "nlb_external"}
+
+const ampPgSettingsReset = "Removing a key resets the setting: an endpoint setting falls back to its branch's value, and a branch setting to the PostgreSQL default."
 
 func ampNameAttribute(description string) tfsdk.Attribute {
 	return tfsdk.Attribute{
@@ -54,30 +59,57 @@ func ampNameAttribute(description string) tfsdk.Attribute {
 
 func ampPgSettingsAttribute(description string) tfsdk.Attribute {
 	return tfsdk.Attribute{
-		Description: description,
+		Description: description + " Can be changed in place. " + ampPgSettingsReset,
 		Type:        types.MapType{ElemType: types.StringType},
 		Optional:    true,
 	}
 }
 
+func ampForceDestroyAttribute(description string) tfsdk.Attribute {
+	return tfsdk.Attribute{
+		Description: description + " Defaults to false. It is read from state, so apply it before the destroy or replacement that needs it.",
+		Type:        types.BoolType,
+		Optional:    true,
+	}
+}
+
+func ampCredentialsAttribute(description string, required bool) tfsdk.Attribute {
+	return tfsdk.Attribute{
+		Description: description,
+		Required:    required,
+		Optional:    !required,
+		Attributes: tfsdk.SingleNestedAttributes(map[string]tfsdk.Attribute{
+			"username": {
+				Description: "The user. Only the default, " + ampUsername + ", is supported for now.",
+				Type:        types.StringType,
+				Optional:    true,
+			},
+			"password": {
+				Description: "The password, 8 to 128 printable ASCII characters. It cannot be changed yet, since AMP cannot rotate passwords.",
+				Type:        types.StringType,
+				Optional:    true,
+				Sensitive:   true,
+				Validators:  []tfsdk.AttributeValidator{stringvalidator.LengthBetween(8, 128)},
+			},
+			"password_wo": {
+				Description: "Reserved for a write-only password that is never stored in state. Not supported yet.",
+				Type:        types.StringType,
+				Optional:    true,
+				Sensitive:   true,
+			},
+			"password_wo_version": {
+				Description: "Reserved for rotating password_wo: changing it sets the new password. Not supported yet.",
+				Type:        types.Int64Type,
+				Optional:    true,
+			},
+		}),
+	}
+}
+
 // ampEndpointAttributes are the attributes of an endpoint: the cluster resources' read-write
 // endpoint and the ybm_amp_endpoint resource.
-func ampEndpointAttributes(passwordRequired bool) map[string]tfsdk.Attribute {
-	password := tfsdk.Attribute{
-		Description:   "The password of the cloud_admin user, 8 to 128 printable ASCII characters. It cannot be changed after creation.",
-		Type:          types.StringType,
-		Sensitive:     true,
-		Validators:    []tfsdk.AttributeValidator{stringvalidator.LengthBetween(8, 128)},
-		PlanModifiers: []tfsdk.AttributePlanModifier{planmodifier.ImmutableFieldModifier{}},
-	}
-	if passwordRequired {
-		password.Required = true
-	} else {
-		password.Description += " Required for a read_write endpoint and not allowed for a read_only one."
-		password.Optional = true
-	}
+func ampEndpointAttributes() map[string]tfsdk.Attribute {
 	return map[string]tfsdk.Attribute{
-		"password": password,
 		"cpu": {
 			Description:   "The CPU of the endpoint as a Kubernetes quantity, such as 2 or 500m. Defaults to 2. Can be changed in place to resize the endpoint.",
 			Type:          types.StringType,
@@ -92,6 +124,11 @@ func ampEndpointAttributes(passwordRequired bool) map[string]tfsdk.Attribute {
 			Optional: true,
 			Computed: true,
 		},
+		"suspend_timeout_seconds": {
+			Description: "Reserved for suspending the endpoint after this many idle seconds. Not supported yet.",
+			Type:        types.Int64Type,
+			Optional:    true,
+		},
 		"connectivity_mode": {
 			Description:   "How the endpoint is exposed: " + strings.Join(ampConnectivityModes, ", ") + ". Defaults to cluster_ip. Changing it forces a replacement.",
 			Type:          types.StringType,
@@ -105,7 +142,6 @@ func ampEndpointAttributes(passwordRequired bool) map[string]tfsdk.Attribute {
 			Type:        types.ListType{ElemType: types.StringType},
 			Optional:    true,
 		},
-		"pg_settings": ampPgSettingsAttribute("PostgreSQL settings of the endpoint's compute, such as work_mem. Can be changed in place."),
 		"state": {
 			Description: "The state the endpoint last reported, such as ready or provisioning.",
 			Type:        types.StringType,
@@ -142,16 +178,17 @@ func ampEndpointAttributes(passwordRequired bool) map[string]tfsdk.Attribute {
 }
 
 // ampClusterAttributes are the attributes shared by the shared (AMP Managed) and BYOC cluster
-// resources: an AMP cluster plus the read-write endpoint the provider creates on its main branch.
+// resources: an AMP cluster, its main branch, and the read-write endpoint the provider creates on it.
 func ampClusterAttributes() map[string]tfsdk.Attribute {
-	attributes := ampEndpointAttributes(true)
+	attributes := ampEndpointAttributes()
+	attributes["credentials"] = ampCredentialsAttribute("The credentials of the read-write endpoint. password is required.", true)
 	attributes["account_id"] = tfsdk.Attribute{
 		Description:   "The ID of the account this cluster belongs to.",
 		Type:          types.StringType,
 		Computed:      true,
 		PlanModifiers: []tfsdk.AttributePlanModifier{tfsdk.UseStateForUnknown()},
 	}
-	attributes["cluster_name"] = ampNameAttribute("The name of the cluster. Must be unique within the account's storage pool. Changing it forces a new cluster.")
+	attributes["cluster_name"] = ampNameAttribute("The name of the cluster. Must be unique within its storage pool. Changing it forces a new cluster.")
 	attributes["pg_version"] = tfsdk.Attribute{
 		Description:   fmt.Sprintf("The PostgreSQL major version. Defaults to %d. Changing it forces a new cluster.", ampDefaultPgVersion),
 		Type:          types.Int64Type,
@@ -179,10 +216,13 @@ func ampClusterAttributes() map[string]tfsdk.Attribute {
 		Computed:      true,
 		PlanModifiers: []tfsdk.AttributePlanModifier{tfsdk.UseStateForUnknown()},
 	}
-	// The cluster's endpoint is the read-write one on the main branch, so say so.
-	pg := attributes["pg_settings"]
-	pg.Description = "PostgreSQL settings of the read-write endpoint's compute, such as work_mem. Can be changed in place."
-	attributes["pg_settings"] = pg
+	attributes["branch_pg_settings"] = ampPgSettingsAttribute(
+		"PostgreSQL settings of the main branch, such as work_mem. They apply to every endpoint on main, including those of ybm_amp_endpoint.")
+	attributes["endpoint_pg_settings"] = ampPgSettingsAttribute(
+		"PostgreSQL settings of the read-write endpoint only. A key set here overrides the same key in branch_pg_settings.")
+	attributes["force_destroy"] = ampForceDestroyAttribute(
+		"Whether destroying or replacing the cluster may also delete branches and endpoints that are not managed by this resource. " +
+			"Without it, deleting a cluster that still has them fails.")
 	return attributes
 }
 
@@ -197,19 +237,28 @@ type ampEndpointConfig struct {
 	PgSettings       map[string]string
 }
 
-// ampClusterConfig is the configuration of an AMP cluster with its read-write endpoint.
+// ampClusterConfig is the configuration of an AMP cluster with its main branch and read-write
+// endpoint.
 type ampClusterConfig struct {
-	PgVersion  int64
-	Engine     string
-	Extensions []string
-	Endpoint   ampEndpointConfig
+	PgVersion        int64
+	Engine           string
+	Extensions       []string
+	BranchPgSettings map[string]string
+	Endpoint         ampEndpointConfig
 }
 
-func newAmpEndpointConfig(role string, password types.String, cpu types.String, memory types.String,
+func ampPassword(c *AmpCredentials) string {
+	if c == nil {
+		return ""
+	}
+	return c.Password.Value
+}
+
+func newAmpEndpointConfig(role string, credentials *AmpCredentials, cpu types.String, memory types.String,
 	mode types.String, allowedCidrs []types.String, pgSettings types.Map) (ampEndpointConfig, error) {
 	c := ampEndpointConfig{
 		Role:             role,
-		Password:         password.Value,
+		Password:         ampPassword(credentials),
 		Cpu:              ampDefaultCpu,
 		ConnectivityMode: ampDefaultConnectivityMode,
 		AllowedCidrs:     stringsFromTf(allowedCidrs),
@@ -235,12 +284,14 @@ func newAmpEndpointConfig(role string, password types.String, cpu types.String, 
 	return c, nil
 }
 
-func newAmpClusterConfig(pgVersion types.Int64, engine types.String, extensions []types.String, password types.String,
-	cpu types.String, memory types.String, mode types.String, allowedCidrs []types.String, pgSettings types.Map) (ampClusterConfig, error) {
+func newAmpClusterConfig(pgVersion types.Int64, engine types.String, extensions []types.String, credentials *AmpCredentials,
+	cpu types.String, memory types.String, mode types.String, allowedCidrs []types.String, branchPgSettings types.Map,
+	endpointPgSettings types.Map) (ampClusterConfig, error) {
 	c := ampClusterConfig{
-		PgVersion:  ampDefaultPgVersion,
-		Engine:     ampDefaultEngine,
-		Extensions: stringsFromTf(extensions),
+		PgVersion:        ampDefaultPgVersion,
+		Engine:           ampDefaultEngine,
+		Extensions:       stringsFromTf(extensions),
+		BranchPgSettings: mapFromTf(branchPgSettings),
 	}
 	if known(pgVersion.Null, pgVersion.Unknown) {
 		c.PgVersion = pgVersion.Value
@@ -248,7 +299,7 @@ func newAmpClusterConfig(pgVersion types.Int64, engine types.String, extensions 
 	if known(engine.Null, engine.Unknown) {
 		c.Engine = engine.Value
 	}
-	endpoint, err := newAmpEndpointConfig(ampRoleReadWrite, password, cpu, memory, mode, allowedCidrs, pgSettings)
+	endpoint, err := newAmpEndpointConfig(ampRoleReadWrite, credentials, cpu, memory, mode, allowedCidrs, endpointPgSettings)
 	c.Endpoint = endpoint
 	return c, err
 }
@@ -268,8 +319,13 @@ func stringsFromTf(values []types.String) []string {
 	return out
 }
 
-func stringsToTf(values []string) []types.String {
+// stringsToTf returns the list to store. An empty list is stored as configured, empty or null, so
+// the read-back matches the plan.
+func stringsToTf(values []string, prior []types.String) []types.String {
 	if len(values) == 0 {
+		if prior != nil {
+			return []types.String{}
+		}
 		return nil
 	}
 	out := make([]types.String, 0, len(values))
@@ -293,8 +349,10 @@ func mapFromTf(m types.Map) map[string]string {
 	return out
 }
 
-func mapToTf(m map[string]string) types.Map {
-	if len(m) == 0 {
+// mapToTf returns the map to store. An empty map is stored as configured, empty or null, so the
+// read-back matches the plan.
+func mapToTf(m map[string]string, prior types.Map) types.Map {
+	if len(m) == 0 && (prior.Null || prior.Unknown) {
 		return types.Map{ElemType: types.StringType, Null: true}
 	}
 	elems := make(map[string]attr.Value, len(m))
@@ -302,6 +360,29 @@ func mapToTf(m map[string]string) types.Map {
 		elems[k] = types.String{Value: v}
 	}
 	return types.Map{ElemType: types.StringType, Elems: elems}
+}
+
+// ampCredentialsToTf returns the credentials to store given the password in the desired spec.
+func ampCredentialsToTf(password string, prior *AmpCredentials) *AmpCredentials {
+	if prior == nil && password == "" {
+		return nil
+	}
+	c := &AmpCredentials{
+		Username:          types.String{Null: true},
+		Password:          tfString(password),
+		PasswordWo:        types.String{Null: true},
+		PasswordWoVersion: types.Int64{Null: true},
+	}
+	if prior != nil {
+		if known(prior.Username.Null, prior.Username.Unknown) {
+			c.Username = prior.Username
+		}
+		// The server echoes the password today; keep the configured one if it ever stops.
+		if c.Password.Null && known(prior.Password.Null, prior.Password.Unknown) {
+			c.Password = prior.Password
+		}
+	}
+	return c
 }
 
 // ampDefaultMemory returns 8Gi per vCPU of the given Kubernetes CPU quantity.
@@ -322,6 +403,14 @@ func ampDefaultMemory(cpu string) (string, error) {
 
 func (c ampClusterConfig) clusterSpec() ampClusterSpec {
 	return ampClusterSpec{PgVersion: c.PgVersion, Engine: c.Engine, Extensions: c.Extensions}
+}
+
+func (c ampClusterConfig) mainBranchSpec() ampBranchSpec {
+	pg := c.BranchPgSettings
+	if pg == nil {
+		pg = map[string]string{}
+	}
+	return ampBranchSpec{PgSettings: &pg}
 }
 
 // spec returns the endpoint's spec. A full spec carries the create-time fields; otherwise only the
@@ -346,6 +435,91 @@ func (c ampEndpointConfig) spec(full bool) ampEndpointSpec {
 		spec.Password = c.Password
 	}
 	return spec
+}
+
+// ampEndpointPlanCheck is what the plan-time checks of an endpoint need.
+type ampEndpointPlanCheck struct {
+	Credentials *AmpCredentials
+	// The prior credentials when the endpoint already exists.
+	PriorCredentials *AmpCredentials
+	Exists           bool
+	// Empty when the role is not known yet.
+	Role           string
+	SuspendTimeout types.Int64
+}
+
+// check returns the errors in an endpoint's planned configuration, so they show at plan time
+// rather than part way through an apply.
+func (c ampEndpointPlanCheck) check() diag.Diagnostics {
+	var diags diag.Diagnostics
+	if known(c.SuspendTimeout.Null, c.SuspendTimeout.Unknown) {
+		diags.AddAttributeError(path.Root("suspend_timeout_seconds"), "Not supported yet",
+			"AMP endpoints cannot suspend when idle yet. Remove suspend_timeout_seconds.")
+	}
+	password := types.String{Null: true}
+	if c.Credentials != nil {
+		creds := c.Credentials
+		if !creds.PasswordWo.Null || !creds.PasswordWoVersion.Null {
+			diags.AddAttributeError(path.Root("credentials").AtName("password_wo"), "Not supported yet",
+				"Write-only passwords and password rotation are not supported yet. Set credentials.password instead.")
+		}
+		if known(creds.Username.Null, creds.Username.Unknown) && creds.Username.Value != ampUsername {
+			diags.AddAttributeError(path.Root("credentials").AtName("username"), "Not supported yet",
+				fmt.Sprintf("Only the %s user is supported for now.", ampUsername))
+		}
+		password = creds.Password
+	}
+	switch c.Role {
+	case ampRoleReadWrite:
+		if password.Null {
+			diags.AddAttributeError(path.Root("credentials").AtName("password"), "Missing password",
+				"A read_write endpoint requires credentials.password.")
+		}
+	case ampRoleReadOnly:
+		if !password.Null {
+			diags.AddAttributeError(path.Root("credentials"), "Unexpected password",
+				"A read_only endpoint does not take a password; it uses the read_write endpoint's.")
+		}
+	}
+	if c.Exists && !password.Unknown {
+		prior := types.String{Null: true}
+		if c.PriorCredentials != nil {
+			prior = c.PriorCredentials.Password
+		}
+		if !prior.Equal(password) {
+			diags.AddAttributeError(path.Root("credentials").AtName("password"), "Password cannot be changed",
+				"AMP cannot rotate passwords yet, so the password cannot be changed, added or removed after creation.")
+		}
+	}
+	return diags
+}
+
+// ampPlanCheckFrom reads the attributes an endpoint's plan-time checks need. Values that are not
+// known yet are skipped; Terraform plans again with them known before it applies.
+func ampPlanCheckFrom(ctx context.Context, req tfsdk.ModifyResourcePlanRequest, role string) (ampEndpointPlanCheck, bool) {
+	c := ampEndpointPlanCheck{Role: role, Exists: !req.State.Raw.IsNull()}
+	if req.Plan.Raw.IsNull() {
+		return c, false
+	}
+	if diags := req.Plan.GetAttribute(ctx, path.Root("credentials"), &c.Credentials); diags.HasError() {
+		return c, false
+	}
+	if diags := req.Plan.GetAttribute(ctx, path.Root("suspend_timeout_seconds"), &c.SuspendTimeout); diags.HasError() {
+		return c, false
+	}
+	if c.Exists {
+		if diags := req.State.GetAttribute(ctx, path.Root("credentials"), &c.PriorCredentials); diags.HasError() {
+			return c, false
+		}
+	}
+	return c, true
+}
+
+// modifyAmpClusterPlan runs the plan-time checks of a cluster resource's read-write endpoint.
+func modifyAmpClusterPlan(ctx context.Context, req tfsdk.ModifyResourcePlanRequest, resp *tfsdk.ModifyResourcePlanResponse) {
+	if c, ok := ampPlanCheckFrom(ctx, req, ampRoleReadWrite); ok {
+		resp.Diagnostics.Append(c.check()...)
+	}
 }
 
 // ampEndpointStatus is what the provider reads back for an endpoint: its configuration from the
@@ -408,7 +582,8 @@ func readAmpEndpoint(desired []ampResource, observed []ampObserved, path string)
 	return s, true, nil
 }
 
-// ampClusterStatus is what the provider reads back for a cluster and its read-write endpoint.
+// ampClusterStatus is what the provider reads back for a cluster, its main branch and its
+// read-write endpoint.
 type ampClusterStatus struct {
 	Config    ampClusterConfig
 	ClusterID string
@@ -440,6 +615,15 @@ func readAmpCluster(desired []ampResource, observed []ampObserved, pool, cluster
 	if o, ok := findAmpObserved(observed, ampKindCluster, ampClusterName(pool, cluster)); ok {
 		s.ClusterID = o.Attrs["id"]
 	}
+	if main, ok := findAmpDesired(desired, ampKindBranch, ampBranchName(pool, cluster, ampDefaultBranch)); ok && len(main.Spec) > 0 {
+		var bs ampBranchSpec
+		if err := json.Unmarshal(main.Spec, &bs); err != nil {
+			return s, true, fmt.Errorf("unable to parse the spec of the main branch of cluster %s: %v", cluster, err)
+		}
+		if bs.PgSettings != nil {
+			s.Config.BranchPgSettings = *bs.PgSettings
+		}
+	}
 
 	endpoint, ok, err := readAmpEndpoint(desired, observed, ampEndpointName(pool, cluster))
 	if err != nil {
@@ -453,11 +637,12 @@ func readAmpCluster(desired []ampResource, observed []ampObserved, pool, cluster
 	return s, true, nil
 }
 
-// ampCreateClusterItems are the resources a cluster resource creates: the cluster and its
-// read-write endpoint on the default branch.
+// ampCreateClusterItems are the resources a cluster resource creates: the cluster, its main
+// branch, and the read-write endpoint on main.
 func ampCreateClusterItems(pool, clusterName string, config ampClusterConfig) []ampPatchItem {
 	return []ampPatchItem{
 		{Kind: ampKindCluster, Name: ampClusterName(pool, clusterName), Spec: config.clusterSpec()},
+		{Kind: ampKindBranch, Name: ampBranchName(pool, clusterName, ampDefaultBranch), Spec: config.mainBranchSpec()},
 		{Kind: ampKindEndpoint, Name: ampEndpointName(pool, clusterName), Spec: config.Endpoint.spec(true)},
 	}
 }
@@ -465,8 +650,61 @@ func ampCreateClusterItems(pool, clusterName string, config ampClusterConfig) []
 func ampClusterTargets(pool, clusterName string) []ampTarget {
 	return []ampTarget{
 		{Kind: ampKindCluster, Name: ampClusterName(pool, clusterName)},
+		{Kind: ampKindBranch, Name: ampBranchName(pool, clusterName, ampDefaultBranch)},
 		{Kind: ampKindEndpoint, Name: ampEndpointName(pool, clusterName)},
 	}
+}
+
+// updateAmpCluster applies the in-place changes of a cluster resource: the main branch's and the
+// read-write endpoint's. Every cluster-level attribute forces a replacement.
+func updateAmpCluster(ctx context.Context, scope ampScope, region, clusterName string, config ampClusterConfig) error {
+	pool := scope.pool()
+	mainPath := ampBranchName(pool, clusterName, ampDefaultBranch)
+	snap, err := scope.snapshot(ctx)
+	if err != nil {
+		return err
+	}
+	// A cluster created outside Terraform may not declare its main branch.
+	mainIntent := ampIntentUpdate
+	if _, ok := ampEnvDeclaring(snap, ampKindBranch, mainPath); !ok {
+		mainIntent = ampIntentCreate
+	}
+	if err := scope.apply(ctx, region, mainIntent, []ampPatchItem{{Kind: ampKindBranch, Name: mainPath, Spec: config.mainBranchSpec()}}); err != nil {
+		return err
+	}
+	items := []ampPatchItem{{Kind: ampKindEndpoint, Name: ampEndpointName(pool, clusterName), Spec: config.Endpoint.spec(false)}}
+	return scope.apply(ctx, region, ampIntentUpdate, items)
+}
+
+// deleteAmpCluster deletes a cluster with its branches and endpoints. Unless forced, it refuses
+// while the cluster has branches or endpoints besides the main branch and read-write endpoint
+// the cluster resource owns, so Terraform state never keeps resources the deletion took with it.
+func deleteAmpCluster(ctx context.Context, scope ampScope, region, clusterName string, force bool) error {
+	pool := scope.pool()
+	clusterPath := ampClusterName(pool, clusterName)
+	snap, err := scope.snapshot(ctx)
+	if err != nil {
+		return err
+	}
+	env, ok := ampEnvDeclaring(snap, ampKindCluster, clusterPath)
+	if !ok {
+		return nil
+	}
+	if !force {
+		owned := map[string]bool{
+			ampKindCluster + " " + clusterPath:                                       true,
+			ampKindBranch + " " + ampBranchName(pool, clusterName, ampDefaultBranch): true,
+			ampKindEndpoint + " " + ampEndpointName(pool, clusterName):               true,
+		}
+		if dependents := ampDependents(env, []string{clusterPath}, owned); len(dependents) > 0 {
+			return fmt.Errorf("cluster %s still has %s. Delete them first, or set force_destroy = true and apply "+
+				"before destroying the cluster to delete them with it", clusterName, strings.Join(dependents, ", "))
+		}
+	}
+	if err := scope.apply(ctx, region, ampIntentDelete, []ampPatchItem{{Kind: ampKindCluster, Name: clusterPath}}); err != nil && !isYcpNotFound(err) {
+		return err
+	}
+	return waitForAmpGone(ctx, scope, []ampTarget{{Kind: ampKindCluster, Name: clusterPath}})
 }
 
 func tfString(v string) types.String {

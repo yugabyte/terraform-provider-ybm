@@ -7,6 +7,7 @@ package managed
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -14,7 +15,9 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 
+	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	openapiclient "github.com/yugabyte/yugabytedb-managed-go-client-internal"
 )
@@ -104,13 +107,14 @@ func TestAmpDefaultMemory(t *testing.T) {
 }
 
 func TestNewAmpClusterConfigAppliesDefaults(t *testing.T) {
+	nullMap := types.Map{ElemType: types.StringType, Null: true}
 	c, err := newAmpClusterConfig(types.Int64{Unknown: true}, types.String{Unknown: true}, nil,
-		types.String{Value: "S3cretPassw0rd"}, types.String{Unknown: true}, types.String{Unknown: true},
-		types.String{Null: true}, nil, types.Map{ElemType: types.StringType, Null: true})
+		&AmpCredentials{Password: types.String{Value: "S3cretPassw0rd"}}, types.String{Unknown: true}, types.String{Unknown: true},
+		types.String{Null: true}, nil, nullMap, nullMap)
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := ampClusterConfig{PgVersion: 18, Engine: "postgres", Endpoint: ampEndpointConfig{
+	want := ampClusterConfig{PgVersion: 18, Engine: "postgres", BranchPgSettings: map[string]string{}, Endpoint: ampEndpointConfig{
 		Role: "read_write", Password: "S3cretPassw0rd", Cpu: "2", Memory: "16384Mi", ConnectivityMode: "cluster_ip", PgSettings: map[string]string{},
 	}}
 	if !reflect.DeepEqual(c, want) {
@@ -159,9 +163,12 @@ func TestAmpResourceProgress(t *testing.T) {
 		{"branch stale", ampKindBranch, "p/c/dev", []ampObserved{{Kind: ampKindBranch, ID: "branch/p/c/dev", State: "ready", Attrs: map[string]string{"applied_generation": "2"}}}, false, false},
 	}
 	for _, tc := range cases {
-		done, err := ampResourceProgress(desired, tc.observed, tc.kind, tc.path)
+		done, waitingOn, err := ampResourceProgress(desired, tc.observed, tc.kind, tc.path)
 		if done != tc.done || (err != nil) != tc.failed {
 			t.Errorf("%s: done = %v, err = %v", tc.name, done, err)
+		}
+		if !done && err == nil && waitingOn == "" {
+			t.Errorf("%s: no reason given for waiting", tc.name)
 		}
 	}
 }
@@ -169,6 +176,7 @@ func TestAmpResourceProgress(t *testing.T) {
 func TestReadAmpCluster(t *testing.T) {
 	desired := []ampResource{
 		{Kind: ampKindCluster, Name: "p/c", Spec: json.RawMessage(`{"pg_version":17,"extensions":["vector"]}`)},
+		{Kind: ampKindBranch, Name: "p/c/main", Spec: json.RawMessage(`{"pg_settings":{"work_mem":"32MB","jit":"off"}}`)},
 		{Kind: ampKindEndpoint, Name: "p/c/main/primary", Generation: 1, Spec: json.RawMessage(
 			`{"role":"read_write","password":"pw123456","resources":{"cpu":"2","memory":"16Gi"},"connectivity":{"mode":"nlb_internal","allowed_cidrs":["10.0.0.0/16"]},"pg_settings":{"work_mem":"64MB"}}`)},
 	}
@@ -183,7 +191,8 @@ func TestReadAmpCluster(t *testing.T) {
 	endpointConfig := ampEndpointConfig{Role: "read_write", Password: "pw123456", Cpu: "2", Memory: "16Gi",
 		ConnectivityMode: "nlb_internal", AllowedCidrs: []string{"10.0.0.0/16"}, PgSettings: map[string]string{"work_mem": "64MB"}}
 	want := ampClusterStatus{
-		Config:    ampClusterConfig{PgVersion: 17, Engine: "postgres", Extensions: []string{"vector"}, Endpoint: endpointConfig},
+		Config: ampClusterConfig{PgVersion: 17, Engine: "postgres", Extensions: []string{"vector"},
+			BranchPgSettings: map[string]string{"work_mem": "32MB", "jit": "off"}, Endpoint: endpointConfig},
 		ClusterID: "amp-uuid",
 		Endpoint: ampEndpointStatus{Config: endpointConfig, EndpointID: "ep-uuid", State: "ready",
 			Host: "db.example.com", Port: "5432", TlsCaCertificate: "CA"},
@@ -194,5 +203,89 @@ func TestReadAmpCluster(t *testing.T) {
 
 	if _, found, _ := readAmpCluster(desired, observed, "p", "other"); found {
 		t.Error("found a cluster that is not declared")
+	}
+}
+
+func TestEmptyCollectionsReadBackAsConfigured(t *testing.T) {
+	nullMap := types.Map{ElemType: types.StringType, Null: true}
+	emptyMap := types.Map{ElemType: types.StringType, Elems: map[string]attr.Value{}}
+	if got := mapToTf(nil, emptyMap); got.Null || len(got.Elems) != 0 {
+		t.Errorf("an empty map read back as %v", got)
+	}
+	if got := mapToTf(map[string]string{}, nullMap); !got.Null {
+		t.Errorf("an unset map read back as %v", got)
+	}
+	if got := mapToTf(map[string]string{"a": "b"}, nullMap); got.Null || len(got.Elems) != 1 {
+		t.Errorf("a map set outside Terraform read back as %v", got)
+	}
+	if got := stringsToTf(nil, []types.String{}); got == nil || len(got) != 0 {
+		t.Errorf("an empty list read back as %v", got)
+	}
+	if got := stringsToTf(nil, nil); got != nil {
+		t.Errorf("an unset list read back as %v", got)
+	}
+}
+
+func TestIsYcpTransient(t *testing.T) {
+	for _, tc := range []struct {
+		err  error
+		want bool
+	}{
+		{&ycpError{StatusCode: 500}, true},
+		{&ycpError{StatusCode: 503}, true},
+		{&ycpError{StatusCode: 429}, true},
+		{&ycpError{StatusCode: 401}, false},
+		{&ycpError{StatusCode: 403}, false},
+		{&ycpError{StatusCode: 404}, false},
+		{&url.Error{Op: "Get", URL: "http://x", Err: io.EOF}, true},
+		{fmt.Errorf("unable to parse the cluster list: bad json"), false},
+	} {
+		if got := isYcpTransient(tc.err); got != tc.want {
+			t.Errorf("isYcpTransient(%v) = %v", tc.err, got)
+		}
+	}
+}
+
+func TestWaitForAmpFailsFastOnAPermanentError(t *testing.T) {
+	ampPollInterval = time.Millisecond
+	t.Cleanup(func() { ampPollInterval = 10 * time.Second })
+	calls := 0
+	client := newTestYcpClient(t, func(w http.ResponseWriter, r *http.Request) {
+		calls++
+		w.WriteHeader(http.StatusForbidden)
+		w.Write([]byte(`{"error":{"status":403,"detail":"Forbidden"}}`))
+	})
+	err := waitForAmp(context.Background(), newAmpScope(client, testAccountID, "", ""), ampClusterTargets(testAccountID, "c"))
+	if err == nil || !strings.Contains(err.Error(), "Forbidden") || calls != 1 {
+		t.Errorf("calls = %d, err = %v", calls, err)
+	}
+}
+
+func TestWaitForAmpReportsWhatItWaitedOn(t *testing.T) {
+	ampPollInterval = time.Millisecond
+	ampOperationTimeout = 20 * time.Millisecond
+	t.Cleanup(func() { ampPollInterval, ampOperationTimeout = 10*time.Second, 60*time.Minute })
+	fake := newFakeYcp()
+	fake.addByocEnv("env", "READY")
+	fake.addByocPool("env", "p")
+	fake.byoc["env"].desired = append(fake.byoc["env"].desired, ampResource{Kind: ampKindCluster, Name: "p/c"})
+	client := newTestYcpClient(t, func(w http.ResponseWriter, r *http.Request) {
+		// The agent never reports anything.
+		if strings.HasSuffix(r.URL.Path, "/environments/env") {
+			w.Write([]byte(`{"data":{"id":"env","state":"READY","resources":[]}}`))
+			return
+		}
+		fake.ServeHTTP(w, r)
+	})
+	err := waitForAmp(context.Background(), newAmpScope(client, testAccountID, "env", "p"), []ampTarget{{Kind: ampKindCluster, Name: "p/c"}})
+	if err == nil || !strings.Contains(err.Error(), "timed out") || !strings.Contains(err.Error(), "cluster p/c has not been reported yet") {
+		t.Errorf("err = %v", err)
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	err = waitForAmp(ctx, newAmpScope(client, testAccountID, "env", "p"), []ampTarget{{Kind: ampKindCluster, Name: "p/c"}})
+	if err == nil || strings.Contains(err.Error(), "timed out") {
+		t.Errorf("a cancelled wait reported %v", err)
 	}
 }

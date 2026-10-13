@@ -54,8 +54,12 @@ type resourceAmpCluster struct {
 }
 
 func ampClusterConfigFromPlan(plan AmpCluster) (ampClusterConfig, error) {
-	return newAmpClusterConfig(plan.PgVersion, plan.Engine, plan.Extensions, plan.Password,
-		plan.Cpu, plan.Memory, plan.ConnectivityMode, plan.AllowedCidrs, plan.PgSettings)
+	return newAmpClusterConfig(plan.PgVersion, plan.Engine, plan.Extensions, plan.Credentials,
+		plan.Cpu, plan.Memory, plan.ConnectivityMode, plan.AllowedCidrs, plan.BranchPgSettings, plan.EndpointPgSettings)
+}
+
+func (r resourceAmpCluster) ModifyPlan(ctx context.Context, req tfsdk.ModifyResourcePlanRequest, resp *tfsdk.ModifyResourcePlanResponse) {
+	modifyAmpClusterPlan(ctx, req, resp)
 }
 
 func (r resourceAmpCluster) Create(ctx context.Context, req tfsdk.CreateResourceRequest, resp *tfsdk.CreateResourceResponse) {
@@ -83,22 +87,24 @@ func (r resourceAmpCluster) Create(ctx context.Context, req tfsdk.CreateResource
 		return
 	}
 
-	scope := newAmpScope(r.p.client, accountId, "")
+	scope := newAmpScope(r.p.client, accountId, "", "")
 	clusterName := plan.ClusterName.Value
 	if err := scope.apply(ctx, plan.Region.Value, ampIntentCreate, ampCreateClusterItems(scope.pool(), clusterName, config)); err != nil {
 		resp.Diagnostics.AddError("Unable to create cluster "+clusterName, err.Error())
 		return
 	}
-	if err := waitForAmp(ctx, scope, ampClusterTargets(scope.pool(), clusterName)); err != nil {
-		resp.Diagnostics.AddError("Cluster "+clusterName+" did not become ready", err.Error())
-		return
-	}
+	waitErr := waitForAmp(ctx, scope, ampClusterTargets(scope.pool(), clusterName))
+	// The cluster exists from here on, so its state is saved even when it did not become ready:
+	// Terraform then marks it tainted rather than losing track of it.
 	cluster, _, err := resourceAmpClusterRead(ctx, scope, clusterName, plan)
 	if err != nil {
 		resp.Diagnostics.AddError("Unable to read the state of cluster "+clusterName, err.Error())
 		return
 	}
 	resp.Diagnostics.Append(resp.State.Set(ctx, &cluster)...)
+	if waitErr != nil {
+		resp.Diagnostics.AddError("Cluster "+clusterName+" did not become ready", waitErr.Error())
+	}
 }
 
 // listAmpManagedResources returns the account's pool as it stands in every region.
@@ -135,30 +141,29 @@ func resourceAmpClusterRead(ctx context.Context, scope ampScope, clusterName str
 	}
 	ep := status.Endpoint
 	cluster = AmpCluster{
-		AccountID:        types.String{Value: scope.accountId},
-		ClusterName:      types.String{Value: clusterName},
-		Region:           types.String{Value: env.Region},
-		PgVersion:        types.Int64{Value: status.Config.PgVersion},
-		Engine:           types.String{Value: status.Config.Engine},
-		Extensions:       stringsToTf(status.Config.Extensions),
-		Password:         tfString(ep.Config.Password),
-		Cpu:              tfString(ep.Config.Cpu),
-		Memory:           tfString(ep.Config.Memory),
-		ConnectivityMode: tfString(ep.Config.ConnectivityMode),
-		AllowedCidrs:     stringsToTf(ep.Config.AllowedCidrs),
-		PgSettings:       mapToTf(ep.Config.PgSettings),
-		ClusterID:        tfString(status.ClusterID),
-		EnvironmentID:    tfString(env.EnvironmentID),
-		State:            tfString(ep.State),
-		Host:             tfString(ep.Host),
-		Port:             tfString(ep.Port),
-		Username:         types.String{Value: ampUsername},
-		Database:         types.String{Value: ampDatabase},
-		TlsCaCertificate: tfString(ep.TlsCaCertificate),
-	}
-	// The server echoes the password today; keep the configured one if it ever stops.
-	if cluster.Password.Null && !prior.Password.Null {
-		cluster.Password = prior.Password
+		AccountID:             types.String{Value: scope.accountId},
+		ClusterName:           types.String{Value: clusterName},
+		Region:                types.String{Value: env.Region},
+		PgVersion:             types.Int64{Value: status.Config.PgVersion},
+		Engine:                types.String{Value: status.Config.Engine},
+		Extensions:            stringsToTf(status.Config.Extensions, prior.Extensions),
+		Credentials:           ampCredentialsToTf(ep.Config.Password, prior.Credentials),
+		Cpu:                   tfString(ep.Config.Cpu),
+		Memory:                tfString(ep.Config.Memory),
+		SuspendTimeoutSeconds: types.Int64{Null: true},
+		ConnectivityMode:      tfString(ep.Config.ConnectivityMode),
+		AllowedCidrs:          stringsToTf(ep.Config.AllowedCidrs, prior.AllowedCidrs),
+		BranchPgSettings:      mapToTf(status.Config.BranchPgSettings, prior.BranchPgSettings),
+		EndpointPgSettings:    mapToTf(ep.Config.PgSettings, prior.EndpointPgSettings),
+		ForceDestroy:          prior.ForceDestroy,
+		ClusterID:             tfString(status.ClusterID),
+		EnvironmentID:         tfString(env.EnvironmentID),
+		State:                 tfString(ep.State),
+		Host:                  tfString(ep.Host),
+		Port:                  tfString(ep.Port),
+		Username:              types.String{Value: ampUsername},
+		Database:              types.String{Value: ampDatabase},
+		TlsCaCertificate:      tfString(ep.TlsCaCertificate),
 	}
 	return cluster, true, nil
 }
@@ -180,7 +185,7 @@ func (r resourceAmpCluster) Read(ctx context.Context, req tfsdk.ReadResourceRequ
 		}
 	}
 
-	cluster, found, err := resourceAmpClusterRead(ctx, newAmpScope(r.p.client, accountId, ""), state.ClusterName.Value, state)
+	cluster, found, err := resourceAmpClusterRead(ctx, newAmpScope(r.p.client, accountId, "", ""), state.ClusterName.Value, state)
 	if err != nil {
 		resp.Diagnostics.AddError("Unable to read the state of cluster "+state.ClusterName.Value, err.Error())
 		return
@@ -200,7 +205,7 @@ func (r resourceAmpCluster) Update(ctx context.Context, req tfsdk.UpdateResource
 	if resp.Diagnostics.HasError() {
 		return
 	}
-	scope := newAmpScope(r.p.client, state.AccountID.Value, "")
+	scope := newAmpScope(r.p.client, state.AccountID.Value, "", "")
 	clusterName := state.ClusterName.Value
 
 	config, err := ampClusterConfigFromPlan(plan)
@@ -208,10 +213,7 @@ func (r resourceAmpCluster) Update(ctx context.Context, req tfsdk.UpdateResource
 		resp.Diagnostics.AddError("Invalid cluster configuration", err.Error())
 		return
 	}
-	// Only the endpoint changes in place: every cluster-level attribute forces a replacement.
-	endpointPath := ampEndpointName(scope.pool(), clusterName)
-	items := []ampPatchItem{{Kind: ampKindEndpoint, Name: endpointPath, Spec: config.Endpoint.spec(false)}}
-	if err := scope.apply(ctx, state.Region.Value, ampIntentUpdate, items); err != nil {
+	if err := updateAmpCluster(ctx, scope, state.Region.Value, clusterName, config); err != nil {
 		resp.Diagnostics.AddError("Unable to update cluster "+clusterName, err.Error())
 		return
 	}
@@ -233,18 +235,10 @@ func (r resourceAmpCluster) Delete(ctx context.Context, req tfsdk.DeleteResource
 	if resp.Diagnostics.HasError() {
 		return
 	}
-	scope := newAmpScope(r.p.client, state.AccountID.Value, "")
+	scope := newAmpScope(r.p.client, state.AccountID.Value, "", "")
 	clusterName := state.ClusterName.Value
-	clusterPath := ampClusterName(scope.pool(), clusterName)
-
-	// Deleting the cluster cascades to its branches and endpoints.
-	items := []ampPatchItem{{Kind: ampKindCluster, Name: clusterPath}}
-	if err := scope.apply(ctx, state.Region.Value, ampIntentDelete, items); err != nil && !isYcpNotFound(err) {
+	if err := deleteAmpCluster(ctx, scope, state.Region.Value, clusterName, boolValue(state.ForceDestroy)); err != nil {
 		resp.Diagnostics.AddError("Unable to delete cluster "+clusterName, err.Error())
-		return
-	}
-	if err := waitForAmpGone(ctx, scope, ampKindCluster, clusterPath); err != nil {
-		resp.Diagnostics.AddError("Unable to delete cluster "+clusterName, "The operation timed out waiting for the cluster deletion to complete.")
 		return
 	}
 	resp.State.RemoveResource(ctx)

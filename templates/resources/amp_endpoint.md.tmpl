@@ -10,9 +10,13 @@ description: |-
 
 ~> **Note:** This resource is behind a feature flag. Set the environment variable `YBM_FF_AMP=true` to use it.
 
-Set `environment_id` for a cluster in a BYOC environment; leave it unset for a shared cluster.
+Set `environment_id` and `storage_pool` for a cluster in a BYOC environment; leave both unset for a shared cluster.
 
-`cpu`, `memory`, `allowed_cidrs` and `pg_settings` can be changed in place. Changing `cluster_name`, `branch_name`, `endpoint_name`, `role`, `connectivity_mode` or `environment_id` replaces the endpoint. A `read_write` endpoint requires `password`, which cannot be changed after creation; a `read_only` endpoint takes none. A branch has at most one `read_write` endpoint, and the cluster resources already create one, named `primary`, on `main`.
+`cpu`, `memory`, `allowed_cidrs` and `pg_settings` can be changed in place. `pg_settings` override the same keys in the branch's settings, and removing a key falls back to the branch's value. Changing `cluster_name`, `branch_name`, `endpoint_name`, `role`, `connectivity_mode`, `environment_id` or `storage_pool` replaces the endpoint. A branch has at most one `read_write` endpoint, and the cluster resources already create one, named `primary`, on `main`.
+
+A `read_write` endpoint requires `credentials.password`; a `read_only` endpoint takes none and uses the read-write endpoint's. `credentials.password` cannot be changed, added or removed after creation, since AMP cannot rotate passwords yet; the plan fails if it changes. `credentials.password_wo`, `credentials.password_wo_version` and `suspend_timeout_seconds` are reserved for features AMP does not support yet, and setting them fails at plan time.
+
+!> **Warning:** Passwords are stored in plaintext in the Terraform state. Protect the state accordingly.
 
 ## Example Usage
 

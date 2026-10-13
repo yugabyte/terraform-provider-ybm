@@ -8,6 +8,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -64,6 +65,18 @@ func isYcpNotFound(err error) bool {
 		return e.StatusCode == http.StatusNotFound
 	}
 	return false
+}
+
+// isYcpTransient reports whether a failed call may succeed if repeated: a server error, throttling,
+// or a request that never got a response. Anything else, such as a 401, a 404 or an unparsable
+// response, fails the same way every time.
+func isYcpTransient(err error) bool {
+	var apiErr *ycpError
+	if errors.As(err, &apiErr) {
+		return apiErr.StatusCode >= 500 || apiErr.StatusCode == http.StatusTooManyRequests
+	}
+	var urlErr *url.Error
+	return errors.As(err, &urlErr)
 }
 
 // ycpDo calls a YCP route below /public/v1/accounts/{accountId}/ycp and returns the `data` member
@@ -197,6 +210,10 @@ type ampEndpointResources struct {
 type ampEndpointConnectivity struct {
 	Mode         string   `json:"mode,omitempty"`
 	AllowedCidrs []string `json:"allowed_cidrs"`
+}
+
+type ampStoragePoolSpec struct {
+	OwnerUserID string `json:"owner_user_id"`
 }
 
 type ampClusterSpec struct {

@@ -19,10 +19,13 @@ import (
 type resourceAmpEndpointType struct{}
 
 func (r resourceAmpEndpointType) GetSchema(_ context.Context) (tfsdk.Schema, diag.Diagnostics) {
-	attributes := ampEndpointAttributes(false)
+	attributes := ampEndpointAttributes()
 	for k, v := range ampParentAttributes() {
 		attributes[k] = v
 	}
+	attributes["credentials"] = ampCredentialsAttribute(
+		"The credentials of a read_write endpoint, whose password is required. A read_only endpoint takes none; it uses the read_write endpoint's.", false)
+	attributes["pg_settings"] = ampPgSettingsAttribute("PostgreSQL settings of the endpoint, such as work_mem. A key set here overrides the same key in its branch's settings.")
 	attributes["branch_name"] = tfsdk.Attribute{
 		Description:   "The name of the branch the endpoint serves. Defaults to main. Changing it forces a new endpoint.",
 		Type:          types.StringType,
@@ -65,7 +68,24 @@ type resourceAmpEndpoint struct {
 }
 
 func ampEndpointConfigFromPlan(plan AmpEndpoint, role string) (ampEndpointConfig, error) {
-	return newAmpEndpointConfig(role, plan.Password, plan.Cpu, plan.Memory, plan.ConnectivityMode, plan.AllowedCidrs, plan.PgSettings)
+	return newAmpEndpointConfig(role, plan.Credentials, plan.Cpu, plan.Memory, plan.ConnectivityMode, plan.AllowedCidrs, plan.PgSettings)
+}
+
+func (r resourceAmpEndpoint) ModifyPlan(ctx context.Context, req tfsdk.ModifyResourcePlanRequest, resp *tfsdk.ModifyResourcePlanResponse) {
+	if req.Plan.Raw.IsNull() {
+		return
+	}
+	resp.Diagnostics.Append(checkAmpParentPlan(ctx, req.Plan)...)
+	// role defaults to read_only, so an unset one is not known in the plan.
+	var role types.String
+	resp.Diagnostics.Append(req.Config.GetAttribute(ctx, path.Root("role"), &role)...)
+	roleName := ""
+	if !role.Unknown {
+		roleName = stringOr(role, ampRoleReadOnly)
+	}
+	if c, ok := ampPlanCheckFrom(ctx, req, roleName); ok {
+		resp.Diagnostics.Append(c.check()...)
+	}
 }
 
 func stringOr(v types.String, fallback string) string {
@@ -92,23 +112,13 @@ func (r resourceAmpEndpoint) Create(ctx context.Context, req tfsdk.CreateResourc
 	branchName := stringOr(plan.BranchName, ampDefaultBranch)
 	endpointName := plan.EndpointName.Value
 	role := stringOr(plan.Role, ampRoleReadOnly)
-
-	hasPassword := known(plan.Password.Null, plan.Password.Unknown)
-	if role == ampRoleReadWrite && !hasPassword {
-		resp.Diagnostics.AddError("Invalid endpoint configuration", "A read_write endpoint requires a password.")
-		return
-	}
-	if role == ampRoleReadOnly && hasPassword {
-		resp.Diagnostics.AddError("Invalid endpoint configuration", "A read_only endpoint does not take a password; it uses the read_write endpoint's.")
-		return
-	}
 	config, err := ampEndpointConfigFromPlan(plan, role)
 	if err != nil {
 		resp.Diagnostics.AddError("Invalid endpoint configuration", err.Error())
 		return
 	}
 
-	scope, region, err := ampChildScope(ctx, r.p, plan.EnvironmentID, clusterName)
+	scope, region, err := ampChildScope(ctx, r.p, plan.EnvironmentID, plan.StoragePool, clusterName)
 	if err != nil {
 		resp.Diagnostics.AddError("Unable to create endpoint "+endpointName, err.Error())
 		return
@@ -119,10 +129,9 @@ func (r resourceAmpEndpoint) Create(ctx context.Context, req tfsdk.CreateResourc
 		resp.Diagnostics.AddError("Unable to create endpoint "+endpointName, err.Error())
 		return
 	}
-	if err := waitForAmp(ctx, scope, []ampTarget{{Kind: ampKindEndpoint, Name: endpointPath}}); err != nil {
-		resp.Diagnostics.AddError("Endpoint "+endpointName+" did not become ready", err.Error())
-		return
-	}
+	waitErr := waitForAmp(ctx, scope, []ampTarget{{Kind: ampKindEndpoint, Name: endpointPath}})
+	// The endpoint exists from here on, so its state is saved even when it did not become ready:
+	// Terraform then marks it tainted rather than losing track of it.
 	plan.BranchName = types.String{Value: branchName}
 	endpoint, _, err := resourceAmpEndpointRead(ctx, scope, plan)
 	if err != nil {
@@ -130,6 +139,9 @@ func (r resourceAmpEndpoint) Create(ctx context.Context, req tfsdk.CreateResourc
 		return
 	}
 	resp.Diagnostics.Append(resp.State.Set(ctx, &endpoint)...)
+	if waitErr != nil {
+		resp.Diagnostics.AddError("Endpoint "+endpointName+" did not become ready", waitErr.Error())
+	}
 }
 
 func resourceAmpEndpointRead(ctx context.Context, scope ampScope, prior AmpEndpoint) (endpoint AmpEndpoint, found bool, err error) {
@@ -149,28 +161,27 @@ func resourceAmpEndpointRead(ctx context.Context, scope ampScope, prior AmpEndpo
 		return endpoint, true, err
 	}
 	endpoint = AmpEndpoint{
-		AccountID:        types.String{Value: scope.accountId},
-		EnvironmentID:    optionalString(prior.EnvironmentID),
-		ClusterName:      types.String{Value: clusterName},
-		BranchName:       types.String{Value: branchName},
-		EndpointName:     prior.EndpointName,
-		Role:             types.String{Value: status.Config.Role},
-		Password:         tfString(status.Config.Password),
-		Cpu:              tfString(status.Config.Cpu),
-		Memory:           tfString(status.Config.Memory),
-		ConnectivityMode: tfString(status.Config.ConnectivityMode),
-		AllowedCidrs:     stringsToTf(status.Config.AllowedCidrs),
-		PgSettings:       mapToTf(status.Config.PgSettings),
-		EndpointID:       tfString(status.EndpointID),
-		State:            tfString(status.State),
-		Host:             tfString(status.Host),
-		Port:             tfString(status.Port),
-		Username:         types.String{Value: ampUsername},
-		Database:         types.String{Value: ampDatabase},
-		TlsCaCertificate: tfString(status.TlsCaCertificate),
-	}
-	if endpoint.Password.Null && known(prior.Password.Null, prior.Password.Unknown) {
-		endpoint.Password = prior.Password
+		AccountID:             types.String{Value: scope.accountId},
+		EnvironmentID:         optionalString(prior.EnvironmentID),
+		StoragePool:           optionalString(prior.StoragePool),
+		ClusterName:           types.String{Value: clusterName},
+		BranchName:            types.String{Value: branchName},
+		EndpointName:          prior.EndpointName,
+		Role:                  types.String{Value: status.Config.Role},
+		Credentials:           ampCredentialsToTf(status.Config.Password, prior.Credentials),
+		Cpu:                   tfString(status.Config.Cpu),
+		Memory:                tfString(status.Config.Memory),
+		SuspendTimeoutSeconds: types.Int64{Null: true},
+		ConnectivityMode:      tfString(status.Config.ConnectivityMode),
+		AllowedCidrs:          stringsToTf(status.Config.AllowedCidrs, prior.AllowedCidrs),
+		PgSettings:            mapToTf(status.Config.PgSettings, prior.PgSettings),
+		EndpointID:            tfString(status.EndpointID),
+		State:                 tfString(status.State),
+		Host:                  tfString(status.Host),
+		Port:                  tfString(status.Port),
+		Username:              types.String{Value: ampUsername},
+		Database:              types.String{Value: ampDatabase},
+		TlsCaCertificate:      tfString(status.TlsCaCertificate),
 	}
 	return endpoint, true, nil
 }
@@ -191,7 +202,7 @@ func (r resourceAmpEndpoint) Read(ctx context.Context, req tfsdk.ReadResourceReq
 			return
 		}
 	}
-	scope := newAmpScope(r.p.client, accountId, state.EnvironmentID.Value)
+	scope := newAmpScope(r.p.client, accountId, state.EnvironmentID.Value, state.StoragePool.Value)
 	endpoint, found, err := resourceAmpEndpointRead(ctx, scope, state)
 	if isYcpNotFound(err) || (err == nil && !found) {
 		tflog.Warn(ctx, "Endpoint "+state.EndpointName.Value+" no longer exists; removing it from state")
@@ -218,7 +229,7 @@ func (r resourceAmpEndpoint) Update(ctx context.Context, req tfsdk.UpdateResourc
 		resp.Diagnostics.AddError("Invalid endpoint configuration", err.Error())
 		return
 	}
-	scope, region, err := ampChildScope(ctx, r.p, state.EnvironmentID, state.ClusterName.Value)
+	scope, region, err := ampChildScope(ctx, r.p, state.EnvironmentID, state.StoragePool, state.ClusterName.Value)
 	if err != nil {
 		resp.Diagnostics.AddError("Unable to update endpoint "+endpointName, err.Error())
 		return
@@ -248,7 +259,7 @@ func (r resourceAmpEndpoint) Delete(ctx context.Context, req tfsdk.DeleteResourc
 		return
 	}
 	endpointName := state.EndpointName.Value
-	scope := newAmpScope(r.p.client, state.AccountID.Value, state.EnvironmentID.Value)
+	scope := newAmpScope(r.p.client, state.AccountID.Value, state.EnvironmentID.Value, state.StoragePool.Value)
 	region, err := scope.clusterRegion(ctx, state.ClusterName.Value)
 	if isYcpNotFound(err) {
 		// Deleting the cluster already took the endpoint with it.
@@ -264,24 +275,25 @@ func (r resourceAmpEndpoint) Delete(ctx context.Context, req tfsdk.DeleteResourc
 		resp.Diagnostics.AddError("Unable to delete endpoint "+endpointName, err.Error())
 		return
 	}
-	if err := waitForAmpGone(ctx, scope, ampKindEndpoint, endpointPath); err != nil {
-		resp.Diagnostics.AddError("Unable to delete endpoint "+endpointName, "The operation timed out waiting for the endpoint deletion to complete.")
+	if err := waitForAmpGone(ctx, scope, []ampTarget{{Kind: ampKindEndpoint, Name: endpointPath}}); err != nil {
+		resp.Diagnostics.AddError("Unable to delete endpoint "+endpointName, err.Error())
 		return
 	}
 	resp.State.RemoveResource(ctx)
 }
 
 // ImportState imports an endpoint by "<cluster_name>/<branch_name>/<endpoint_name>", or
-// "<environment_id>/<cluster_name>/<branch_name>/<endpoint_name>" for a BYOC cluster.
+// "<environment_id>/<storage_pool>/<cluster_name>/<branch_name>/<endpoint_name>" for a BYOC cluster.
 func (r resourceAmpEndpoint) ImportState(ctx context.Context, req tfsdk.ImportResourceStateRequest, resp *tfsdk.ImportResourceStateResponse) {
 	parts := strings.Split(req.ID, "/")
-	if len(parts) == 4 {
+	if len(parts) == 5 && parts[0] != "" && parts[1] != "" {
 		resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("environment_id"), parts[0])...)
-		parts = parts[1:]
+		resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("storage_pool"), parts[1])...)
+		parts = parts[2:]
 	}
 	if len(parts) != 3 || parts[0] == "" || parts[1] == "" || parts[2] == "" {
 		resp.Diagnostics.AddError("Invalid import ID",
-			"Expected <cluster_name>/<branch_name>/<endpoint_name> or <environment_id>/<cluster_name>/<branch_name>/<endpoint_name>, got "+req.ID)
+			"Expected <cluster_name>/<branch_name>/<endpoint_name> or <environment_id>/<storage_pool>/<cluster_name>/<branch_name>/<endpoint_name>, got "+req.ID)
 		return
 	}
 	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("cluster_name"), parts[0])...)

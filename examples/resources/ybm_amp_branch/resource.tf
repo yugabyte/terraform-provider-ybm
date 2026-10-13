@@ -20,7 +20,8 @@ resource "ybm_amp_branch" "feature" {
 
 # A branch of a cluster in a BYOC environment
 resource "ybm_amp_branch" "byoc_dev" {
-  environment_id = ybm_byoc_environment.example.environment_id
+  environment_id = ybm_byoc_cluster.example.environment_id
+  storage_pool   = ybm_byoc_cluster.example.storage_pool
   cluster_name   = ybm_byoc_cluster.example.cluster_name
   branch_name    = "dev"
 }

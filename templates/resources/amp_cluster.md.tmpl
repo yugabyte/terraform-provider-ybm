@@ -10,9 +10,17 @@ description: |-
 
 ~> **Note:** This resource is behind a feature flag. Set the environment variable `YBM_FF_AMP=true` to use it.
 
-Updating `cpu`, `memory`, `allowed_cidrs` or `pg_settings` changes the cluster in place. Manage branches and additional endpoints with `ybm_amp_branch` and `ybm_amp_endpoint`. Changing `cluster_name`, `region`, `pg_version`, `engine`, `extensions` or `connectivity_mode` replaces the cluster, which deletes its data. `password` cannot be changed after creation.
+Updating `cpu`, `memory`, `allowed_cidrs`, `branch_pg_settings` or `endpoint_pg_settings` changes the cluster in place. Manage branches and additional endpoints with `ybm_amp_branch` and `ybm_amp_endpoint`. Changing `cluster_name`, `region`, `pg_version`, `engine`, `extensions` or `connectivity_mode` replaces the cluster, which deletes its data.
 
-Connect as `username` to `database` at `host`:`port` with `password`.
+Postgres settings apply at two levels. `branch_pg_settings` sets them on the cluster's `main` branch, for every endpoint on it; `endpoint_pg_settings` sets them on the read-write endpoint only, and a key set there overrides the same key in `branch_pg_settings`. Removing a key resets the setting: an endpoint setting falls back to the branch's value, and a branch setting to the PostgreSQL default. An empty map clears every setting at that level.
+
+Deleting the cluster also deletes its branches and endpoints, so deleting a cluster that still has branches or endpoints not managed by this resource fails. A normal `terraform destroy` deletes the `ybm_amp_branch` and `ybm_amp_endpoint` resources first, so it works. To delete them along with the cluster, for example to replace the cluster after a `pg_version` change, set `force_destroy = true` and apply it first.
+
+`credentials.password` cannot be changed, added or removed after creation, since AMP cannot rotate passwords yet; the plan fails if it changes. `credentials.password_wo`, `credentials.password_wo_version` and `suspend_timeout_seconds` are reserved for features AMP does not support yet, and setting them fails at plan time.
+
+!> **Warning:** Passwords are stored in plaintext in the Terraform state. Protect the state accordingly.
+
+Connect as `username` to `database` at `host`:`port` with `credentials.password`.
 
 ## Example Usage
 

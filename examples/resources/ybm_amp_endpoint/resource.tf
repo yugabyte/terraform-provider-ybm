@@ -12,10 +12,14 @@ resource "ybm_amp_endpoint" "dev" {
   branch_name       = ybm_amp_branch.dev.branch_name
   endpoint_name     = "rw"
   role              = "read_write"
-  password          = var.dev_password
   connectivity_mode = "nlb_internal"
   allowed_cidrs     = ["10.0.0.0/16"]
 
+  credentials = {
+    password = var.dev_password
+  }
+
+  # Overrides the branch's settings for this endpoint
   pg_settings = {
     work_mem = "64MB"
   }

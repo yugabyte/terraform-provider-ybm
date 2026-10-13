@@ -7,9 +7,9 @@ package managed
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"net/http"
+	"sort"
 	"strings"
 
 	"github.com/hashicorp/terraform-plugin-log/tflog"
@@ -23,28 +23,33 @@ const (
 	ampIntentDelete = "delete"
 )
 
-// ampScope is where an AMP resource tree lives: the account's AMP Managed storage pool, or a BYOC
-// environment's desired state. Both are written one resource at a time with the AMP Managed
-// create/update/delete semantics, which the provider emulates for BYOC environments until YCP
-// offers the same patch for them (CLOUDGA-37492).
+// ampScope is where an AMP resource tree lives: the account's AMP Managed storage pool, or a
+// storage pool in a BYOC environment's desired state. Both are written one resource at a time with
+// the AMP Managed create/update/delete semantics, which the provider emulates for BYOC environments
+// until YCP offers the same patch for them (CLOUDGA-37492).
 type ampScope struct {
 	client        *openapiclient.APIClient
 	accountId     string
 	environmentId string // empty for AMP Managed
+	storagePool   string
 }
 
-func newAmpScope(client *openapiclient.APIClient, accountId string, environmentId string) ampScope {
-	return ampScope{client: client, accountId: accountId, environmentId: environmentId}
+// newAmpScope returns the scope of a storage pool. YBM requires the account ID as the AMP Managed
+// pool, so storagePool only applies to a BYOC environment, where it is required.
+func newAmpScope(client *openapiclient.APIClient, accountId string, environmentId string, storagePool string) ampScope {
+	if environmentId == "" {
+		storagePool = accountId
+	}
+	return ampScope{client: client, accountId: accountId, environmentId: environmentId, storagePool: storagePool}
 }
 
 func (s ampScope) isByoc() bool {
 	return s.environmentId != ""
 }
 
-// pool is the storage pool every resource name starts with: the account ID, as YBM requires for
-// AMP Managed and the provider uses for BYOC environments too.
+// pool is the storage pool every resource name starts with.
 func (s ampScope) pool() string {
-	return s.accountId
+	return s.storagePool
 }
 
 // snapshot returns the desired and observed state of the scope, one entry per environment.
@@ -76,7 +81,13 @@ func (s ampScope) apply(ctx context.Context, region string, intent string, items
 		return err
 	}
 	return updateByocDesired(ctx, s.client, s.accountId, s.environmentId, func(desired []ampResource) ([]ampResource, error) {
-		return applyAmpIntent(desired, s.pool(), intent, items)
+		if intent == ampIntentCreate {
+			if _, ok := findAmpDesired(desired, ampKindStoragePool, s.pool()); !ok {
+				return nil, &ycpError{StatusCode: http.StatusNotFound, Message: fmt.Sprintf(
+					"storage pool %s does not exist in environment %s; create it with ybm_byoc_storage_pool", s.pool(), s.environmentId)}
+			}
+		}
+		return applyAmpIntent(desired, intent, items)
 	})
 }
 
@@ -108,7 +119,7 @@ func ampEnvDeclaring(snap []ampEnvironmentResources, kind, name string) (ampEnvi
 // applyAmpIntent applies an intent to a desired state the way YCP applies an AMP Managed patch: a
 // create of an existing resource and an update of a missing one fail, an update merges the spec's
 // top-level keys, and a delete removes the resource with everything under it.
-func applyAmpIntent(desired []ampResource, pool string, intent string, items []ampPatchItem) ([]ampResource, error) {
+func applyAmpIntent(desired []ampResource, intent string, items []ampPatchItem) ([]ampResource, error) {
 	for _, item := range items {
 		idx := -1
 		for i, r := range desired {
@@ -122,9 +133,6 @@ func applyAmpIntent(desired []ampResource, pool string, intent string, items []a
 			if idx >= 0 {
 				return nil, &ycpError{StatusCode: http.StatusConflict, Message: fmt.Sprintf("%s %s already exists", item.Kind, item.Name)}
 			}
-			if _, ok := findAmpDesired(desired, ampKindStoragePool, pool); !ok && strings.HasPrefix(item.Name, pool+"/") {
-				desired = append(desired, ampResource{Kind: ampKindStoragePool, Name: pool, Spec: mustMarshal(map[string]string{"owner_user_id": pool})})
-			}
 			desired = append(desired, ampResource{Kind: item.Kind, Name: item.Name, Spec: mustMarshal(item.Spec)})
 		case ampIntentUpdate:
 			if idx < 0 {
@@ -136,7 +144,7 @@ func applyAmpIntent(desired []ampResource, pool string, intent string, items []a
 			}
 			desired[idx].Spec = merged
 		case ampIntentDelete:
-			desired = withoutAmpSubtree(desired, pool, item.Name)
+			desired = withoutAmpSubtree(desired, item.Name)
 		default:
 			return nil, fmt.Errorf("unknown intent %q", intent)
 		}
@@ -163,30 +171,61 @@ func mergeAmpSpec(stored json.RawMessage, patch interface{}) (json.RawMessage, e
 	return mustMarshal(merged), nil
 }
 
-// withoutAmpSubtree returns desired without the named resource and its descendants, and without
-// the pool once nothing is left in it.
-func withoutAmpSubtree(desired []ampResource, pool string, name string) []ampResource {
+// withoutAmpSubtree returns desired without the named resource and its descendants.
+func withoutAmpSubtree(desired []ampResource, name string) []ampResource {
 	kept := make([]ampResource, 0, len(desired))
-	poolUsed := false
 	for _, r := range desired {
 		if r.Name == name || strings.HasPrefix(r.Name, name+"/") {
 			continue
 		}
-		if strings.HasPrefix(r.Name, pool+"/") {
-			poolUsed = true
-		}
 		kept = append(kept, r)
 	}
-	if poolUsed {
-		return kept
-	}
-	out := kept[:0]
-	for _, r := range kept {
-		if !(r.Kind == ampKindStoragePool && r.Name == pool) {
-			out = append(out, r)
+	return kept
+}
+
+// ampForks returns the paths of the branches forked from the given branch, directly or through
+// other forks. A fork names its parent by ID, so its path is not under its parent's.
+func ampForks(env ampEnvironmentResources, clusterPath, branchPath string) []string {
+	var forks []string
+	parents := []string{branchPath}
+	for len(parents) > 0 {
+		parent := parents[0]
+		parents = parents[1:]
+		o, ok := findAmpObserved(env.Observed, ampKindBranch, parent)
+		if !ok || o.Attrs["id"] == "" {
+			continue
+		}
+		for _, r := range env.Desired {
+			if r.Kind != ampKindBranch || !strings.HasPrefix(r.Name, clusterPath+"/") {
+				continue
+			}
+			var spec ampBranchSpec
+			if json.Unmarshal(r.Spec, &spec) == nil && spec.ParentBranchID == o.Attrs["id"] {
+				forks = append(forks, r.Name)
+				parents = append(parents, r.Name)
+			}
 		}
 	}
-	return out
+	return forks
+}
+
+// ampDependents returns the declared resources that deleting the given roots would delete with
+// them, other than those in keep.
+func ampDependents(env ampEnvironmentResources, roots []string, keep map[string]bool) []string {
+	var dependents []string
+	for _, r := range env.Desired {
+		if keep[r.Kind+" "+r.Name] {
+			continue
+		}
+		for _, root := range roots {
+			if r.Name == root || strings.HasPrefix(r.Name, root+"/") {
+				dependents = append(dependents, r.Kind+" "+r.Name)
+				break
+			}
+		}
+	}
+	sort.Strings(dependents)
+	return dependents
 }
 
 type ampTarget struct {
@@ -194,85 +233,107 @@ type ampTarget struct {
 	Name string
 }
 
-// ampResourceProgress reports whether a resource has converged on its desired generation, or the
-// error that stops it ever converging.
-func ampResourceProgress(desired []ampResource, observed []ampObserved, kind, name string) (bool, error) {
+// ampResourceProgress reports whether a resource has converged on its desired generation, what it
+// is waiting on if not, or the error that stops it ever converging.
+func ampResourceProgress(desired []ampResource, observed []ampObserved, kind, name string) (bool, string, error) {
 	o, ok := findAmpObserved(observed, kind, name)
 	if ok && ampTerminalStates[o.State] {
-		return false, fmt.Errorf("%s %s is %s: %s", kind, name, o.State, o.Error)
+		return false, "", fmt.Errorf("%s %s is %s: %s", kind, name, o.State, o.Error)
 	}
-	if !ok || o.State != ampStateReady {
-		return false, nil
+	if !ok {
+		return false, fmt.Sprintf("%s %s has not been reported yet", kind, name), nil
+	}
+	if o.State != ampStateReady {
+		return false, fmt.Sprintf("%s %s is %s", kind, name, o.State), nil
 	}
 	if kind == ampKindEndpoint && o.Attrs["address"] == "" {
-		return false, nil
+		return false, fmt.Sprintf("%s %s has no address yet", kind, name), nil
 	}
 	// generation is omitted while 0, and applied_generation only appears once the controller has
 	// echoed one back, so the comparison applies only when both are present.
 	if d, ok := findAmpDesired(desired, kind, name); ok && d.Generation > 0 {
 		if applied, ok := o.Attrs["applied_generation"]; ok && applied != fmt.Sprint(d.Generation) {
-			return false, nil
+			return false, fmt.Sprintf("%s %s has applied generation %s of %d", kind, name, applied, d.Generation), nil
 		}
 	}
-	return true, nil
+	return true, "", nil
+}
+
+// ampPoll calls check until it reports nothing left to wait on. A transient API error is retried
+// like a wait; any other error stops the poll at once.
+func ampPoll(ctx context.Context, what string, check func(context.Context) (waitingOn string, err error)) error {
+	var terminal error
+	last := "no response yet"
+	retryPolicy := retry.WithMaxDuration(ampOperationTimeout, retry.NewConstant(ampPollInterval))
+	err := retry.Do(ctx, retryPolicy, func(ctx context.Context) error {
+		waitingOn, err := check(ctx)
+		switch {
+		case err != nil && !isYcpTransient(err):
+			terminal = err
+			return err
+		case err != nil:
+			last = err.Error()
+			return retry.RetryableError(err)
+		case waitingOn != "":
+			last = waitingOn
+			tflog.Debug(ctx, "Waiting for "+what+": "+waitingOn)
+			return retry.RetryableError(fmt.Errorf("%s", waitingOn))
+		}
+		return nil
+	})
+	switch {
+	case terminal != nil:
+		return terminal
+	case err == nil:
+		return nil
+	case ctx.Err() != nil:
+		return fmt.Errorf("stopped waiting for %s: %v", what, ctx.Err())
+	}
+	return fmt.Errorf("timed out after %v waiting for %s; last status: %s", ampOperationTimeout, what, last)
 }
 
 // waitForAmp polls until every target has converged.
 func waitForAmp(ctx context.Context, scope ampScope, targets []ampTarget) error {
-	var terminal error
-	retryPolicy := retry.WithMaxDuration(ampOperationTimeout, retry.NewConstant(ampPollInterval))
-	err := retry.Do(ctx, retryPolicy, func(ctx context.Context) error {
+	what := "the change to converge"
+	if scope.isByoc() {
+		what += " (check that the environment's agent is running)"
+	}
+	return ampPoll(ctx, what, func(ctx context.Context) (string, error) {
 		snap, err := scope.snapshot(ctx)
 		if err != nil {
-			return retry.RetryableError(err)
+			return "", err
 		}
 		for _, t := range targets {
 			env, ok := ampEnvDeclaring(snap, t.Kind, t.Name)
 			if !ok {
-				terminal = fmt.Errorf("%s %s is not declared", t.Kind, t.Name)
-				return terminal
+				return "", fmt.Errorf("%s %s is not declared", t.Kind, t.Name)
 			}
-			done, err := ampResourceProgress(env.Desired, env.Observed, t.Kind, t.Name)
-			if err != nil {
-				terminal = err
-				return err
-			}
-			if !done {
-				tflog.Debug(ctx, fmt.Sprintf("%s %s has not converged yet", t.Kind, t.Name))
-				return retry.RetryableError(errors.New("not ready yet"))
+			done, waitingOn, err := ampResourceProgress(env.Desired, env.Observed, t.Kind, t.Name)
+			if err != nil || !done {
+				return waitingOn, err
 			}
 		}
-		return nil
+		return "", nil
 	})
-	if terminal != nil {
-		return terminal
-	}
-	if err != nil {
-		hint := ""
-		if scope.isByoc() {
-			hint = "; check that the environment's agent is running"
-		}
-		return fmt.Errorf("timed out after %v waiting for the change to converge%s", ampOperationTimeout, hint)
-	}
-	return nil
 }
 
-// waitForAmpGone polls until no environment reports the resource any more.
-func waitForAmpGone(ctx context.Context, scope ampScope, kind, name string) error {
-	retryPolicy := retry.WithMaxDuration(ampOperationTimeout, retry.NewConstant(ampPollInterval))
-	return retry.Do(ctx, retryPolicy, func(ctx context.Context) error {
+// waitForAmpGone polls until no environment reports any of the resources any more.
+func waitForAmpGone(ctx context.Context, scope ampScope, targets []ampTarget) error {
+	return ampPoll(ctx, "the deletion to complete", func(ctx context.Context) (string, error) {
 		snap, err := scope.snapshot(ctx)
 		if isYcpNotFound(err) {
-			return nil
+			return "", nil
 		}
 		if err != nil {
-			return retry.RetryableError(err)
+			return "", err
 		}
 		for _, env := range snap {
-			if _, ok := findAmpObserved(env.Observed, kind, name); ok {
-				return retry.RetryableError(fmt.Errorf("%s %s is still being deleted", kind, name))
+			for _, t := range targets {
+				if _, ok := findAmpObserved(env.Observed, t.Kind, t.Name); ok {
+					return fmt.Sprintf("%s %s is still being deleted", t.Kind, t.Name), nil
+				}
 			}
 		}
-		return nil
+		return "", nil
 	})
 }

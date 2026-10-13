@@ -10,9 +10,13 @@ description: |-
 
 ~> **Note:** This resource is behind a feature flag. Set the environment variable `YBM_FF_AMP=true` to use it.
 
-Set `environment_id` for a cluster in a BYOC environment; leave it unset for a shared cluster.
+Set `environment_id` and `storage_pool` for a cluster in a BYOC environment; leave both unset for a shared cluster.
 
-`pg_settings` can be changed in place. `extensions` can be added in place but not removed. Changing `cluster_name`, `branch_name`, `parent_branch`, `fork_point_lsn` or `environment_id` replaces the branch, which deletes its data and its endpoints. The default `main` branch is created with the cluster and cannot be managed with this resource.
+`pg_settings` can be changed in place. They apply to every endpoint on the branch, and an endpoint's own `pg_settings` override them. Removing a key resets the setting to the PostgreSQL default. `extensions` can be added in place but not removed. Changing `cluster_name`, `branch_name`, `parent_branch`, `fork_point_lsn`, `environment_id` or `storage_pool` replaces the branch, which deletes its data. The default `main` branch is created with the cluster; set its settings with the cluster's `branch_pg_settings`.
+
+Deleting a branch also deletes its endpoints and the branches forked from it, so deleting a branch that still has any fails. A normal `terraform destroy` deletes the dependent resources first, so it works. To delete them along with the branch, for example to replace it after a `fork_point_lsn` change, set `force_destroy = true` and apply it first.
+
+`ttl` is reserved for branch expiry, which AMP does not support yet, and setting it fails at plan time.
 
 ## Example Usage
 

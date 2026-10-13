@@ -178,6 +178,7 @@ func (p *provider) GetResources(_ context.Context) (map[string]tfsdk.ResourceTyp
 	if fflags.IsFeatureFlagEnabled(fflags.AMP) {
 		resources["ybm_amp_cluster"] = resourceAmpClusterType{}
 		resources["ybm_byoc_environment"] = resourceByocEnvironmentType{}
+		resources["ybm_byoc_storage_pool"] = resourceByocStoragePoolType{}
 		resources["ybm_byoc_cluster"] = resourceByocClusterType{}
 		resources["ybm_amp_branch"] = resourceAmpBranchType{}
 		resources["ybm_amp_endpoint"] = resourceAmpEndpointType{}

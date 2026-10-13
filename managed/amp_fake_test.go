@@ -27,7 +27,7 @@ import (
 
 // fakeYcp is a stateful stand-in for the YBM /ycp routes. Every declared resource is reported
 // as converged on its latest generation, endpoints with an address, and every cluster with its
-// default main branch.
+// default main branch whether or not it is declared.
 type fakeYcp struct {
 	mu       sync.Mutex
 	managed  map[string][]ampResource // region -> desired
@@ -50,6 +50,20 @@ func (f *fakeYcp) addByocEnv(id, state string) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.byoc[id] = &fakeByocEnv{state: state, region: "us-east-1"}
+}
+
+func (f *fakeYcp) setByocState(id, state string) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.byoc[id].state = state
+}
+
+// addByocPool declares a storage pool the way the console does.
+func (f *fakeYcp) addByocPool(env, pool string) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.byoc[env].desired = append(f.byoc[env].desired, ampResource{Kind: ampKindStoragePool, Name: pool,
+		Spec: mustMarshal(ampStoragePoolSpec{OwnerUserID: testAccountID}), Generation: 1})
 }
 
 func fakeID(name string) string {
@@ -81,8 +95,8 @@ func fakeObserved(desired []ampResource) []ampObserved {
 			attrs["address"] = leaf + ".amp.example.com:5432"
 		}
 		observed = append(observed, ampObserved{Kind: r.Kind, ID: r.Kind + "/" + r.Name, State: ampStateReady, Attrs: attrs})
-		if r.Kind == ampKindCluster {
-			main := r.Name + "/" + ampDefaultBranch
+		main := r.Name + "/" + ampDefaultBranch
+		if _, declared := findAmpDesired(desired, ampKindBranch, main); r.Kind == ampKindCluster && !declared {
 			observed = append(observed, ampObserved{Kind: ampKindBranch, ID: ampKindBranch + "/" + main, State: ampStateReady, Attrs: map[string]string{"id": fakeID(main)}})
 		}
 	}
@@ -195,7 +209,7 @@ func (f *fakeYcp) serveManaged(w http.ResponseWriter, r *http.Request, body []by
 	for _, region := range patch.Regions {
 		before := copyResources(f.managed[region.Region])
 		// The real route carries no storage pool row in the response; the pool is implied.
-		after, err := applyAmpIntent(copyResources(before), testAccountID, intent, region.Resources)
+		after, err := applyAmpIntent(copyResources(before), intent, region.Resources)
 		if err != nil {
 			f.fail(w, err)
 			return
@@ -274,6 +288,8 @@ func tfValue(t *testing.T, typ tftypes.Type, v interface{}) tftypes.Value {
 		return tftypes.NewValue(typ, v)
 	case typ.Is(tftypes.Number):
 		return tftypes.NewValue(typ, big.NewFloat(float64(v.(int))))
+	case typ.Is(tftypes.Object{}):
+		return tfObject(t, typ, v.(map[string]interface{}))
 	case typ.Is(tftypes.List{}):
 		elem := typ.(tftypes.List).ElementType
 		var vals []tftypes.Value
@@ -389,7 +405,22 @@ func (h *tfHarness) apply(name string, prior tftypes.Value, config map[string]in
 		return prior, resp.Diagnostics
 	}
 	state, _ := resp.NewState.Unmarshal(typ)
+	h.requireConsistent(name, p.planned, state)
 	return state, nil
+}
+
+// requireConsistent fails the test where Terraform would fail the apply with "Provider produced
+// inconsistent result after apply": a value known in the plan that the new state does not match.
+func (h *tfHarness) requireConsistent(name string, planned, state tftypes.Value) {
+	h.t.Helper()
+	var plannedAttrs, stateAttrs map[string]tftypes.Value
+	_ = planned.As(&plannedAttrs)
+	_ = state.As(&stateAttrs)
+	for k, v := range plannedAttrs {
+		if v.IsFullyKnown() && !v.Equal(stateAttrs[k]) {
+			h.t.Errorf("%s: inconsistent result after apply: %s was planned as %v but is %v", name, k, v, stateAttrs[k])
+		}
+	}
 }
 
 func (h *tfHarness) destroy(name string, prior tftypes.Value) []*tfprotov6.Diagnostic {
