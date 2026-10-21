@@ -30,15 +30,15 @@ func (r resourceAmpClusterType) GetSchema(_ context.Context) (tfsdk.Schema, diag
 		PlanModifiers: []tfsdk.AttributePlanModifier{tfsdk.RequiresReplace()},
 	}
 	attributes["environment_id"] = tfsdk.Attribute{
-		Description:   "The ID of the AMP Managed environment hosting the cluster.",
+		Description:   "The ID of the environment hosting the cluster.",
 		Type:          types.StringType,
 		Computed:      true,
 		PlanModifiers: []tfsdk.AttributePlanModifier{tfsdk.UseStateForUnknown()},
 	}
 	return tfsdk.Schema{
-		Description: `The resource to create a shared PostgreSQL cluster in YugabyteDB Aeon's AMP Managed service. ` +
-			`The cluster is created in the account's storage pool with one read-write endpoint on its main branch. ` +
-			`Add branches and endpoints with ybm_amp_branch and ybm_amp_endpoint.`,
+		Description: `The resource to create a shared PostgreSQL cluster in YugabyteDB Aeon. ` +
+			`The cluster is created in the account's storage pool with its main branch. ` +
+			`Connect to it through a ybm_aeon_pg_endpoint on main with role read_write, and add branches with ybm_aeon_pg_branch.`,
 		Attributes: attributes,
 	}, nil
 }
@@ -53,9 +53,12 @@ type resourceAmpCluster struct {
 	p provider
 }
 
-func ampClusterConfigFromPlan(plan AmpCluster) (ampClusterConfig, error) {
-	return newAmpClusterConfig(plan.PgVersion, plan.Engine, plan.Extensions, plan.Credentials,
-		plan.Cpu, plan.Memory, plan.ConnectivityMode, plan.AllowedCidrs, plan.BranchPgSettings, plan.EndpointPgSettings)
+func ampClusterConfigFromPlan(plan AmpCluster, prior *AmpCluster) ampClusterConfig {
+	priorPg := types.Map{Null: true}
+	if prior != nil {
+		priorPg = prior.BranchPgSettings
+	}
+	return newAmpClusterConfig(plan.PgVersion, plan.Engine, plan.Extensions, plan.BranchPgSettings, plan.BranchExtensions, priorPg)
 }
 
 func (r resourceAmpCluster) ModifyPlan(ctx context.Context, req tfsdk.ModifyResourcePlanRequest, resp *tfsdk.ModifyResourcePlanResponse) {
@@ -81,20 +84,14 @@ func (r resourceAmpCluster) Create(ctx context.Context, req tfsdk.CreateResource
 		resp.Diagnostics.AddError("Unable to get account ID", message)
 		return
 	}
-	config, err := ampClusterConfigFromPlan(plan)
-	if err != nil {
-		resp.Diagnostics.AddError("Invalid cluster configuration", err.Error())
-		return
-	}
-
 	scope := newAmpScope(r.p.client, accountId, "", "")
 	clusterName := plan.ClusterName.Value
-	if err := scope.apply(ctx, plan.Region.Value, ampIntentCreate, ampCreateClusterItems(scope.pool(), clusterName, config)); err != nil {
-		resp.Diagnostics.AddError("Unable to create cluster "+clusterName, err.Error())
+	created, createErr := createAmpCluster(ctx, scope, plan.Region.Value, clusterName, ampClusterConfigFromPlan(plan, nil))
+	if !created {
+		resp.Diagnostics.AddError("Unable to create cluster "+clusterName, createErr.Error())
 		return
 	}
-	waitErr := waitForAmp(ctx, scope, ampClusterTargets(scope.pool(), clusterName))
-	// The cluster exists from here on, so its state is saved even when it did not become ready:
+	// The cluster exists from here on, so its state is saved even when the create did not finish:
 	// Terraform then marks it tainted rather than losing track of it.
 	cluster, _, err := resourceAmpClusterRead(ctx, scope, clusterName, plan)
 	if err != nil {
@@ -102,8 +99,8 @@ func (r resourceAmpCluster) Create(ctx context.Context, req tfsdk.CreateResource
 		return
 	}
 	resp.Diagnostics.Append(resp.State.Set(ctx, &cluster)...)
-	if waitErr != nil {
-		resp.Diagnostics.AddError("Cluster "+clusterName+" did not become ready", waitErr.Error())
+	if createErr != nil {
+		resp.Diagnostics.AddError("Unable to create cluster "+clusterName, createErr.Error())
 	}
 }
 
@@ -139,31 +136,19 @@ func resourceAmpClusterRead(ctx context.Context, scope ampScope, clusterName str
 	if err != nil {
 		return cluster, true, err
 	}
-	ep := status.Endpoint
 	cluster = AmpCluster{
-		AccountID:             types.String{Value: scope.accountId},
-		ClusterName:           types.String{Value: clusterName},
-		Region:                types.String{Value: env.Region},
-		PgVersion:             types.Int64{Value: status.Config.PgVersion},
-		Engine:                types.String{Value: status.Config.Engine},
-		Extensions:            stringsToTf(status.Config.Extensions, prior.Extensions),
-		Credentials:           ampCredentialsToTf(ep.Config.Password, prior.Credentials),
-		Cpu:                   tfString(ep.Config.Cpu),
-		Memory:                tfString(ep.Config.Memory),
-		SuspendTimeoutSeconds: types.Int64{Null: true},
-		ConnectivityMode:      tfString(ep.Config.ConnectivityMode),
-		AllowedCidrs:          stringsToTf(ep.Config.AllowedCidrs, prior.AllowedCidrs),
-		BranchPgSettings:      mapToTf(status.Config.BranchPgSettings, prior.BranchPgSettings),
-		EndpointPgSettings:    mapToTf(ep.Config.PgSettings, prior.EndpointPgSettings),
-		ForceDestroy:          prior.ForceDestroy,
-		ClusterID:             tfString(status.ClusterID),
-		EnvironmentID:         tfString(env.EnvironmentID),
-		State:                 tfString(ep.State),
-		Host:                  tfString(ep.Host),
-		Port:                  tfString(ep.Port),
-		Username:              types.String{Value: ampUsername},
-		Database:              types.String{Value: ampDatabase},
-		TlsCaCertificate:      tfString(ep.TlsCaCertificate),
+		AccountID:        types.String{Value: scope.accountId},
+		ClusterName:      types.String{Value: clusterName},
+		Region:           types.String{Value: env.Region},
+		PgVersion:        tfInt64(status.Config.PgVersion),
+		Engine:           tfString(status.Config.Engine),
+		Extensions:       stringsToTf(status.Config.Extensions, prior.Extensions),
+		BranchPgSettings: mapToTf(derefMap(status.Config.BranchPgSettings), prior.BranchPgSettings),
+		BranchExtensions: stringsToTf(status.Config.BranchExtensions, prior.BranchExtensions),
+		ForceDestroy:     prior.ForceDestroy,
+		ClusterID:        tfString(status.ClusterID),
+		EnvironmentID:    tfString(env.EnvironmentID),
+		State:            tfString(status.State),
 	}
 	return cluster, true, nil
 }
@@ -208,12 +193,7 @@ func (r resourceAmpCluster) Update(ctx context.Context, req tfsdk.UpdateResource
 	scope := newAmpScope(r.p.client, state.AccountID.Value, "", "")
 	clusterName := state.ClusterName.Value
 
-	config, err := ampClusterConfigFromPlan(plan)
-	if err != nil {
-		resp.Diagnostics.AddError("Invalid cluster configuration", err.Error())
-		return
-	}
-	if err := updateAmpCluster(ctx, scope, state.Region.Value, clusterName, config); err != nil {
+	if err := updateAmpCluster(ctx, scope, state.Region.Value, clusterName, ampClusterConfigFromPlan(plan, &state)); err != nil {
 		resp.Diagnostics.AddError("Unable to update cluster "+clusterName, err.Error())
 		return
 	}

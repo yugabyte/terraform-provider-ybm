@@ -37,9 +37,10 @@ type fakeYcp struct {
 }
 
 type fakeByocEnv struct {
-	state   string
-	region  string
-	desired []ampResource
+	state     string
+	region    string
+	placement string
+	desired   []ampResource
 }
 
 func newFakeYcp() *fakeYcp {
@@ -86,13 +87,43 @@ func bumpGenerations(before, after []ampResource) {
 	}
 }
 
+// fakeObserved reports every declared resource as AMP applied it, with the service's defaults
+// for what the spec leaves out.
 func fakeObserved(desired []ampResource) []ampObserved {
 	var observed []ampObserved
 	for _, r := range desired {
 		attrs := map[string]string{"id": fakeID(r.Name), "applied_generation": strconv.FormatInt(r.Generation, 10)}
-		if r.Kind == ampKindEndpoint {
+		switch r.Kind {
+		case ampKindCluster:
+			var spec ampClusterSpec
+			_ = json.Unmarshal(r.Spec, &spec)
+			attrs["pg_version"], attrs["engine"] = "18", "postgres"
+			if spec.PgVersion != 0 {
+				attrs["pg_version"] = strconv.FormatInt(spec.PgVersion, 10)
+			}
+			if spec.Engine != "" {
+				attrs["engine"] = spec.Engine
+			}
+		case ampKindEndpoint:
+			var spec ampEndpointSpec
+			_ = json.Unmarshal(r.Spec, &spec)
 			leaf := r.Name[strings.LastIndex(r.Name, "/")+1:]
 			attrs["address"] = leaf + ".amp.example.com:5432"
+			attrs["tls_ca_crt"] = "CA"
+			attrs["role"], attrs["cpu"], attrs["connectivity_mode"] = ampRoleReadOnly, "2", "cluster_ip"
+			if spec.Role != "" {
+				attrs["role"] = spec.Role
+			}
+			if spec.Resources != nil && spec.Resources.CPU != "" {
+				attrs["cpu"] = spec.Resources.CPU
+			}
+			attrs["memory"], _ = ampDefaultMemory(attrs["cpu"])
+			if spec.Resources != nil && spec.Resources.Memory != "" {
+				attrs["memory"] = spec.Resources.Memory
+			}
+			if spec.Connectivity != nil && spec.Connectivity.Mode != "" {
+				attrs["connectivity_mode"] = spec.Connectivity.Mode
+			}
 		}
 		observed = append(observed, ampObserved{Kind: r.Kind, ID: r.Kind + "/" + r.Name, State: ampStateReady, Attrs: attrs})
 		main := r.Name + "/" + ampDefaultBranch
@@ -139,7 +170,7 @@ func (f *fakeYcp) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	if r.URL.Path == "/api/public/v1/account" {
 		f.write(w, http.StatusOK, map[string]interface{}{
-			"spec": map[string]string{"name": "test", "account_type": "AMP_MANAGED"},
+			"spec": map[string]string{"name": "test"},
 			"info": map[string]string{"id": testAccountID},
 		})
 		return
@@ -150,6 +181,26 @@ func (f *fakeYcp) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	switch {
 	case route == "/clusters":
 		f.serveManaged(w, r, body)
+	case route == "/environments" && r.Method == http.MethodPost:
+		var req struct {
+			Name      string `json:"name"`
+			Placement string `json:"placement"`
+		}
+		_ = json.Unmarshal(body, &req)
+		id := byocEnvironmentID(req.Name)
+		if _, ok := f.byoc[id]; ok {
+			f.fail(w, &ycpError{StatusCode: http.StatusConflict, Message: "name already claimed"})
+			return
+		}
+		placement := req.Placement
+		if placement == "" {
+			placement = "cloud"
+		}
+		f.byoc[id] = &fakeByocEnv{state: "PENDING", placement: placement}
+		f.write(w, http.StatusCreated, map[string]interface{}{
+			"environment": map[string]interface{}{"id": id, "state": "PENDING", "placement": placement},
+			"api_key":     "key-" + id, "install_hint": "helm upgrade --install",
+		})
 	case strings.HasPrefix(route, "/environments/"):
 		rest := strings.TrimPrefix(route, "/environments/")
 		id, sub, _ := strings.Cut(rest, "/")
@@ -161,7 +212,11 @@ func (f *fakeYcp) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 		switch {
 		case sub == "" && r.Method == http.MethodGet:
-			f.write(w, http.StatusOK, map[string]interface{}{"id": id, "state": env.state, "region": env.region, "resources": fakeObserved(env.desired)})
+			f.write(w, http.StatusOK, map[string]interface{}{"id": id, "state": env.state, "region": env.region, "placement": env.placement,
+				"resources": fakeObserved(env.desired)})
+		case sub == "" && r.Method == http.MethodDelete:
+			env.state = byocEnvironmentDeregistered
+			f.write(w, http.StatusNoContent, nil)
 		case sub == "desired" && r.Method == http.MethodGet:
 			f.write(w, http.StatusOK, map[string]interface{}{"resources": env.desired})
 		case sub == "desired" && r.Method == http.MethodPost:
@@ -230,7 +285,7 @@ type tfHarness struct {
 
 func newTfHarness(t *testing.T) *tfHarness {
 	t.Helper()
-	t.Setenv("YBM_FF_AMP", "true")
+	t.Setenv("YBM_FF_AEON_PG", "true")
 	ampPollInterval = time.Millisecond
 	t.Cleanup(func() { ampPollInterval = 10 * time.Second })
 
@@ -252,6 +307,12 @@ func newTfHarness(t *testing.T) *tfHarness {
 		t.Fatalf("configure: %v %v", err, resp.Diagnostics)
 	}
 	return &tfHarness{t: t, srv: srv, fake: fake}
+}
+
+// with returns the harness reporting to t, for use from a subtest: a failure in another goroutine
+// than the test's cannot stop it.
+func (h *tfHarness) with(t *testing.T) *tfHarness {
+	return &tfHarness{t: t, srv: h.srv, fake: h.fake}
 }
 
 func dynamic(t *testing.T, typ tftypes.Type, v tftypes.Value) *tfprotov6.DynamicValue {
@@ -279,9 +340,16 @@ func diagText(diags []*tfprotov6.Diagnostic) string {
 	return strings.Join(parts, "; ")
 }
 
+// unknown stands for a configuration value that is not known until apply, such as the ID of a
+// resource being replaced.
+type unknown struct{}
+
 func tfValue(t *testing.T, typ tftypes.Type, v interface{}) tftypes.Value {
 	if v == nil {
 		return tftypes.NewValue(typ, nil)
+	}
+	if _, ok := v.(unknown); ok {
+		return tftypes.NewValue(typ, tftypes.UnknownValue)
 	}
 	switch {
 	case typ.Is(tftypes.String), typ.Is(tftypes.Bool):
@@ -290,9 +358,14 @@ func tfValue(t *testing.T, typ tftypes.Type, v interface{}) tftypes.Value {
 		return tftypes.NewValue(typ, big.NewFloat(float64(v.(int))))
 	case typ.Is(tftypes.Object{}):
 		return tfObject(t, typ, v.(map[string]interface{}))
-	case typ.Is(tftypes.List{}):
-		elem := typ.(tftypes.List).ElementType
-		var vals []tftypes.Value
+	case typ.Is(tftypes.List{}), typ.Is(tftypes.Set{}):
+		var elem tftypes.Type
+		if l, ok := typ.(tftypes.List); ok {
+			elem = l.ElementType
+		} else {
+			elem = typ.(tftypes.Set).ElementType
+		}
+		vals := []tftypes.Value{}
 		for _, s := range v.([]string) {
 			vals = append(vals, tftypes.NewValue(elem, s))
 		}
@@ -369,6 +442,14 @@ func (h *tfHarness) plan(name string, prior tftypes.Value, config map[string]int
 			merged[k] = v
 		}
 		proposed = tftypes.NewValue(typ, merged)
+	}
+	// Terraform validates the configuration before it plans.
+	validated, err := h.srv.ValidateResourceConfig(ctx, &tfprotov6.ValidateResourceConfigRequest{TypeName: name, Config: dynamic(h.t, typ, cfg)})
+	if err != nil {
+		h.t.Fatal(err)
+	}
+	if hasErrors(validated.Diagnostics) {
+		return tfPlanResult{diags: validated.Diagnostics}
 	}
 	resp, err := h.srv.PlanResourceChange(ctx, &tfprotov6.PlanResourceChangeRequest{
 		TypeName: name, PriorState: dynamic(h.t, typ, prior), ProposedNewState: dynamic(h.t, typ, proposed), Config: dynamic(h.t, typ, cfg),

@@ -56,7 +56,7 @@ func (r resourceByocClusterType) GetSchema(_ context.Context) (tfsdk.Schema, dia
 	return tfsdk.Schema{
 		Description: `The resource to create a PostgreSQL cluster in a storage pool of a BYOC environment registered with ybm_byoc_environment. ` +
 			`The cluster is created with one read-write endpoint on its main branch once the environment's agent picks it up. ` +
-			`Add branches and endpoints with ybm_amp_branch and ybm_amp_endpoint.`,
+			`Add branches and endpoints with ybm_aeon_pg_branch and ybm_aeon_pg_endpoint.`,
 		Attributes: attributes,
 	}, nil
 }
@@ -147,9 +147,12 @@ func waitForActiveByocEnvironment(ctx context.Context, apiClient *openapiclient.
 	})
 }
 
-func byocClusterConfigFromPlan(plan ByocCluster) (ampClusterConfig, error) {
-	return newAmpClusterConfig(plan.PgVersion, plan.Engine, plan.Extensions, plan.Credentials,
-		plan.Cpu, plan.Memory, plan.ConnectivityMode, plan.AllowedCidrs, plan.BranchPgSettings, plan.EndpointPgSettings)
+func byocClusterConfigFromPlan(plan ByocCluster, prior *ByocCluster) ampClusterConfig {
+	priorPg := types.Map{Null: true}
+	if prior != nil {
+		priorPg = prior.BranchPgSettings
+	}
+	return newAmpClusterConfig(plan.PgVersion, plan.Engine, plan.Extensions, plan.BranchPgSettings, plan.BranchExtensions, priorPg)
 }
 
 func (r resourceByocCluster) ModifyPlan(ctx context.Context, req tfsdk.ModifyResourcePlanRequest, resp *tfsdk.ModifyResourcePlanResponse) {
@@ -175,11 +178,6 @@ func (r resourceByocCluster) Create(ctx context.Context, req tfsdk.CreateResourc
 		resp.Diagnostics.AddError("Unable to get account ID", message)
 		return
 	}
-	config, err := byocClusterConfigFromPlan(plan)
-	if err != nil {
-		resp.Diagnostics.AddError("Invalid cluster configuration", err.Error())
-		return
-	}
 	environmentId := plan.EnvironmentID.Value
 	clusterName := plan.ClusterName.Value
 	if err := waitForActiveByocEnvironment(ctx, r.p.client, accountId, environmentId); err != nil {
@@ -188,12 +186,12 @@ func (r resourceByocCluster) Create(ctx context.Context, req tfsdk.CreateResourc
 	}
 
 	scope := newAmpScope(r.p.client, accountId, environmentId, plan.StoragePool.Value)
-	if err := scope.apply(ctx, "", ampIntentCreate, ampCreateClusterItems(scope.pool(), clusterName, config)); err != nil {
-		resp.Diagnostics.AddError("Unable to create cluster "+clusterName, err.Error())
+	created, createErr := createAmpCluster(ctx, scope, "", clusterName, byocClusterConfigFromPlan(plan, nil))
+	if !created {
+		resp.Diagnostics.AddError("Unable to create cluster "+clusterName, createErr.Error())
 		return
 	}
-	waitErr := waitForAmp(ctx, scope, ampClusterTargets(scope.pool(), clusterName))
-	// The cluster exists from here on, so its state is saved even when it did not become ready:
+	// The cluster exists from here on, so its state is saved even when the create did not finish:
 	// Terraform then marks it tainted rather than losing track of it.
 	cluster, _, err := resourceByocClusterRead(ctx, scope, clusterName, plan)
 	if err != nil {
@@ -201,8 +199,8 @@ func (r resourceByocCluster) Create(ctx context.Context, req tfsdk.CreateResourc
 		return
 	}
 	resp.Diagnostics.Append(resp.State.Set(ctx, &cluster)...)
-	if waitErr != nil {
-		resp.Diagnostics.AddError("Cluster "+clusterName+" did not become ready", waitErr.Error())
+	if createErr != nil {
+		resp.Diagnostics.AddError("Unable to create cluster "+clusterName, createErr.Error())
 	}
 }
 
@@ -215,31 +213,19 @@ func resourceByocClusterRead(ctx context.Context, scope ampScope, clusterName st
 	if err != nil || !ok {
 		return cluster, ok, err
 	}
-	ep := status.Endpoint
 	cluster = ByocCluster{
-		AccountID:             types.String{Value: scope.accountId},
-		EnvironmentID:         types.String{Value: scope.environmentId},
-		StoragePool:           types.String{Value: scope.pool()},
-		ClusterName:           types.String{Value: clusterName},
-		PgVersion:             types.Int64{Value: status.Config.PgVersion},
-		Engine:                types.String{Value: status.Config.Engine},
-		Extensions:            stringsToTf(status.Config.Extensions, prior.Extensions),
-		Credentials:           ampCredentialsToTf(ep.Config.Password, prior.Credentials),
-		Cpu:                   tfString(ep.Config.Cpu),
-		Memory:                tfString(ep.Config.Memory),
-		SuspendTimeoutSeconds: types.Int64{Null: true},
-		ConnectivityMode:      tfString(ep.Config.ConnectivityMode),
-		AllowedCidrs:          stringsToTf(ep.Config.AllowedCidrs, prior.AllowedCidrs),
-		BranchPgSettings:      mapToTf(status.Config.BranchPgSettings, prior.BranchPgSettings),
-		EndpointPgSettings:    mapToTf(ep.Config.PgSettings, prior.EndpointPgSettings),
-		ForceDestroy:          prior.ForceDestroy,
-		ClusterID:             tfString(status.ClusterID),
-		State:                 tfString(ep.State),
-		Host:                  tfString(ep.Host),
-		Port:                  tfString(ep.Port),
-		Username:              types.String{Value: ampUsername},
-		Database:              types.String{Value: ampDatabase},
-		TlsCaCertificate:      tfString(ep.TlsCaCertificate),
+		AccountID:        types.String{Value: scope.accountId},
+		EnvironmentID:    types.String{Value: scope.environmentId},
+		StoragePool:      types.String{Value: scope.pool()},
+		ClusterName:      types.String{Value: clusterName},
+		PgVersion:        tfInt64(status.Config.PgVersion),
+		Engine:           tfString(status.Config.Engine),
+		Extensions:       stringsToTf(status.Config.Extensions, prior.Extensions),
+		BranchPgSettings: mapToTf(derefMap(status.Config.BranchPgSettings), prior.BranchPgSettings),
+		BranchExtensions: stringsToTf(status.Config.BranchExtensions, prior.BranchExtensions),
+		ForceDestroy:     prior.ForceDestroy,
+		ClusterID:        tfString(status.ClusterID),
+		State:            tfString(status.State),
 	}
 	return cluster, true, nil
 }
@@ -284,13 +270,13 @@ func (r resourceByocCluster) Update(ctx context.Context, req tfsdk.UpdateResourc
 	}
 	scope := newAmpScope(r.p.client, state.AccountID.Value, state.EnvironmentID.Value, state.StoragePool.Value)
 	clusterName := state.ClusterName.Value
-
-	config, err := byocClusterConfigFromPlan(plan)
-	if err != nil {
-		resp.Diagnostics.AddError("Invalid cluster configuration", err.Error())
+	// The agent will never act on a change to an environment that is not READY, so this fails at
+	// once rather than after the whole wait.
+	if err := waitForActiveByocEnvironment(ctx, r.p.client, scope.accountId, scope.environmentId); err != nil {
+		resp.Diagnostics.AddError("Environment "+scope.environmentId+" cannot run clusters", err.Error())
 		return
 	}
-	if err := updateAmpCluster(ctx, scope, "", clusterName, config); err != nil {
+	if err := updateAmpCluster(ctx, scope, "", clusterName, byocClusterConfigFromPlan(plan, &state)); err != nil {
 		resp.Diagnostics.AddError("Unable to update cluster "+clusterName, err.Error())
 		return
 	}

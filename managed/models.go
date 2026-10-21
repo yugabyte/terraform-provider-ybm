@@ -609,55 +609,33 @@ type AmpCredentials struct {
 }
 
 type AmpCluster struct {
-	AccountID             types.String    `tfsdk:"account_id"`
-	ClusterName           types.String    `tfsdk:"cluster_name"`
-	Region                types.String    `tfsdk:"region"`
-	PgVersion             types.Int64     `tfsdk:"pg_version"`
-	Engine                types.String    `tfsdk:"engine"`
-	Extensions            []types.String  `tfsdk:"extensions"`
-	Credentials           *AmpCredentials `tfsdk:"credentials"`
-	Cpu                   types.String    `tfsdk:"cpu"`
-	Memory                types.String    `tfsdk:"memory"`
-	SuspendTimeoutSeconds types.Int64     `tfsdk:"suspend_timeout_seconds"`
-	ConnectivityMode      types.String    `tfsdk:"connectivity_mode"`
-	AllowedCidrs          []types.String  `tfsdk:"allowed_cidrs"`
-	BranchPgSettings      types.Map       `tfsdk:"branch_pg_settings"`
-	EndpointPgSettings    types.Map       `tfsdk:"endpoint_pg_settings"`
-	ForceDestroy          types.Bool      `tfsdk:"force_destroy"`
-	ClusterID             types.String    `tfsdk:"cluster_id"`
-	EnvironmentID         types.String    `tfsdk:"environment_id"`
-	State                 types.String    `tfsdk:"state"`
-	Host                  types.String    `tfsdk:"host"`
-	Port                  types.String    `tfsdk:"port"`
-	Username              types.String    `tfsdk:"username"`
-	Database              types.String    `tfsdk:"database"`
-	TlsCaCertificate      types.String    `tfsdk:"tls_ca_certificate"`
+	AccountID        types.String   `tfsdk:"account_id"`
+	ClusterName      types.String   `tfsdk:"cluster_name"`
+	Region           types.String   `tfsdk:"region"`
+	PgVersion        types.Int64    `tfsdk:"pg_version"`
+	Engine           types.String   `tfsdk:"engine"`
+	Extensions       []types.String `tfsdk:"extensions"`
+	BranchPgSettings types.Map      `tfsdk:"branch_pg_settings"`
+	BranchExtensions []types.String `tfsdk:"branch_extensions"`
+	ForceDestroy     types.Bool     `tfsdk:"force_destroy"`
+	ClusterID        types.String   `tfsdk:"cluster_id"`
+	EnvironmentID    types.String   `tfsdk:"environment_id"`
+	State            types.String   `tfsdk:"state"`
 }
 
 type ByocCluster struct {
-	AccountID             types.String    `tfsdk:"account_id"`
-	EnvironmentID         types.String    `tfsdk:"environment_id"`
-	StoragePool           types.String    `tfsdk:"storage_pool"`
-	ClusterName           types.String    `tfsdk:"cluster_name"`
-	PgVersion             types.Int64     `tfsdk:"pg_version"`
-	Engine                types.String    `tfsdk:"engine"`
-	Extensions            []types.String  `tfsdk:"extensions"`
-	Credentials           *AmpCredentials `tfsdk:"credentials"`
-	Cpu                   types.String    `tfsdk:"cpu"`
-	Memory                types.String    `tfsdk:"memory"`
-	SuspendTimeoutSeconds types.Int64     `tfsdk:"suspend_timeout_seconds"`
-	ConnectivityMode      types.String    `tfsdk:"connectivity_mode"`
-	AllowedCidrs          []types.String  `tfsdk:"allowed_cidrs"`
-	BranchPgSettings      types.Map       `tfsdk:"branch_pg_settings"`
-	EndpointPgSettings    types.Map       `tfsdk:"endpoint_pg_settings"`
-	ForceDestroy          types.Bool      `tfsdk:"force_destroy"`
-	ClusterID             types.String    `tfsdk:"cluster_id"`
-	State                 types.String    `tfsdk:"state"`
-	Host                  types.String    `tfsdk:"host"`
-	Port                  types.String    `tfsdk:"port"`
-	Username              types.String    `tfsdk:"username"`
-	Database              types.String    `tfsdk:"database"`
-	TlsCaCertificate      types.String    `tfsdk:"tls_ca_certificate"`
+	AccountID        types.String   `tfsdk:"account_id"`
+	EnvironmentID    types.String   `tfsdk:"environment_id"`
+	StoragePool      types.String   `tfsdk:"storage_pool"`
+	ClusterName      types.String   `tfsdk:"cluster_name"`
+	PgVersion        types.Int64    `tfsdk:"pg_version"`
+	Engine           types.String   `tfsdk:"engine"`
+	Extensions       []types.String `tfsdk:"extensions"`
+	BranchPgSettings types.Map      `tfsdk:"branch_pg_settings"`
+	BranchExtensions []types.String `tfsdk:"branch_extensions"`
+	ForceDestroy     types.Bool     `tfsdk:"force_destroy"`
+	ClusterID        types.String   `tfsdk:"cluster_id"`
+	State            types.String   `tfsdk:"state"`
 }
 
 type ByocStoragePool struct {
@@ -686,6 +664,7 @@ type AmpBranch struct {
 	EnvironmentID types.String   `tfsdk:"environment_id"`
 	StoragePool   types.String   `tfsdk:"storage_pool"`
 	ClusterName   types.String   `tfsdk:"cluster_name"`
+	ClusterID     types.String   `tfsdk:"cluster_id"`
 	BranchName    types.String   `tfsdk:"branch_name"`
 	ParentBranch  types.String   `tfsdk:"parent_branch"`
 	ForkPointLsn  types.String   `tfsdk:"fork_point_lsn"`
@@ -702,6 +681,7 @@ type AmpEndpoint struct {
 	EnvironmentID         types.String    `tfsdk:"environment_id"`
 	StoragePool           types.String    `tfsdk:"storage_pool"`
 	ClusterName           types.String    `tfsdk:"cluster_name"`
+	ClusterID             types.String    `tfsdk:"cluster_id"`
 	BranchName            types.String    `tfsdk:"branch_name"`
 	EndpointName          types.String    `tfsdk:"endpoint_name"`
 	Role                  types.String    `tfsdk:"role"`

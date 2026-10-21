@@ -30,10 +30,8 @@ const (
 	ampKindBranch      = "branch"
 	ampKindEndpoint    = "endpoint"
 
-	// Every AMP cluster gets a default branch named main; the provider puts its one read-write
-	// endpoint there under a fixed name.
-	ampDefaultBranch   = "main"
-	ampPrimaryEndpoint = "primary"
+	// Every AMP cluster gets a default branch named main.
+	ampDefaultBranch = "main"
 
 	// Connection details AMP endpoints always use.
 	ampUsername = "cloud_admin"
@@ -208,8 +206,9 @@ type ampEndpointResources struct {
 }
 
 type ampEndpointConnectivity struct {
-	Mode         string   `json:"mode,omitempty"`
-	AllowedCidrs []string `json:"allowed_cidrs"`
+	Mode string `json:"mode,omitempty"`
+	// A pointer so an emptied list is still sent: an update replaces connectivity whole.
+	AllowedCidrs *[]string `json:"allowed_cidrs,omitempty"`
 }
 
 type ampStoragePoolSpec struct {
@@ -227,7 +226,8 @@ type ampEndpointSpec struct {
 	Password     string                   `json:"password,omitempty"`
 	Resources    *ampEndpointResources    `json:"resources,omitempty"`
 	Connectivity *ampEndpointConnectivity `json:"connectivity,omitempty"`
-	// A pointer so an emptied map is still sent: an update replaces the whole map.
+	// A pointer so an emptied map is still sent, which clears it, while an omitted one is left
+	// alone: an update replaces the whole map.
 	PgSettings *map[string]string `json:"pg_settings,omitempty"`
 }
 
@@ -248,11 +248,6 @@ func ampBranchName(pool, cluster, branch string) string {
 
 func ampEndpointPath(pool, cluster, branch, endpoint string) string {
 	return strings.Join([]string{pool, cluster, branch, endpoint}, "/")
-}
-
-// ampEndpointName is the path of the read-write endpoint the cluster resources create.
-func ampEndpointName(pool, cluster string) string {
-	return ampEndpointPath(pool, cluster, ampDefaultBranch, ampPrimaryEndpoint)
 }
 
 func findAmpDesired(resources []ampResource, kind, name string) (ampResource, bool) {

@@ -18,7 +18,7 @@ const (
 	MultiZoneSupport     FeatureFlag = "MULTI_ZONE_SUPPORT"
 	MultiCloudSupport    FeatureFlag = "MULTI_CLOUD_SUPPORT"
 	Autoscaling          FeatureFlag = "AUTOSCALING"
-	AMP                  FeatureFlag = "AMP"
+	AeonPG               FeatureFlag = "AEON_PG"
 )
 
 var flagEnabled = map[FeatureFlag]bool{
@@ -27,7 +27,7 @@ var flagEnabled = map[FeatureFlag]bool{
 	MultiZoneSupport:     false,
 	MultiCloudSupport:    true,
 	Autoscaling:          false,
-	AMP:                  false,
+	AeonPG:               false,
 }
 
 func (f FeatureFlag) String() string {

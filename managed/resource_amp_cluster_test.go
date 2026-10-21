@@ -106,29 +106,56 @@ func TestAmpDefaultMemory(t *testing.T) {
 	}
 }
 
-func TestNewAmpClusterConfigAppliesDefaults(t *testing.T) {
+func TestAmpEndpointSpecLeavesUnsetValuesToTheService(t *testing.T) {
 	nullMap := types.Map{ElemType: types.StringType, Null: true}
-	c, err := newAmpClusterConfig(types.Int64{Unknown: true}, types.String{Unknown: true}, nil,
-		&AmpCredentials{Password: types.String{Value: "S3cretPassw0rd"}}, types.String{Unknown: true}, types.String{Unknown: true},
-		types.String{Null: true}, nil, nullMap, nullMap)
+	plan := AmpEndpoint{Credentials: &AmpCredentials{Password: types.String{Value: "S3cretPassw0rd"}}, Cpu: types.String{Unknown: true},
+		Memory: types.String{Unknown: true}, ConnectivityMode: types.String{Unknown: true}, PgSettings: nullMap}
+	c, err := newAmpEndpointConfig(ampRoleReadWrite, plan, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := ampClusterConfig{PgVersion: 18, Engine: "postgres", BranchPgSettings: map[string]string{}, Endpoint: ampEndpointConfig{
-		Role: "read_write", Password: "S3cretPassw0rd", Cpu: "2", Memory: "16384Mi", ConnectivityMode: "cluster_ip", PgSettings: map[string]string{},
-	}}
-	if !reflect.DeepEqual(c, want) {
-		t.Errorf("config = %+v", c)
+	b, _ := json.Marshal(c.spec(true))
+	if string(b) != `{"role":"read_write","password":"S3cretPassw0rd"}` {
+		t.Errorf("create spec = %s", b)
 	}
 
-	// An update carries only what AMP can change in place, with nested maps sent whole.
-	b, _ := json.Marshal(c.Endpoint.spec(false))
-	if string(b) != `{"resources":{"cpu":"2","memory":"16384Mi"},"connectivity":{"mode":"cluster_ip","allowed_cidrs":[]},"pg_settings":{}}` {
+	// On an update, a new cpu brings memory with it, and unmanaged collections are left out.
+	prior := plan
+	prior.Cpu, prior.Memory = types.String{Value: "2"}, types.String{Value: "16Gi"}
+	plan.Cpu, plan.ConnectivityMode = types.String{Value: "4"}, types.String{Value: "cluster_ip"}
+	c, err = newAmpEndpointConfig(ampRoleReadWrite, plan, &prior)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if b, _ := json.Marshal(c.spec(false)); string(b) != `{"resources":{"cpu":"4","memory":"32768Mi"}}` {
 		t.Errorf("update spec = %s", b)
 	}
-	b, _ = json.Marshal(c.Endpoint.spec(true))
-	if !strings.Contains(string(b), `"role":"read_write","password":"S3cretPassw0rd"`) {
-		t.Errorf("create spec = %s", b)
+
+	// Removing managed collections from the configuration clears them, with the mode connectivity
+	// already has.
+	prior.AllowedCidrs = []types.String{{Value: "10.0.0.0/8"}}
+	prior.PgSettings = types.Map{ElemType: types.StringType, Elems: map[string]attr.Value{"work_mem": types.String{Value: "64MB"}}}
+	c, _ = newAmpEndpointConfig(ampRoleReadWrite, plan, &prior)
+	if b, _ := json.Marshal(c.spec(false)); !strings.Contains(string(b), `"connectivity":{"mode":"cluster_ip","allowed_cidrs":[]},"pg_settings":{}`) {
+		t.Errorf("update spec = %s", b)
+	}
+}
+
+func TestAmpClusterConfigLeavesUnsetValuesToTheService(t *testing.T) {
+	nullMap := types.Map{ElemType: types.StringType, Null: true}
+	c := newAmpClusterConfig(types.Int64{Unknown: true}, types.String{Unknown: true}, nil, nullMap, nil, nullMap)
+	if b, _ := json.Marshal(c.clusterSpec()); string(b) != `{}` {
+		t.Errorf("cluster spec = %s", b)
+	}
+	if b, _ := json.Marshal(c.mainBranchSpec(true)); string(b) != `{}` {
+		t.Errorf("main branch spec = %s", b)
+	}
+	c = newAmpClusterConfig(types.Int64{Value: 17}, types.String{Value: "postgres"}, nil, nullMap, []types.String{{Value: "vector"}}, nullMap)
+	if b, _ := json.Marshal(c.mainBranchSpec(false)); string(b) != `{}` {
+		t.Errorf("a new main branch got extensions: %s", b)
+	}
+	if b, _ := json.Marshal(c.mainBranchSpec(true)); string(b) != `{"extensions":["vector"]}` {
+		t.Errorf("main branch spec = %s", b)
 	}
 }
 
@@ -137,11 +164,11 @@ func endpointObserved(state, address, applied string) ampObserved {
 	if applied != "" {
 		attrs["applied_generation"] = applied
 	}
-	return ampObserved{Kind: ampKindEndpoint, ID: "endpoint/" + ampEndpointName("p", "c"), State: state, Attrs: attrs}
+	return ampObserved{Kind: ampKindEndpoint, ID: "endpoint/" + "p/c/main/primary", State: state, Attrs: attrs}
 }
 
 func TestAmpResourceProgress(t *testing.T) {
-	endpoint := ampEndpointName("p", "c")
+	endpoint := "p/c/main/primary"
 	desired := []ampResource{{Kind: ampKindEndpoint, Name: endpoint, Generation: 2}, {Kind: ampKindBranch, Name: "p/c/dev", Generation: 3}}
 	cases := []struct {
 		name     string
@@ -175,54 +202,79 @@ func TestAmpResourceProgress(t *testing.T) {
 
 func TestReadAmpCluster(t *testing.T) {
 	desired := []ampResource{
-		{Kind: ampKindCluster, Name: "p/c", Spec: json.RawMessage(`{"pg_version":17,"extensions":["vector"]}`)},
-		{Kind: ampKindBranch, Name: "p/c/main", Spec: json.RawMessage(`{"pg_settings":{"work_mem":"32MB","jit":"off"}}`)},
-		{Kind: ampKindEndpoint, Name: "p/c/main/primary", Generation: 1, Spec: json.RawMessage(
-			`{"role":"read_write","password":"pw123456","resources":{"cpu":"2","memory":"16Gi"},"connectivity":{"mode":"nlb_internal","allowed_cidrs":["10.0.0.0/16"]},"pg_settings":{"work_mem":"64MB"}}`)},
+		{Kind: ampKindCluster, Name: "p/c", Spec: json.RawMessage(`{"extensions":["vector"]}`)},
+		{Kind: ampKindBranch, Name: "p/c/main", Spec: json.RawMessage(`{"pg_settings":{"work_mem":"32MB","jit":"off"},"extensions":["postgis"]}`)},
 	}
 	observed := []ampObserved{
-		{Kind: ampKindCluster, ID: "cluster/p/c", State: "ready", Attrs: map[string]string{"id": "amp-uuid"}},
-		{Kind: ampKindEndpoint, ID: "endpoint/p/c/main/primary", State: "ready", Attrs: map[string]string{"id": "ep-uuid", "address": "db.example.com:5432", "tls_ca_crt": "CA"}},
+		{Kind: ampKindCluster, ID: "cluster/p/c", State: "ready", Attrs: map[string]string{"id": "amp-uuid", "pg_version": "18", "engine": "postgres"}},
 	}
 	s, found, err := readAmpCluster(desired, observed, "p", "c")
 	if err != nil || !found {
 		t.Fatalf("found = %v, err = %v", found, err)
 	}
-	endpointConfig := ampEndpointConfig{Role: "read_write", Password: "pw123456", Cpu: "2", Memory: "16Gi",
-		ConnectivityMode: "nlb_internal", AllowedCidrs: []string{"10.0.0.0/16"}, PgSettings: map[string]string{"work_mem": "64MB"}}
+	// What the spec leaves out is read from what AMP applied.
 	want := ampClusterStatus{
-		Config: ampClusterConfig{PgVersion: 17, Engine: "postgres", Extensions: []string{"vector"},
-			BranchPgSettings: map[string]string{"work_mem": "32MB", "jit": "off"}, Endpoint: endpointConfig},
+		Config: ampClusterConfig{PgVersion: 18, Engine: "postgres", Extensions: []string{"vector"},
+			BranchPgSettings: &map[string]string{"work_mem": "32MB", "jit": "off"}, BranchExtensions: []string{"postgis"}},
 		ClusterID: "amp-uuid",
-		Endpoint: ampEndpointStatus{Config: endpointConfig, EndpointID: "ep-uuid", State: "ready",
-			Host: "db.example.com", Port: "5432", TlsCaCertificate: "CA"},
+		State:     "ready",
 	}
 	if !reflect.DeepEqual(s, want) {
 		t.Errorf("status = %+v", s)
 	}
-
 	if _, found, _ := readAmpCluster(desired, observed, "p", "other"); found {
 		t.Error("found a cluster that is not declared")
 	}
 }
 
-func TestEmptyCollectionsReadBackAsConfigured(t *testing.T) {
+func TestReadAmpEndpoint(t *testing.T) {
+	desired := []ampResource{{Kind: ampKindEndpoint, Name: "p/c/main/primary", Spec: json.RawMessage(
+		`{"role":"read_write","password":"pw123456","connectivity":{"allowed_cidrs":["10.0.0.0/16"]},"pg_settings":{"work_mem":"64MB"}}`)}}
+	observed := []ampObserved{{Kind: ampKindEndpoint, ID: "endpoint/p/c/main/primary", State: "ready", Attrs: map[string]string{
+		"id": "ep-uuid", "address": "db.example.com:5432", "tls_ca_crt": "CA", "cpu": "2", "memory": "16Gi", "connectivity_mode": "cluster_ip"}}}
+	s, found, err := readAmpEndpoint(desired, observed, "p/c/main/primary")
+	if err != nil || !found {
+		t.Fatalf("found = %v, err = %v", found, err)
+	}
+	want := ampEndpointStatus{
+		Config: ampEndpointConfig{Role: "read_write", Cpu: "2", Memory: "16Gi", ConnectivityMode: "cluster_ip",
+			AllowedCidrs: &[]string{"10.0.0.0/16"}, PgSettings: &map[string]string{"work_mem": "64MB"}},
+		EndpointID: "ep-uuid", State: "ready", Host: "db.example.com", Port: "5432", TlsCaCertificate: "CA",
+	}
+	if !reflect.DeepEqual(s, want) {
+		t.Errorf("status = %+v", s)
+	}
+}
+
+func TestCollectionsReadBackOnlyWhenManaged(t *testing.T) {
 	nullMap := types.Map{ElemType: types.StringType, Null: true}
 	emptyMap := types.Map{ElemType: types.StringType, Elems: map[string]attr.Value{}}
 	if got := mapToTf(nil, emptyMap); got.Null || len(got.Elems) != 0 {
 		t.Errorf("an empty map read back as %v", got)
 	}
-	if got := mapToTf(map[string]string{}, nullMap); !got.Null {
-		t.Errorf("an unset map read back as %v", got)
-	}
-	if got := mapToTf(map[string]string{"a": "b"}, nullMap); got.Null || len(got.Elems) != 1 {
-		t.Errorf("a map set outside Terraform read back as %v", got)
+	// Settings Terraform does not manage, such as those a fork inherits, stay out of state.
+	if got := mapToTf(map[string]string{"a": "b"}, nullMap); !got.Null {
+		t.Errorf("an unmanaged map read back as %v", got)
 	}
 	if got := stringsToTf(nil, []types.String{}); got == nil || len(got) != 0 {
-		t.Errorf("an empty list read back as %v", got)
+		t.Errorf("an empty set read back as %v", got)
 	}
-	if got := stringsToTf(nil, nil); got != nil {
-		t.Errorf("an unset list read back as %v", got)
+	if got := stringsToTf([]string{"a"}, nil); got != nil {
+		t.Errorf("an unmanaged set read back as %v", got)
+	}
+	if got := managedMap(nullMap, nullMap); got != nil {
+		t.Errorf("an unmanaged map is sent as %v", *got)
+	}
+	if got := managedMap(nullMap, emptyMap); got == nil || len(*got) != 0 {
+		t.Errorf("a removed map is sent as %v", got)
+	}
+}
+
+func TestByocEnvironmentID(t *testing.T) {
+	for name, want := range map[string]string{"acme-prod": "acme-prod", " Acme Prod ": "acme-prod", "acme_prod/eu": "acme-prod-eu"} {
+		if got := byocEnvironmentID(name); got != want {
+			t.Errorf("byocEnvironmentID(%q) = %q, want %q", name, got, want)
+		}
 	}
 }
 

@@ -23,8 +23,8 @@ type resourceByocStoragePoolType struct{}
 func (r resourceByocStoragePoolType) GetSchema(_ context.Context) (tfsdk.Schema, diag.Diagnostics) {
 	return tfsdk.Schema{
 		Description: `The resource to create a storage pool in a BYOC environment: a group of clusters, for example for a team or business unit. ` +
-			`Create ybm_byoc_cluster resources in it with storage_pool. AMP does not delete storage pools, so destroying this resource ` +
-			`only removes it from Terraform state, and creating a pool that already exists with the same owner adopts it.`,
+			`Create ybm_aeon_pg_byoc_cluster resources in it with storage_pool. Storage pools cannot be deleted, so destroying this resource ` +
+			`only removes it from Terraform state; import the pool to manage it again.`,
 		Attributes: map[string]tfsdk.Attribute{
 			"account_id": {
 				Description:   "The ID of the account the environment belongs to.",
@@ -91,14 +91,9 @@ func (r resourceByocStoragePool) Create(ctx context.Context, req tfsdk.CreateRes
 	}
 
 	err := updateByocDesired(ctx, r.p.client, accountId, environmentId, func(desired []ampResource) ([]ampResource, error) {
-		if existing, ok := findAmpDesired(desired, ampKindStoragePool, name); ok {
-			var spec ampStoragePoolSpec
-			_ = json.Unmarshal(existing.Spec, &spec)
-			if spec.OwnerUserID != owner {
-				return nil, &ycpError{StatusCode: http.StatusConflict, Message: fmt.Sprintf(
-					"storage pool %s already exists with owner %s; import it, or set owner_user_id to match", name, spec.OwnerUserID)}
-			}
-			return desired, nil
+		if _, ok := findAmpDesired(desired, ampKindStoragePool, name); ok {
+			return nil, &ycpError{StatusCode: http.StatusConflict, Message: fmt.Sprintf(
+				"storage pool %s already exists in environment %s; import it with terraform import", name, environmentId)}
 		}
 		return applyAmpIntent(desired, ampIntentCreate, []ampPatchItem{{Kind: ampKindStoragePool, Name: name, Spec: ampStoragePoolSpec{OwnerUserID: owner}}})
 	})
@@ -202,8 +197,8 @@ func (r resourceByocStoragePool) Delete(ctx context.Context, req tfsdk.DeleteRes
 		return
 	}
 	resp.Diagnostics.AddWarning("Storage pool "+state.Name.Value+" was not deleted",
-		"AMP does not delete storage pools, so the pool stays in environment "+state.EnvironmentID.Value+
-			" and has only been removed from Terraform state. Creating it again adopts it.")
+		"Storage pools cannot be deleted, so the pool stays in environment "+state.EnvironmentID.Value+
+			" and has only been removed from Terraform state. Import it to manage it again.")
 	resp.State.RemoveResource(ctx)
 }
 

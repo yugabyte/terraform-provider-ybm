@@ -8,11 +8,16 @@ description: |-
 
 {{ .Description | trimspace }}
 
-~> **Note:** This resource is behind a feature flag. Set the environment variable `YBM_FF_AMP=true` to use it.
+~> **Note:** This resource is behind a feature flag. Set the environment variable `YBM_FF_AEON_PG=true` to use it.
 
-Creating the environment registers it and returns `agent_api_key` and `install_hint`. The environment stays `PENDING` until you install its agent with them. `agent_api_key` is only returned by the apply that registers the environment.
 
-!> **Warning:** Destroying the environment deregisters it and revokes the agent API key, but its name stays claimed, so an environment with the same name cannot be registered again.
+Creating the environment registers it and returns `agent_api_key` and `install_hint`. The environment stays `PENDING` until its agent is installed and enrolls with the key; `region`, `cloud_provider` and `k8s_version` are what the agent reports then. `placement` is passed to the agent by the install command, so set it before installing.
+
+`agent_api_key` is only returned by the apply that registers the environment. Importing an environment cannot recover it, and replacing or destroying the environment revokes it. Keep it in a Kubernetes secret, as in the example, rather than only in Terraform state.
+
+The environment's ID is derived from `name`: lowercased, with spaces, underscores and slashes turned into hyphens. A `name` change that derives the same ID, such as a change of case, is applied in place; any other change replaces the environment. After an import, `name` can be written as registered or as the ID.
+
+!> **Warning:** Destroying or replacing the environment deregisters it and revokes the agent API key, and its name stays claimed, so an environment with the same name cannot be registered again.
 
 ## Example Usage
 

@@ -24,7 +24,8 @@ func (r resourceAmpEndpointType) GetSchema(_ context.Context) (tfsdk.Schema, dia
 		attributes[k] = v
 	}
 	attributes["credentials"] = ampCredentialsAttribute(
-		"The credentials of a read_write endpoint, whose password is required. A read_only endpoint takes none; it uses the read_write endpoint's.", false)
+		"The credentials of a read_write endpoint. Only the cluster's first read_write endpoint, normally the one on main, takes a password: " +
+			"it sets the cluster's password, which branches and their endpoints inherit. A read_only endpoint takes none.")
 	attributes["pg_settings"] = ampPgSettingsAttribute("PostgreSQL settings of the endpoint, such as work_mem. A key set here overrides the same key in its branch's settings.")
 	attributes["branch_name"] = tfsdk.Attribute{
 		Description:   "The name of the branch the endpoint serves. Defaults to main. Changing it forces a new endpoint.",
@@ -36,7 +37,7 @@ func (r resourceAmpEndpointType) GetSchema(_ context.Context) (tfsdk.Schema, dia
 	}
 	attributes["endpoint_name"] = ampNameAttribute("The name of the endpoint, unique within its branch. Changing it forces a new endpoint.")
 	attributes["role"] = tfsdk.Attribute{
-		Description:   "read_write or read_only. Defaults to read_only. A branch can have at most one read_write endpoint, and the cluster resources already create one on main. Changing it forces a new endpoint.",
+		Description:   "read_write or read_only. Defaults to read_only. A branch can have at most one read_write endpoint. Changing it forces a new endpoint.",
 		Type:          types.StringType,
 		Optional:      true,
 		Computed:      true,
@@ -50,9 +51,9 @@ func (r resourceAmpEndpointType) GetSchema(_ context.Context) (tfsdk.Schema, dia
 		PlanModifiers: []tfsdk.AttributePlanModifier{tfsdk.UseStateForUnknown()},
 	}
 	return tfsdk.Schema{
-		Description: `The resource to create an endpoint of an AMP PostgreSQL cluster: compute that serves one branch, ` +
-			`such as a read-only replica of main or the read-write endpoint of a ybm_amp_branch. ` +
-			`Works for shared clusters (ybm_amp_cluster) and, with environment_id, BYOC clusters (ybm_byoc_cluster).`,
+		Description: `The resource to create an endpoint of a PostgreSQL cluster: compute that serves one branch, ` +
+			`such as the cluster's read-write endpoint on main, a read-only replica, or the read-write endpoint of a ybm_aeon_pg_branch. ` +
+			`Works for shared clusters (ybm_aeon_pg_cluster) and, with environment_id, BYOC clusters (ybm_aeon_pg_byoc_cluster).`,
 		Attributes: attributes,
 	}, nil
 }
@@ -65,10 +66,6 @@ func (r resourceAmpEndpointType) NewResource(_ context.Context, p tfsdk.Provider
 
 type resourceAmpEndpoint struct {
 	p provider
-}
-
-func ampEndpointConfigFromPlan(plan AmpEndpoint, role string) (ampEndpointConfig, error) {
-	return newAmpEndpointConfig(role, plan.Credentials, plan.Cpu, plan.Memory, plan.ConnectivityMode, plan.AllowedCidrs, plan.PgSettings)
 }
 
 func (r resourceAmpEndpoint) ModifyPlan(ctx context.Context, req tfsdk.ModifyResourcePlanRequest, resp *tfsdk.ModifyResourcePlanResponse) {
@@ -86,6 +83,26 @@ func (r resourceAmpEndpoint) ModifyPlan(ctx context.Context, req tfsdk.ModifyRes
 	if c, ok := ampPlanCheckFrom(ctx, req, roleName); ok {
 		resp.Diagnostics.Append(c.check()...)
 	}
+	resp.Diagnostics.Append(planAmpMemory(ctx, req, resp)...)
+}
+
+// planAmpMemory keeps an unset memory as it is unless cpu changes, when it follows the new cpu.
+// Terraform would otherwise plan it as unknown on every update.
+func planAmpMemory(ctx context.Context, req tfsdk.ModifyResourcePlanRequest, resp *tfsdk.ModifyResourcePlanResponse) diag.Diagnostics {
+	var diags diag.Diagnostics
+	if req.State.Raw.IsNull() {
+		return diags
+	}
+	var configMemory, plannedCpu, priorCpu, priorMemory types.String
+	diags.Append(req.Config.GetAttribute(ctx, path.Root("memory"), &configMemory)...)
+	diags.Append(resp.Plan.GetAttribute(ctx, path.Root("cpu"), &plannedCpu)...)
+	diags.Append(req.State.GetAttribute(ctx, path.Root("cpu"), &priorCpu)...)
+	diags.Append(req.State.GetAttribute(ctx, path.Root("memory"), &priorMemory)...)
+	if diags.HasError() || !configMemory.Null || !plannedCpu.Equal(priorCpu) {
+		return diags
+	}
+	diags.Append(resp.Plan.SetAttribute(ctx, path.Root("memory"), priorMemory)...)
+	return diags
 }
 
 func stringOr(v types.String, fallback string) string {
@@ -112,13 +129,16 @@ func (r resourceAmpEndpoint) Create(ctx context.Context, req tfsdk.CreateResourc
 	branchName := stringOr(plan.BranchName, ampDefaultBranch)
 	endpointName := plan.EndpointName.Value
 	role := stringOr(plan.Role, ampRoleReadOnly)
-	config, err := ampEndpointConfigFromPlan(plan, role)
+	config, err := newAmpEndpointConfig(role, plan, nil)
 	if err != nil {
 		resp.Diagnostics.AddError("Invalid endpoint configuration", err.Error())
 		return
 	}
 
 	scope, region, err := ampChildScope(ctx, r.p, plan.EnvironmentID, plan.StoragePool, clusterName)
+	if err == nil {
+		err = checkAmpClusterID(ctx, scope, plan.ClusterID, clusterName)
+	}
 	if err != nil {
 		resp.Diagnostics.AddError("Unable to create endpoint "+endpointName, err.Error())
 		return
@@ -165,16 +185,17 @@ func resourceAmpEndpointRead(ctx context.Context, scope ampScope, prior AmpEndpo
 		EnvironmentID:         optionalString(prior.EnvironmentID),
 		StoragePool:           optionalString(prior.StoragePool),
 		ClusterName:           types.String{Value: clusterName},
+		ClusterID:             ampClusterIDToTf(snap, scope.pool(), clusterName, prior.ClusterID),
 		BranchName:            types.String{Value: branchName},
 		EndpointName:          prior.EndpointName,
 		Role:                  types.String{Value: status.Config.Role},
-		Credentials:           ampCredentialsToTf(status.Config.Password, prior.Credentials),
+		Credentials:           ampCredentialsToTf(prior.Credentials),
 		Cpu:                   tfString(status.Config.Cpu),
 		Memory:                tfString(status.Config.Memory),
 		SuspendTimeoutSeconds: types.Int64{Null: true},
 		ConnectivityMode:      tfString(status.Config.ConnectivityMode),
-		AllowedCidrs:          stringsToTf(status.Config.AllowedCidrs, prior.AllowedCidrs),
-		PgSettings:            mapToTf(status.Config.PgSettings, prior.PgSettings),
+		AllowedCidrs:          stringsToTf(derefStrings(status.Config.AllowedCidrs), prior.AllowedCidrs),
+		PgSettings:            mapToTf(derefMap(status.Config.PgSettings), prior.PgSettings),
 		EndpointID:            tfString(status.EndpointID),
 		State:                 tfString(status.State),
 		Host:                  tfString(status.Host),
@@ -224,7 +245,7 @@ func (r resourceAmpEndpoint) Update(ctx context.Context, req tfsdk.UpdateResourc
 		return
 	}
 	endpointName := state.EndpointName.Value
-	config, err := ampEndpointConfigFromPlan(plan, state.Role.Value)
+	config, err := newAmpEndpointConfig(state.Role.Value, plan, &state)
 	if err != nil {
 		resp.Diagnostics.AddError("Invalid endpoint configuration", err.Error())
 		return

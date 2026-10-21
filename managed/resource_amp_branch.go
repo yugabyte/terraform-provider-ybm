@@ -31,13 +31,21 @@ func ampParentAttributes() map[string]tfsdk.Attribute {
 			PlanModifiers: []tfsdk.AttributePlanModifier{tfsdk.UseStateForUnknown()},
 		},
 		"environment_id": {
-			Description:   "The ID of the BYOC environment the cluster is in. Leave it unset for a shared (AMP Managed) cluster. Changing it forces a replacement.",
+			Description:   "The ID of the BYOC environment the cluster is in. Leave it unset for a shared cluster (ybm_aeon_pg_cluster). Changing it forces a replacement.",
 			Type:          types.StringType,
 			Optional:      true,
 			PlanModifiers: []tfsdk.AttributePlanModifier{tfsdk.RequiresReplace()},
 		},
 		"storage_pool": ampStoragePoolAttribute("The storage pool of the BYOC cluster. Required with environment_id, and not allowed without it. Changing it forces a replacement.", false),
 		"cluster_name": ampNameAttribute("The name of the cluster. Changing it forces a replacement."),
+		"cluster_id": {
+			Description: "The ID of the cluster. Set it to the cluster resource's cluster_id so that replacing the cluster, which deletes its " +
+				"branches and endpoints, replaces this resource too. Read from the cluster when unset. Changing it forces a replacement.",
+			Type:          types.StringType,
+			Optional:      true,
+			Computed:      true,
+			PlanModifiers: []tfsdk.AttributePlanModifier{tfsdk.UseStateForUnknown(), tfsdk.RequiresReplace()},
+		},
 	}
 }
 
@@ -58,6 +66,35 @@ func checkAmpParentPlan(ctx context.Context, plan tfsdk.Plan) diag.Diagnostics {
 			"A shared cluster is always in the account's storage pool; set storage_pool only with environment_id.")
 	}
 	return diags
+}
+
+// ampClusterID returns the ID the agent reported for a cluster, or "" before it has.
+func ampClusterID(snap []ampEnvironmentResources, pool, clusterName string) string {
+	return ampObservedID(snap, ampKindCluster, ampClusterName(pool, clusterName))
+}
+
+// checkAmpClusterID returns an error when a configured cluster_id is not the cluster's.
+func checkAmpClusterID(ctx context.Context, scope ampScope, configured types.String, clusterName string) error {
+	if !known(configured.Null, configured.Unknown) {
+		return nil
+	}
+	snap, err := scope.snapshot(ctx)
+	if err != nil {
+		return err
+	}
+	if id := ampClusterID(snap, scope.pool(), clusterName); id != "" && id != configured.Value {
+		return fmt.Errorf("cluster_id %s is not the ID of cluster %s, which is %s", configured.Value, clusterName, id)
+	}
+	return nil
+}
+
+// ampClusterIDToTf returns the cluster_id to store: the reported one, or the prior one until the
+// cluster is reported.
+func ampClusterIDToTf(snap []ampEnvironmentResources, pool, clusterName string, prior types.String) types.String {
+	if id := ampClusterID(snap, pool, clusterName); id != "" {
+		return types.String{Value: id}
+	}
+	return optionalString(prior)
 }
 
 // ampChildScope returns the scope of the cluster a branch or endpoint belongs to, and the region
@@ -88,7 +125,9 @@ type resourceAmpBranchType struct{}
 
 func (r resourceAmpBranchType) GetSchema(_ context.Context) (tfsdk.Schema, diag.Diagnostics) {
 	attributes := ampParentAttributes()
-	attributes["branch_name"] = ampNameAttribute("The name of the branch. The default branch, main, is created with the cluster and cannot be managed here; set its settings with the cluster's branch_pg_settings. Changing it forces a new branch.")
+	attributes["branch_name"] = ampNameAttribute("The name of the branch. The default branch, main, is created with the cluster and cannot be managed here; " +
+		"set its settings with the cluster's branch_pg_settings and branch_extensions. Changing it forces a new branch.")
+	attributes["branch_name"] = withValidator(attributes["branch_name"], stringvalidator.NoneOf(ampDefaultBranch))
 	attributes["parent_branch"] = tfsdk.Attribute{
 		Description:   "The name of the branch to fork from. Defaults to main. Changing it forces a new branch.",
 		Type:          types.StringType,
@@ -106,11 +145,7 @@ func (r resourceAmpBranchType) GetSchema(_ context.Context) (tfsdk.Schema, diag.
 	}
 	attributes["pg_settings"] = ampPgSettingsAttribute("PostgreSQL settings of the branch, such as work_mem. They apply to every endpoint on the branch; " +
 		"an endpoint's own pg_settings override them.")
-	attributes["extensions"] = tfsdk.Attribute{
-		Description: "Extensions to install in the branch. Extensions can be added in place but not removed.",
-		Type:        types.ListType{ElemType: types.StringType},
-		Optional:    true,
-	}
+	attributes["extensions"] = ampExtensionsAttribute("Extensions to install in the branch.")
 	attributes["ttl"] = tfsdk.Attribute{
 		Description: "Reserved for deleting the branch automatically after a duration, such as 24h. Not supported yet.",
 		Type:        types.StringType,
@@ -131,9 +166,9 @@ func (r resourceAmpBranchType) GetSchema(_ context.Context) (tfsdk.Schema, diag.
 		Computed:    true,
 	}
 	return tfsdk.Schema{
-		Description: `The resource to create a branch of an AMP PostgreSQL cluster: a copy-on-write fork of another branch ` +
-			`with its own settings. Works for shared clusters (ybm_amp_cluster) and, with environment_id, BYOC clusters (ybm_byoc_cluster). ` +
-			`Connect to a branch through a ybm_amp_endpoint on it.`,
+		Description: `The resource to create a branch of a PostgreSQL cluster: a copy-on-write fork of another branch ` +
+			`with its own settings. Works for shared clusters (ybm_aeon_pg_cluster) and, with environment_id, BYOC clusters (ybm_aeon_pg_byoc_cluster). ` +
+			`Connect to a branch through a ybm_aeon_pg_endpoint on it.`,
 		Attributes: attributes,
 	}, nil
 }
@@ -156,8 +191,14 @@ func (r resourceAmpBranch) ModifyPlan(ctx context.Context, req tfsdk.ModifyResou
 	var ttl types.String
 	resp.Diagnostics.Append(req.Plan.GetAttribute(ctx, path.Root("ttl"), &ttl)...)
 	if known(ttl.Null, ttl.Unknown) {
-		resp.Diagnostics.AddAttributeError(path.Root("ttl"), "Not supported yet", "AMP branches cannot expire yet. Remove ttl.")
+		resp.Diagnostics.AddAttributeError(path.Root("ttl"), "Not supported yet", "Branches cannot expire yet. Remove ttl.")
 	}
+	resp.Diagnostics.Append(checkExtensionsKept(ctx, req, "extensions")...)
+}
+
+func withValidator(a tfsdk.Attribute, v tfsdk.AttributeValidator) tfsdk.Attribute {
+	a.Validators = append(append([]tfsdk.AttributeValidator{}, a.Validators...), v)
+	return a
 }
 
 // ampObservedID returns the AMP ID of a resource the agent has reported.
@@ -194,11 +235,10 @@ func (r resourceAmpBranch) Create(ctx context.Context, req tfsdk.CreateResourceR
 		return
 	}
 	clusterName, branchName := plan.ClusterName.Value, plan.BranchName.Value
-	if branchName == ampDefaultBranch {
-		resp.Diagnostics.AddError("Invalid branch name", "The main branch is created with the cluster and cannot be managed as a ybm_amp_branch; set its settings with the cluster's branch_pg_settings.")
-		return
-	}
 	scope, region, err := ampChildScope(ctx, r.p, plan.EnvironmentID, plan.StoragePool, clusterName)
+	if err == nil {
+		err = checkAmpClusterID(ctx, scope, plan.ClusterID, clusterName)
+	}
 	if err != nil {
 		resp.Diagnostics.AddError("Unable to create branch "+branchName, err.Error())
 		return
@@ -223,9 +263,7 @@ func (r resourceAmpBranch) Create(ctx context.Context, req tfsdk.CreateResourceR
 			return
 		}
 	}
-	if pg := mapFromTf(plan.PgSettings); len(pg) > 0 {
-		spec.PgSettings = &pg
-	}
+	spec.PgSettings = managedMap(plan.PgSettings, types.Map{Null: true})
 
 	items := []ampPatchItem{{Kind: ampKindBranch, Name: branchPath, Spec: spec}}
 	if err := scope.apply(ctx, region, ampIntentCreate, items); err != nil {
@@ -282,18 +320,15 @@ func resourceAmpBranchRead(ctx context.Context, scope ampScope, clusterName, bra
 			return branch, true, fmt.Errorf("unable to parse the spec of branch %s: %v", branchName, err)
 		}
 	}
-	var pg map[string]string
-	if spec.PgSettings != nil {
-		pg = *spec.PgSettings
-	}
 	branch = AmpBranch{
 		AccountID:     types.String{Value: scope.accountId},
 		EnvironmentID: optionalString(prior.EnvironmentID),
 		StoragePool:   optionalString(prior.StoragePool),
 		ClusterName:   types.String{Value: clusterName},
+		ClusterID:     ampClusterIDToTf(snap, pool, clusterName, prior.ClusterID),
 		BranchName:    types.String{Value: branchName},
 		ForkPointLsn:  tfString(spec.ForkPointLsn),
-		PgSettings:    mapToTf(pg, prior.PgSettings),
+		PgSettings:    mapToTf(derefMap(spec.PgSettings), prior.PgSettings),
 		Extensions:    stringsToTf(spec.Extensions, prior.Extensions),
 		Ttl:           types.String{Null: true},
 		ForceDestroy:  prior.ForceDestroy,
@@ -356,28 +391,20 @@ func (r resourceAmpBranch) Update(ctx context.Context, req tfsdk.UpdateResourceR
 		return
 	}
 	clusterName, branchName := state.ClusterName.Value, state.BranchName.Value
-
-	extensions := stringsFromTf(plan.Extensions)
-	for _, old := range stringsFromTf(state.Extensions) {
-		if !containsString(extensions, old) {
-			resp.Diagnostics.AddError("Unable to update branch "+branchName,
-				fmt.Sprintf("Extension %s cannot be removed from a branch; extensions can only be added.", old))
-			return
-		}
-	}
-
 	scope, region, err := ampChildScope(ctx, r.p, state.EnvironmentID, state.StoragePool, clusterName)
 	if err != nil {
 		resp.Diagnostics.AddError("Unable to update branch "+branchName, err.Error())
 		return
 	}
 	branchPath := ampBranchName(scope.pool(), clusterName, branchName)
-	// A declared pg_settings map owns the whole map, so an emptied one is sent to clear it.
-	pg := mapFromTf(plan.PgSettings)
-	items := []ampPatchItem{{Kind: ampKindBranch, Name: branchPath, Spec: ampBranchSpec{PgSettings: &pg, Extensions: extensions}}}
-	if err := scope.apply(ctx, region, ampIntentUpdate, items); err != nil {
-		resp.Diagnostics.AddError("Unable to update branch "+branchName, err.Error())
-		return
+	// Settings Terraform has never managed are left out, so a fork keeps those it inherited.
+	spec := ampBranchSpec{PgSettings: managedMap(plan.PgSettings, state.PgSettings), Extensions: stringsFromTf(plan.Extensions)}
+	if spec.PgSettings != nil || spec.Extensions != nil {
+		items := []ampPatchItem{{Kind: ampKindBranch, Name: branchPath, Spec: spec}}
+		if err := scope.apply(ctx, region, ampIntentUpdate, items); err != nil {
+			resp.Diagnostics.AddError("Unable to update branch "+branchName, err.Error())
+			return
+		}
 	}
 	if err := waitForAmp(ctx, scope, []ampTarget{{Kind: ampKindBranch, Name: branchPath}}); err != nil {
 		resp.Diagnostics.AddError("Branch "+branchName+" did not converge", err.Error())
@@ -389,15 +416,6 @@ func (r resourceAmpBranch) Update(ctx context.Context, req tfsdk.UpdateResourceR
 		return
 	}
 	resp.Diagnostics.Append(resp.State.Set(ctx, &branch)...)
-}
-
-func containsString(values []string, v string) bool {
-	for _, s := range values {
-		if s == v {
-			return true
-		}
-	}
-	return false
 }
 
 func (r resourceAmpBranch) Delete(ctx context.Context, req tfsdk.DeleteResourceRequest, resp *tfsdk.DeleteResourceResponse) {

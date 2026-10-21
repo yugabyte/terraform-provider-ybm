@@ -174,14 +174,14 @@ func (p *provider) GetResources(_ context.Context) (map[string]tfsdk.ResourceTyp
 		resources["ybm_autoscaler_policy"] = resourceAutoscalerPolicyType{}
 	}
 
-	// Add AMP PostgreSQL resources only if the feature flag is enabled
-	if fflags.IsFeatureFlagEnabled(fflags.AMP) {
-		resources["ybm_amp_cluster"] = resourceAmpClusterType{}
+	// Add the Aeon PG resources only if the feature flag is enabled
+	if fflags.IsFeatureFlagEnabled(fflags.AeonPG) {
+		resources["ybm_aeon_pg_cluster"] = resourceAmpClusterType{}
 		resources["ybm_byoc_environment"] = resourceByocEnvironmentType{}
 		resources["ybm_byoc_storage_pool"] = resourceByocStoragePoolType{}
-		resources["ybm_byoc_cluster"] = resourceByocClusterType{}
-		resources["ybm_amp_branch"] = resourceAmpBranchType{}
-		resources["ybm_amp_endpoint"] = resourceAmpEndpointType{}
+		resources["ybm_aeon_pg_byoc_cluster"] = resourceByocClusterType{}
+		resources["ybm_aeon_pg_branch"] = resourceAmpBranchType{}
+		resources["ybm_aeon_pg_endpoint"] = resourceAmpEndpointType{}
 	}
 
 	return resources, nil
