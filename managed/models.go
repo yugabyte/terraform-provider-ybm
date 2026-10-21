@@ -599,3 +599,104 @@ type AutoscalerScalingRule struct {
 type AutoscalerScalingAction struct {
 	Delta types.Int64 `tfsdk:"delta"`
 }
+
+// AmpCredentials are the credentials of an AMP endpoint's user.
+type AmpCredentials struct {
+	Username          types.String `tfsdk:"username"`
+	Password          types.String `tfsdk:"password"`
+	PasswordWo        types.String `tfsdk:"password_wo"`
+	PasswordWoVersion types.Int64  `tfsdk:"password_wo_version"`
+}
+
+type AmpCluster struct {
+	AccountID        types.String   `tfsdk:"account_id"`
+	ClusterName      types.String   `tfsdk:"cluster_name"`
+	Region           types.String   `tfsdk:"region"`
+	PgVersion        types.Int64    `tfsdk:"pg_version"`
+	Engine           types.String   `tfsdk:"engine"`
+	Extensions       []types.String `tfsdk:"extensions"`
+	BranchPgSettings types.Map      `tfsdk:"branch_pg_settings"`
+	BranchExtensions []types.String `tfsdk:"branch_extensions"`
+	ForceDestroy     types.Bool     `tfsdk:"force_destroy"`
+	ClusterID        types.String   `tfsdk:"cluster_id"`
+	EnvironmentID    types.String   `tfsdk:"environment_id"`
+	State            types.String   `tfsdk:"state"`
+}
+
+type ByocCluster struct {
+	AccountID        types.String   `tfsdk:"account_id"`
+	EnvironmentID    types.String   `tfsdk:"environment_id"`
+	StoragePool      types.String   `tfsdk:"storage_pool"`
+	ClusterName      types.String   `tfsdk:"cluster_name"`
+	PgVersion        types.Int64    `tfsdk:"pg_version"`
+	Engine           types.String   `tfsdk:"engine"`
+	Extensions       []types.String `tfsdk:"extensions"`
+	BranchPgSettings types.Map      `tfsdk:"branch_pg_settings"`
+	BranchExtensions []types.String `tfsdk:"branch_extensions"`
+	ForceDestroy     types.Bool     `tfsdk:"force_destroy"`
+	ClusterID        types.String   `tfsdk:"cluster_id"`
+	State            types.String   `tfsdk:"state"`
+}
+
+type ByocStoragePool struct {
+	AccountID     types.String `tfsdk:"account_id"`
+	EnvironmentID types.String `tfsdk:"environment_id"`
+	Name          types.String `tfsdk:"name"`
+	OwnerUserID   types.String `tfsdk:"owner_user_id"`
+	State         types.String `tfsdk:"state"`
+}
+
+type ByocEnvironment struct {
+	AccountID     types.String `tfsdk:"account_id"`
+	EnvironmentID types.String `tfsdk:"environment_id"`
+	Name          types.String `tfsdk:"name"`
+	Region        types.String `tfsdk:"region"`
+	Placement     types.String `tfsdk:"placement"`
+	State         types.String `tfsdk:"state"`
+	Provider      types.String `tfsdk:"cloud_provider"`
+	K8sVersion    types.String `tfsdk:"k8s_version"`
+	AgentApiKey   types.String `tfsdk:"agent_api_key"`
+	InstallHint   types.String `tfsdk:"install_hint"`
+}
+
+type AmpBranch struct {
+	AccountID     types.String   `tfsdk:"account_id"`
+	EnvironmentID types.String   `tfsdk:"environment_id"`
+	StoragePool   types.String   `tfsdk:"storage_pool"`
+	ClusterName   types.String   `tfsdk:"cluster_name"`
+	ClusterID     types.String   `tfsdk:"cluster_id"`
+	BranchName    types.String   `tfsdk:"branch_name"`
+	ParentBranch  types.String   `tfsdk:"parent_branch"`
+	ForkPointLsn  types.String   `tfsdk:"fork_point_lsn"`
+	PgSettings    types.Map      `tfsdk:"pg_settings"`
+	Extensions    []types.String `tfsdk:"extensions"`
+	Ttl           types.String   `tfsdk:"ttl"`
+	ForceDestroy  types.Bool     `tfsdk:"force_destroy"`
+	BranchID      types.String   `tfsdk:"branch_id"`
+	State         types.String   `tfsdk:"state"`
+}
+
+type AmpEndpoint struct {
+	AccountID             types.String    `tfsdk:"account_id"`
+	EnvironmentID         types.String    `tfsdk:"environment_id"`
+	StoragePool           types.String    `tfsdk:"storage_pool"`
+	ClusterName           types.String    `tfsdk:"cluster_name"`
+	ClusterID             types.String    `tfsdk:"cluster_id"`
+	BranchName            types.String    `tfsdk:"branch_name"`
+	EndpointName          types.String    `tfsdk:"endpoint_name"`
+	Role                  types.String    `tfsdk:"role"`
+	Credentials           *AmpCredentials `tfsdk:"credentials"`
+	Cpu                   types.String    `tfsdk:"cpu"`
+	Memory                types.String    `tfsdk:"memory"`
+	SuspendTimeoutSeconds types.Int64     `tfsdk:"suspend_timeout_seconds"`
+	ConnectivityMode      types.String    `tfsdk:"connectivity_mode"`
+	AllowedCidrs          []types.String  `tfsdk:"allowed_cidrs"`
+	PgSettings            types.Map       `tfsdk:"pg_settings"`
+	EndpointID            types.String    `tfsdk:"endpoint_id"`
+	State                 types.String    `tfsdk:"state"`
+	Host                  types.String    `tfsdk:"host"`
+	Port                  types.String    `tfsdk:"port"`
+	Username              types.String    `tfsdk:"username"`
+	Database              types.String    `tfsdk:"database"`
+	TlsCaCertificate      types.String    `tfsdk:"tls_ca_certificate"`
+}

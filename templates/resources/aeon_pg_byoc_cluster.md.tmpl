@@ -1,0 +1,37 @@
+---
+page_title: "{{.Name}} {{.Type}} - {{.RenderedProviderName}}"
+description: |-
+{{ .Description | plainmarkdown | trimspace | prefixlines "  " }}
+---
+
+# {{.Name}} ({{.Type}})
+
+{{ .Description | trimspace }}
+
+~> **Note:** This resource is behind a feature flag. Set the environment variable `YBM_FF_AEON_PG=true` to use it.
+
+
+The cluster is created in a storage pool of the environment, which you create with `ybm_byoc_storage_pool`. Creating or updating a cluster waits for the environment's agent to enroll, up to 60 minutes, so the environment, the agent's install (for example with `helm_release`, as in the `ybm_byoc_environment` example) and the cluster can all be in one apply. It fails at once if the environment is `SUSPENDED`, `DRAINING` or `DEREGISTERED`. Changing `environment_id`, `storage_pool`, `cluster_name`, `pg_version`, `engine` or `extensions` replaces the cluster, which deletes its data.
+
+The cluster resource manages the cluster and its `main` branch. Connect through a `ybm_aeon_pg_endpoint` on `main` with `role = "read_write"`, which also sets the cluster's password; add read-only replicas and branches with `ybm_aeon_pg_endpoint` and `ybm_aeon_pg_branch`. Set their `cluster_id` to this resource's `cluster_id` so that replacing the cluster replaces them too.
+
+`branch_pg_settings` and `branch_extensions` change the `main` branch in place; they apply to every endpoint on `main`. Leave `branch_pg_settings` unset to leave the settings as they are, or set it to `{}` to clear them; removing a key resets the setting to the PostgreSQL default. Extensions can be added to `branch_extensions` but not removed, and the plan fails if one is. Unset `pg_version` and `engine` take the service's defaults.
+
+Deleting the cluster also deletes its endpoints and branches, so deleting a cluster that still has endpoints or branches other than `main` fails. A normal `terraform destroy` deletes the `ybm_aeon_pg_endpoint` and `ybm_aeon_pg_branch` resources first, so it works. To delete them along with the cluster, set `force_destroy = true` and apply it first.
+
+~> **Note:** An environment's desired state is written as a whole. The provider serializes its own writes, but two applies against the same environment, or a console edit during an apply, can overwrite each other's changes. Run one apply at a time per environment.
+
+## Example Usage
+
+{{ tffile "examples/resources/ybm_aeon_pg_byoc_cluster/resource.tf" }}
+
+{{ .SchemaMarkdown | trimspace }}
+{{- if .HasImport }}
+
+## Import
+
+Import is supported using the following syntax:
+
+{{ codefile "shell" "examples/resources/ybm_aeon_pg_byoc_cluster/import.sh" }}
+
+{{- end }}
