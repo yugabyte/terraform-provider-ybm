@@ -216,36 +216,6 @@ func (mr *MockAccountApiMockRecorder) ListAccountUsersExecute(arg0 interface{}) 
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListAccountUsersExecute", reflect.TypeOf((*MockAccountApi)(nil).ListAccountUsersExecute), arg0)
 }
 
-// ModifyAccount mocks base method.
-func (m *MockAccountApi) ModifyAccount(arg0 context.Context, arg1 string) openapi.ApiModifyAccountRequest {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "ModifyAccount", arg0, arg1)
-	ret0, _ := ret[0].(openapi.ApiModifyAccountRequest)
-	return ret0
-}
-
-// ModifyAccount indicates an expected call of ModifyAccount.
-func (mr *MockAccountApiMockRecorder) ModifyAccount(arg0, arg1 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ModifyAccount", reflect.TypeOf((*MockAccountApi)(nil).ModifyAccount), arg0, arg1)
-}
-
-// ModifyAccountExecute mocks base method.
-func (m *MockAccountApi) ModifyAccountExecute(arg0 openapi.ApiModifyAccountRequest) (openapi.AccountResponse, *http.Response, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "ModifyAccountExecute", arg0)
-	ret0, _ := ret[0].(openapi.AccountResponse)
-	ret1, _ := ret[1].(*http.Response)
-	ret2, _ := ret[2].(error)
-	return ret0, ret1, ret2
-}
-
-// ModifyAccountExecute indicates an expected call of ModifyAccountExecute.
-func (mr *MockAccountApiMockRecorder) ModifyAccountExecute(arg0 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ModifyAccountExecute", reflect.TypeOf((*MockAccountApi)(nil).ModifyAccountExecute), arg0)
-}
-
 // ModifyAllowedLoginTypes mocks base method.
 func (m *MockAccountApi) ModifyAllowedLoginTypes(arg0 context.Context, arg1 string) openapi.ApiModifyAllowedLoginTypesRequest {
 	m.ctrl.T.Helper()
