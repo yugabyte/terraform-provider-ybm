@@ -120,6 +120,19 @@ resource "ybm_integration" "newrelic" {
 }
 ```
 
+To create Tsuga integration
+
+```terraform
+resource "ybm_integration" "tsuga" {
+  config_name = "tsuga-example"
+  type        = "TSUGA"
+  tsuga_spec = {
+    endpoint  = "<tsuga otlp endpoint url>" # e.g. intake.yourcompany.tsuga.com/api/v1/otlp
+    api_token = "<tsuga api token>"
+  }
+}
+```
+
 To create AWS S3 integration
 
 ```terraform
@@ -153,6 +166,7 @@ resource "ybm_integration" "aws_s3" {
 - `newrelic_spec` (Attributes) The specifications of a New Relic integration. (see [below for nested schema](#nestedatt--newrelic_spec))
 - `prometheus_spec` (Attributes) The specifications of a Prometheus integration. (see [below for nested schema](#nestedatt--prometheus_spec))
 - `sumologic_spec` (Attributes) The specifications of a Sumo Logic integration. (see [below for nested schema](#nestedatt--sumologic_spec))
+- `tsuga_spec` (Attributes) The specifications of a Tsuga integration for exporting metrics, database query logs and database audit logs. (see [below for nested schema](#nestedatt--tsuga_spec))
 - `victoriametrics_spec` (Attributes) The specifications of a VictoriaMetrics integration. (see [below for nested schema](#nestedatt--victoriametrics_spec))
 
 ### Read-Only
@@ -245,6 +259,15 @@ Required:
 - `access_id` (String, Sensitive) Sumo Logic Access Key ID
 - `access_key` (String, Sensitive) Sumo Logic Access Key
 - `installation_token` (String, Sensitive) A Sumo Logic installation token to export telemetry to Grafana with
+
+
+<a id="nestedatt--tsuga_spec"></a>
+### Nested Schema for `tsuga_spec`
+
+Required:
+
+- `api_token` (String, Sensitive) Tsuga API token. Enter the token only; it is sent as an `Authorization: Bearer` header.
+- `endpoint` (String) Tsuga OTLP endpoint URL, for example `intake.yourcompany.tsuga.com/api/v1/otlp`. Do not add `/v1/metrics` or `/v1/logs`; they are appended automatically.
 
 
 <a id="nestedatt--victoriametrics_spec"></a>

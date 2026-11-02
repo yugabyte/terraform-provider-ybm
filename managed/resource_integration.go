@@ -35,7 +35,7 @@ func (r resourceIntegrationType) GetSchema(_ context.Context) (tfsdk.Schema, dia
 }
 
 func (r resourceIntegrationType) getTypeValidator() tfsdk.AttributeValidator {
-	validTypes := []string{"DATADOG", "GRAFANA", "SUMOLOGIC", "GOOGLECLOUD", "PROMETHEUS", "VICTORIAMETRICS", "NEWRELIC", "AWS_S3"}
+	validTypes := []string{"DATADOG", "GRAFANA", "SUMOLOGIC", "GOOGLECLOUD", "PROMETHEUS", "VICTORIAMETRICS", "NEWRELIC", "TSUGA", "AWS_S3"}
 	return stringvalidator.OneOf(validTypes...)
 }
 
@@ -273,6 +273,27 @@ func (r resourceIntegrationType) getSchemaAttributes() map[string]tfsdk.Attribut
 				},
 			}),
 		},
+		"tsuga_spec": {
+			Description: "The specifications of a Tsuga integration for exporting metrics, database query logs and database audit logs.",
+			Optional:    true,
+			PlanModifiers: []tfsdk.AttributePlanModifier{
+				planmodifier.ImmutableFieldModifier{},
+			},
+			Validators: onlyContainsPath("tsuga_spec"),
+			Attributes: tfsdk.SingleNestedAttributes(map[string]tfsdk.Attribute{
+				"endpoint": {
+					Description: "Tsuga OTLP endpoint URL, for example `intake.yourcompany.tsuga.com/api/v1/otlp`. Do not add `/v1/metrics` or `/v1/logs`; they are appended automatically.",
+					Type:        types.StringType,
+					Required:    true,
+				},
+				"api_token": {
+					Description: "Tsuga API token. Enter the token only; it is sent as an `Authorization: Bearer` header.",
+					Type:        types.StringType,
+					Required:    true,
+					Sensitive:   true,
+				},
+			}),
+		},
 		"aws_s3_spec": {
 			Description: "The specifications of an AWS S3 integration for exporting database query and audit logs. You can use the same integration with ybm_db_query_logging and ybm_db_audit_logging resources.",
 			Optional:    true,
@@ -335,7 +356,7 @@ func (r resourceIntegrationType) getSchemaAttributes() map[string]tfsdk.Attribut
 }
 
 func onlyContainsPath(requiredPath string) []tfsdk.AttributeValidator {
-	allPaths := []string{"datadog_spec", "grafana_spec", "sumologic_spec", "googlecloud_spec", "prometheus_spec", "victoriametrics_spec", "newrelic_spec", "aws_s3_spec"}
+	allPaths := []string{"datadog_spec", "grafana_spec", "sumologic_spec", "googlecloud_spec", "prometheus_spec", "victoriametrics_spec", "newrelic_spec", "tsuga_spec", "aws_s3_spec"}
 
 	var validators []tfsdk.AttributeValidator
 
@@ -369,6 +390,7 @@ func getIntegrationPlan(ctx context.Context, plan tfsdk.Plan, tp *TelemetryProvi
 	diags.Append(plan.GetAttribute(ctx, path.Root("sumologic_spec"), &tp.SumoLogicSpec)...)
 	diags.Append(plan.GetAttribute(ctx, path.Root("googlecloud_spec"), &tp.GoogleCloudSpec)...)
 	diags.Append(plan.GetAttribute(ctx, path.Root("newrelic_spec"), &tp.NewRelicSpec)...)
+	diags.Append(plan.GetAttribute(ctx, path.Root("tsuga_spec"), &tp.TsugaSpec)...)
 	diags.Append(plan.GetAttribute(ctx, path.Root("aws_s3_spec"), &tp.AwsS3Spec)...)
 
 	return diags
@@ -394,6 +416,8 @@ func getIDsFromIntegrationState(ctx context.Context, state tfsdk.State, tp *Tele
 		state.GetAttribute(ctx, path.Root("googlecloud_spec"), &tp.GoogleCloudSpec)
 	case string(openapiclient.TELEMETRYPROVIDERTYPEENUM_NEWRELIC):
 		state.GetAttribute(ctx, path.Root("newrelic_spec"), &tp.NewRelicSpec)
+	case string(openapiclient.TELEMETRYPROVIDERTYPEENUM_TSUGA):
+		state.GetAttribute(ctx, path.Root("tsuga_spec"), &tp.TsugaSpec)
 	case string(openapiclient.TELEMETRYPROVIDERTYPEENUM_AWS_S3):
 		state.GetAttribute(ctx, path.Root("aws_s3_spec"), &tp.AwsS3Spec)
 	}
@@ -512,6 +536,20 @@ func (r resourceIntegration) Create(ctx context.Context, req tfsdk.CreateResourc
 			return
 		}
 		telemetryProviderSpec.SetNewrelicSpec(*openapiclient.NewNewrelicTelemetryProviderSpec(plan.NewRelicSpec.LicenseKey.Value, plan.NewRelicSpec.Endpoint.Value))
+	case openapiclient.TELEMETRYPROVIDERTYPEENUM_TSUGA:
+		if plan.TsugaSpec == nil {
+			resp.Diagnostics.AddError(
+				"tsuga_spec is required for type TSUGA",
+				"tsuga_spec is required when telemetry sink is TSUGA. Please include this field in the resource",
+			)
+			return
+		}
+		// Named setters, not the positional constructor: both fields are
+		// strings, so a wrong argument order would compile silently.
+		tsugaSpec := openapiclient.NewTsugaTelemetryProviderSpecWithDefaults()
+		tsugaSpec.SetEndpoint(plan.TsugaSpec.Endpoint.Value)
+		tsugaSpec.SetApiToken(plan.TsugaSpec.ApiToken.Value)
+		telemetryProviderSpec.SetTsugaSpec(*tsugaSpec)
 	case openapiclient.TELEMETRYPROVIDERTYPEENUM_AWS_S3:
 		if plan.AwsS3Spec == nil {
 			resp.Diagnostics.AddError(
@@ -534,7 +572,7 @@ func (r resourceIntegration) Create(ctx context.Context, req tfsdk.CreateResourc
 	default:
 		//We should never go there normally
 		resp.Diagnostics.AddError(
-			"Only DATADOG, GRAFANA, SUMOLOGIC, GOOGLECLOUD, PROMETHEUS, VICTORIAMETRICS, NEWRELIC and AWS_S3 are currently supported as integrations",
+			"Only DATADOG, GRAFANA, SUMOLOGIC, GOOGLECLOUD, PROMETHEUS, VICTORIAMETRICS, NEWRELIC, TSUGA and AWS_S3 are currently supported as integrations",
 			"",
 		)
 		return
@@ -668,6 +706,11 @@ func resourceTelemetryProviderRead(accountId string, projectId string, configID 
 		tp.NewRelicSpec = &NewRelicSpec{
 			Endpoint:   types.String{Value: configSpec.NewrelicSpec.Get().Endpoint},
 			LicenseKey: userProvidedTpDetails.NewRelicSpec.LicenseKey,
+		}
+	case openapiclient.TELEMETRYPROVIDERTYPEENUM_TSUGA:
+		tp.TsugaSpec = &TsugaSpec{
+			Endpoint: types.String{Value: configSpec.GetTsugaSpec().Endpoint},
+			ApiToken: userProvidedTpDetails.TsugaSpec.ApiToken, // API returns it masked
 		}
 	case openapiclient.TELEMETRYPROVIDERTYPEENUM_AWS_S3:
 		s3Spec := configSpec.GetAwsS3Spec()

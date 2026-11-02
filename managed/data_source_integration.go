@@ -221,6 +221,23 @@ func (r dataSourceIntegrationType) GetSchema(_ context.Context) (tfsdk.Schema, d
 					},
 				}),
 			},
+			"tsuga_spec": {
+				Description: "The specifications of a Tsuga integration.",
+				Computed:    true,
+				Attributes: tfsdk.SingleNestedAttributes(map[string]tfsdk.Attribute{
+					"endpoint": {
+						Description: "Tsuga OTLP endpoint URL",
+						Type:        types.StringType,
+						Required:    true,
+					},
+					"api_token": {
+						Description: "Tsuga API token",
+						Type:        types.StringType,
+						Required:    true,
+						Sensitive:   true,
+					},
+				}),
+			},
 			"aws_s3_spec": {
 				Description: "The specifications of an AWS S3 integration.",
 				Computed:    true,
@@ -407,6 +424,12 @@ func dataSourceTelemetryProviderRead(accountId string, projectId string, configN
 		tp.NewRelicSpec = &NewRelicSpec{
 			Endpoint:   types.String{Value: newRelicSpec.Endpoint},
 			LicenseKey: types.String{Value: newRelicSpec.LicenseKey},
+		}
+	case openapiclient.TELEMETRYPROVIDERTYPEENUM_TSUGA:
+		tsugaSpec := configSpec.GetTsugaSpec()
+		tp.TsugaSpec = &TsugaSpec{
+			Endpoint: types.String{Value: tsugaSpec.Endpoint},
+			ApiToken: types.String{Value: tsugaSpec.ApiToken}, // masked by the API
 		}
 	case openapiclient.TELEMETRYPROVIDERTYPEENUM_AWS_S3:
 		s3Spec := configSpec.GetAwsS3Spec()

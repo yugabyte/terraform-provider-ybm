@@ -37,6 +37,7 @@ data "ybm_integration" "example_name" {
 - `project_id` (String) The ID of the project this integration belongs to.
 - `prometheus_spec` (Attributes) The specifications of a Prometheus integration. (see [below for nested schema](#nestedatt--prometheus_spec))
 - `sumologic_spec` (Attributes) The specifications of a Sumo Logic integration. (see [below for nested schema](#nestedatt--sumologic_spec))
+- `tsuga_spec` (Attributes) The specifications of a Tsuga integration. (see [below for nested schema](#nestedatt--tsuga_spec))
 - `type` (String) Defines different exporter destination types.
 - `victoriametrics_spec` (Attributes) The specifications of a VictoriaMetrics integration. (see [below for nested schema](#nestedatt--victoriametrics_spec))
 
@@ -117,6 +118,15 @@ Read-Only:
 - `access_id` (String, Sensitive) Sumo Logic Access Key ID
 - `access_key` (String, Sensitive) Sumo Logic Access Key
 - `installation_token` (String, Sensitive) A Sumo Logic installation token to export telemetry to Grafana with
+
+
+<a id="nestedatt--tsuga_spec"></a>
+### Nested Schema for `tsuga_spec`
+
+Required:
+
+- `api_token` (String, Sensitive) Tsuga API token
+- `endpoint` (String) Tsuga OTLP endpoint URL
 
 
 <a id="nestedatt--victoriametrics_spec"></a>
