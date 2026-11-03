@@ -33,10 +33,12 @@ data "ybm_integration" "example_name" {
 - `googlecloud_spec` (Attributes) The specifications of a Google Cloud integration. (see [below for nested schema](#nestedatt--googlecloud_spec))
 - `grafana_spec` (Attributes) The specifications of a Grafana integration. (see [below for nested schema](#nestedatt--grafana_spec))
 - `is_valid` (Boolean) Signifies whether the integration configuration is valid or not
+- `mimir_spec` (Attributes) The specifications of a Mimir integration. (see [below for nested schema](#nestedatt--mimir_spec))
 - `newrelic_spec` (Attributes) The specifications of a Newrelic integration. (see [below for nested schema](#nestedatt--newrelic_spec))
 - `project_id` (String) The ID of the project this integration belongs to.
 - `prometheus_spec` (Attributes) The specifications of a Prometheus integration. (see [below for nested schema](#nestedatt--prometheus_spec))
 - `sumologic_spec` (Attributes) The specifications of a Sumo Logic integration. (see [below for nested schema](#nestedatt--sumologic_spec))
+- `tsuga_spec` (Attributes) The specifications of a Tsuga integration. (see [below for nested schema](#nestedatt--tsuga_spec))
 - `type` (String) Defines different exporter destination types.
 - `victoriametrics_spec` (Attributes) The specifications of a VictoriaMetrics integration. (see [below for nested schema](#nestedatt--victoriametrics_spec))
 
@@ -92,6 +94,16 @@ Read-Only:
 - `zone` (String) Grafana Zone.
 
 
+<a id="nestedatt--mimir_spec"></a>
+### Nested Schema for `mimir_spec`
+
+Read-Only:
+
+- `api_token` (String, Sensitive) Mimir Authorization header value (masked)
+- `endpoint` (String) Mimir OTLP endpoint URL
+- `org_id` (String) Mimir tenant organization ID, sent as the X-Scope-OrgID header
+
+
 <a id="nestedatt--newrelic_spec"></a>
 ### Nested Schema for `newrelic_spec`
 
@@ -117,6 +129,15 @@ Read-Only:
 - `access_id` (String, Sensitive) Sumo Logic Access Key ID
 - `access_key` (String, Sensitive) Sumo Logic Access Key
 - `installation_token` (String, Sensitive) A Sumo Logic installation token to export telemetry to Grafana with
+
+
+<a id="nestedatt--tsuga_spec"></a>
+### Nested Schema for `tsuga_spec`
+
+Read-Only:
+
+- `api_token` (String, Sensitive) Tsuga bearer token (masked)
+- `endpoint` (String) Tsuga OTLP endpoint URL
 
 
 <a id="nestedatt--victoriametrics_spec"></a>

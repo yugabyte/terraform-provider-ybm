@@ -397,6 +397,17 @@ type NewRelicSpec struct {
 	LicenseKey types.String `tfsdk:"license_key"`
 }
 
+type TsugaSpec struct {
+	Endpoint types.String `tfsdk:"endpoint"`
+	ApiToken types.String `tfsdk:"api_token"`
+}
+
+type MimirSpec struct {
+	Endpoint types.String `tfsdk:"endpoint"`
+	ApiToken types.String `tfsdk:"api_token"`
+	OrgId    types.String `tfsdk:"org_id"`
+}
+
 type AwsS3Spec struct {
 	BucketName        types.String `tfsdk:"bucket_name"`
 	Region            types.String `tfsdk:"region"`
@@ -492,6 +503,8 @@ type TelemetryProvider struct {
 	GoogleCloudSpec     *GCPServiceAccount   `tfsdk:"googlecloud_spec"`
 	NewRelicSpec        *NewRelicSpec        `tfsdk:"newrelic_spec"`
 	AwsS3Spec           *AwsS3Spec           `tfsdk:"aws_s3_spec"`
+	TsugaSpec           *TsugaSpec           `tfsdk:"tsuga_spec"`
+	MimirSpec           *MimirSpec           `tfsdk:"mimir_spec"`
 	IsValid             types.Bool           `tfsdk:"is_valid"`
 }
 
