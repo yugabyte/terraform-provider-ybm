@@ -35,7 +35,7 @@ func (r resourceIntegrationType) GetSchema(_ context.Context) (tfsdk.Schema, dia
 }
 
 func (r resourceIntegrationType) getTypeValidator() tfsdk.AttributeValidator {
-	validTypes := []string{"DATADOG", "GRAFANA", "SUMOLOGIC", "GOOGLECLOUD", "PROMETHEUS", "VICTORIAMETRICS", "NEWRELIC", "AWS_S3"}
+	validTypes := []string{"DATADOG", "GRAFANA", "SUMOLOGIC", "GOOGLECLOUD", "PROMETHEUS", "VICTORIAMETRICS", "NEWRELIC", "AWS_S3", "TSUGA", "MIMIR"}
 	return stringvalidator.OneOf(validTypes...)
 }
 
@@ -329,13 +329,68 @@ func (r resourceIntegrationType) getSchemaAttributes() map[string]tfsdk.Attribut
 				},
 			}),
 		},
+		"tsuga_spec": {
+			Description: "The specifications of a Tsuga integration. A Tsuga integration can be used to export metrics, database query logs and database audit logs.",
+			Optional:    true,
+			PlanModifiers: []tfsdk.AttributePlanModifier{
+				planmodifier.ImmutableFieldModifier{},
+			},
+			Validators: onlyContainsPath("tsuga_spec"),
+			Attributes: tfsdk.SingleNestedAttributes(map[string]tfsdk.Attribute{
+				"endpoint": {
+					Description: "Tsuga OTLP endpoint URL e.g. https://intake.my-org.tsuga.com/api/v1/otlp. Do not include the /v1/metrics suffix, it is appended automatically.",
+					Type:        types.StringType,
+					Required:    true,
+				},
+				"api_token": {
+					Description: "Tsuga bearer token used to export telemetry to Tsuga.",
+					Type:        types.StringType,
+					Required:    true,
+					Sensitive:   true,
+					Validators:  []tfsdk.AttributeValidator{stringvalidator.LengthBetween(6, 600)},
+				},
+			}),
+		},
+		"mimir_spec": {
+			Description: "The specifications of a Mimir integration. A Mimir integration can be used to export metrics only.",
+			Optional:    true,
+			PlanModifiers: []tfsdk.AttributePlanModifier{
+				planmodifier.ImmutableFieldModifier{},
+			},
+			Validators: onlyContainsPath("mimir_spec"),
+			Attributes: tfsdk.SingleNestedAttributes(map[string]tfsdk.Attribute{
+				"endpoint": {
+					Description: "Mimir OTLP endpoint URL e.g. https://mimir.my-company.com/otlp. Do not include the /v1/metrics suffix, it is appended automatically.",
+					Type:        types.StringType,
+					Required:    true,
+				},
+				"api_token": {
+					Description: "The full Authorization header value used to export metrics to Mimir. Must start with \"Bearer \" or \"Basic \".",
+					Type:        types.StringType,
+					Required:    true,
+					Sensitive:   true,
+					Validators: []tfsdk.AttributeValidator{
+						stringvalidator.LengthBetween(6, 600),
+						stringvalidator.RegexMatches(
+							regexp.MustCompile(`^(Bearer|Basic) `),
+							"value must start with \"Bearer \" or \"Basic \"",
+						),
+					},
+				},
+				"org_id": {
+					Description: "Mimir tenant organization ID, sent as the X-Scope-OrgID header.",
+					Type:        types.StringType,
+					Optional:    true,
+				},
+			}),
+		},
 	}
 
 	return attributes
 }
 
 func onlyContainsPath(requiredPath string) []tfsdk.AttributeValidator {
-	allPaths := []string{"datadog_spec", "grafana_spec", "sumologic_spec", "googlecloud_spec", "prometheus_spec", "victoriametrics_spec", "newrelic_spec", "aws_s3_spec"}
+	allPaths := []string{"datadog_spec", "grafana_spec", "sumologic_spec", "googlecloud_spec", "prometheus_spec", "victoriametrics_spec", "newrelic_spec", "aws_s3_spec", "tsuga_spec", "mimir_spec"}
 
 	var validators []tfsdk.AttributeValidator
 
@@ -370,6 +425,8 @@ func getIntegrationPlan(ctx context.Context, plan tfsdk.Plan, tp *TelemetryProvi
 	diags.Append(plan.GetAttribute(ctx, path.Root("googlecloud_spec"), &tp.GoogleCloudSpec)...)
 	diags.Append(plan.GetAttribute(ctx, path.Root("newrelic_spec"), &tp.NewRelicSpec)...)
 	diags.Append(plan.GetAttribute(ctx, path.Root("aws_s3_spec"), &tp.AwsS3Spec)...)
+	diags.Append(plan.GetAttribute(ctx, path.Root("tsuga_spec"), &tp.TsugaSpec)...)
+	diags.Append(plan.GetAttribute(ctx, path.Root("mimir_spec"), &tp.MimirSpec)...)
 
 	return diags
 }
@@ -396,6 +453,10 @@ func getIDsFromIntegrationState(ctx context.Context, state tfsdk.State, tp *Tele
 		state.GetAttribute(ctx, path.Root("newrelic_spec"), &tp.NewRelicSpec)
 	case string(openapiclient.TELEMETRYPROVIDERTYPEENUM_AWS_S3):
 		state.GetAttribute(ctx, path.Root("aws_s3_spec"), &tp.AwsS3Spec)
+	case string(openapiclient.TELEMETRYPROVIDERTYPEENUM_TSUGA):
+		state.GetAttribute(ctx, path.Root("tsuga_spec"), &tp.TsugaSpec)
+	case string(openapiclient.TELEMETRYPROVIDERTYPEENUM_MIMIR):
+		state.GetAttribute(ctx, path.Root("mimir_spec"), &tp.MimirSpec)
 	}
 }
 
@@ -531,10 +592,32 @@ func (r resourceIntegration) Create(ctx context.Context, req tfsdk.CreateResourc
 			s3TelemetrySpec.SetPartitionStrategy(awsS3SpecPlan.PartitionStrategy.Value)
 		}
 		telemetryProviderSpec.SetAwsS3Spec(s3TelemetrySpec)
+	case openapiclient.TELEMETRYPROVIDERTYPEENUM_TSUGA:
+		if plan.TsugaSpec == nil {
+			resp.Diagnostics.AddError(
+				"tsuga_spec is required for type TSUGA",
+				"tsuga_spec is required when telemetry sink is TSUGA. Please include this field in the resource",
+			)
+			return
+		}
+		telemetryProviderSpec.SetTsugaSpec(*openapiclient.NewTsugaTelemetryProviderSpec(plan.TsugaSpec.ApiToken.Value, plan.TsugaSpec.Endpoint.Value))
+	case openapiclient.TELEMETRYPROVIDERTYPEENUM_MIMIR:
+		if plan.MimirSpec == nil {
+			resp.Diagnostics.AddError(
+				"mimir_spec is required for type MIMIR",
+				"mimir_spec is required when telemetry sink is MIMIR. Please include this field in the resource",
+			)
+			return
+		}
+		mimirSpec := *openapiclient.NewMimirTelemetryProviderSpec(plan.MimirSpec.ApiToken.Value, plan.MimirSpec.Endpoint.Value)
+		if !plan.MimirSpec.OrgId.Null && !plan.MimirSpec.OrgId.Unknown && plan.MimirSpec.OrgId.Value != "" {
+			mimirSpec.SetOrgId(plan.MimirSpec.OrgId.Value)
+		}
+		telemetryProviderSpec.SetMimirSpec(mimirSpec)
 	default:
 		//We should never go there normally
 		resp.Diagnostics.AddError(
-			"Only DATADOG, GRAFANA, SUMOLOGIC, GOOGLECLOUD, PROMETHEUS, VICTORIAMETRICS, NEWRELIC and AWS_S3 are currently supported as integrations",
+			"Only DATADOG, GRAFANA, SUMOLOGIC, GOOGLECLOUD, PROMETHEUS, VICTORIAMETRICS, NEWRELIC, AWS_S3, TSUGA and MIMIR are currently supported as integrations",
 			"",
 		)
 		return
@@ -686,7 +769,40 @@ func resourceTelemetryProviderRead(accountId string, projectId string, configID 
 		if s3Spec.HasPartitionStrategy() {
 			tp.AwsS3Spec.PartitionStrategy = types.String{Value: s3Spec.GetPartitionStrategy()}
 		}
-
+	case openapiclient.TELEMETRYPROVIDERTYPEENUM_TSUGA:
+		// The API masks api_token and normalizes the endpoint (e.g. strips trailing slashes),
+		// so keep the user-provided values to avoid inconsistent results / perpetual diffs.
+		if userProvidedTpDetails.TsugaSpec != nil {
+			tp.TsugaSpec = &TsugaSpec{
+				Endpoint: userProvidedTpDetails.TsugaSpec.Endpoint,
+				ApiToken: userProvidedTpDetails.TsugaSpec.ApiToken,
+			}
+		} else {
+			tsugaSpec := configSpec.GetTsugaSpec()
+			tp.TsugaSpec = &TsugaSpec{
+				Endpoint: types.String{Value: tsugaSpec.Endpoint},
+				ApiToken: types.String{Value: tsugaSpec.ApiToken},
+			}
+		}
+	case openapiclient.TELEMETRYPROVIDERTYPEENUM_MIMIR:
+		// Same as Tsuga: keep user-provided values; org_id stays null when not set by the user.
+		if userProvidedTpDetails.MimirSpec != nil {
+			tp.MimirSpec = &MimirSpec{
+				Endpoint: userProvidedTpDetails.MimirSpec.Endpoint,
+				ApiToken: userProvidedTpDetails.MimirSpec.ApiToken,
+				OrgId:    userProvidedTpDetails.MimirSpec.OrgId,
+			}
+		} else {
+			mimirSpec := configSpec.GetMimirSpec()
+			tp.MimirSpec = &MimirSpec{
+				Endpoint: types.String{Value: mimirSpec.Endpoint},
+				ApiToken: types.String{Value: mimirSpec.ApiToken},
+				OrgId:    types.String{Null: true},
+			}
+			if mimirSpec.GetOrgId() != "" {
+				tp.MimirSpec.OrgId = types.String{Value: mimirSpec.GetOrgId()}
+			}
+		}
 	}
 
 	return tp, true, ""

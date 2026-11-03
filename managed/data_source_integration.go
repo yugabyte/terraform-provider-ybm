@@ -263,7 +263,47 @@ func (r dataSourceIntegrationType) GetSchema(_ context.Context) (tfsdk.Schema, d
 						Computed:    true,
 					},
 				}),
-			}},
+			},
+			"tsuga_spec": {
+				Description: "The specifications of a Tsuga integration.",
+				Computed:    true,
+				Attributes: tfsdk.SingleNestedAttributes(map[string]tfsdk.Attribute{
+					"endpoint": {
+						Description: "Tsuga OTLP endpoint URL",
+						Type:        types.StringType,
+						Computed:    true,
+					},
+					"api_token": {
+						Description: "Tsuga bearer token (masked)",
+						Type:        types.StringType,
+						Computed:    true,
+						Sensitive:   true,
+					},
+				}),
+			},
+			"mimir_spec": {
+				Description: "The specifications of a Mimir integration.",
+				Computed:    true,
+				Attributes: tfsdk.SingleNestedAttributes(map[string]tfsdk.Attribute{
+					"endpoint": {
+						Description: "Mimir OTLP endpoint URL",
+						Type:        types.StringType,
+						Computed:    true,
+					},
+					"api_token": {
+						Description: "Mimir Authorization header value (masked)",
+						Type:        types.StringType,
+						Computed:    true,
+						Sensitive:   true,
+					},
+					"org_id": {
+						Description: "Mimir tenant organization ID, sent as the X-Scope-OrgID header",
+						Type:        types.StringType,
+						Computed:    true,
+					},
+				}),
+			},
+		},
 	}, nil
 }
 
@@ -425,7 +465,22 @@ func dataSourceTelemetryProviderRead(accountId string, projectId string, configN
 		if s3Spec.HasPartitionStrategy() {
 			tp.AwsS3Spec.PartitionStrategy = types.String{Value: s3Spec.GetPartitionStrategy()}
 		}
-
+	case openapiclient.TELEMETRYPROVIDERTYPEENUM_TSUGA:
+		tsugaSpec := configSpec.GetTsugaSpec()
+		tp.TsugaSpec = &TsugaSpec{
+			Endpoint: types.String{Value: tsugaSpec.Endpoint},
+			ApiToken: types.String{Value: tsugaSpec.ApiToken},
+		}
+	case openapiclient.TELEMETRYPROVIDERTYPEENUM_MIMIR:
+		mimirSpec := configSpec.GetMimirSpec()
+		tp.MimirSpec = &MimirSpec{
+			Endpoint: types.String{Value: mimirSpec.Endpoint},
+			ApiToken: types.String{Value: mimirSpec.ApiToken},
+			OrgId:    types.String{Null: true},
+		}
+		if mimirSpec.GetOrgId() != "" {
+			tp.MimirSpec.OrgId = types.String{Value: mimirSpec.GetOrgId()}
+		}
 	}
 
 	return tp, true, ""

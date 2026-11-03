@@ -43,6 +43,14 @@ To create AWS S3 integration
 
 {{ tffile "examples/resources/ybm_integration/aws-s3-integration.tf" }}
 
+To create Tsuga integration (supports metrics, database query logs and database audit logs export)
+
+{{ tffile "examples/resources/ybm_integration/tsuga-integration.tf" }}
+
+To create Mimir integration (supports metrics export only)
+
+{{ tffile "examples/resources/ybm_integration/mimir-integration.tf" }}
+
 {{ .SchemaMarkdown | trimspace }}
 {{- if .HasImport }}
 
