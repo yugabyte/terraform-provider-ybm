@@ -763,6 +763,15 @@ func (r resourceClusterType) GetSchema(_ context.Context) (tfsdk.Schema, diag.Di
 				tfsdk.UseStateForUnknown(),
 			},
 		},
+		"enterprise_security": {
+			Description: "Set to true to enable the advanced security profile (enterprise security) on the cluster. Optional; defaults to false. This value cannot be modified after the cluster is created.",
+			Type:        types.BoolType,
+			Optional:    true,
+			Computed:    true,
+			PlanModifiers: []tfsdk.AttributePlanModifier{
+				tfsdk.UseStateForUnknown(),
+			},
+		},
 		"cluster_allow_list_ids": {
 			Description: "List of IDs of the allow lists assigned to the cluster.",
 			Type: types.ListType{
@@ -1309,6 +1318,12 @@ func createClusterSpec(ctx context.Context, apiClient *openapiclient.APIClient, 
 		}
 	}
 
+	// enterprise_security defaults to false (set by NewClusterInfo) when not configured.
+	// On edit, the plan carries the state value, so the existing setting is preserved.
+	if !plan.EnterpriseSecurity.IsUnknown() && !plan.EnterpriseSecurity.IsNull() {
+		clusterInfo.SetEnterpriseSecurity(plan.EnterpriseSecurity.Value)
+	}
+
 	clusterInfo.SetClusterType(openapiclient.ClusterType(clusterType))
 	if clusterExists {
 		clusterVersion, _ := strconv.Atoi(plan.ClusterVersion.Value)
@@ -1387,6 +1402,7 @@ func getPlan(ctx context.Context, plan tfsdk.Plan, cluster *Cluster) diag.Diagno
 	diags.Append(plan.GetAttribute(ctx, path.Root("fault_tolerance"), &cluster.FaultTolerance)...)
 	diags.Append(plan.GetAttribute(ctx, path.Root("num_faults_to_tolerate"), &cluster.NumFaultsToTolerate)...)
 	diags.Append(plan.GetAttribute(ctx, path.Root("is_multi_cloud"), &cluster.IsMultiCloud)...)
+	diags.Append(plan.GetAttribute(ctx, path.Root("enterprise_security"), &cluster.EnterpriseSecurity)...)
 	diags.Append(plan.GetAttribute(ctx, path.Root("cluster_tier"), &cluster.ClusterTier)...)
 	diags.Append(plan.GetAttribute(ctx, path.Root("cluster_allow_list_ids"), &cluster.ClusterAllowListIDs)...)
 	diags.Append(plan.GetAttribute(ctx, path.Root("restore_backup_id"), &cluster.RestoreBackupID)...)
@@ -2561,6 +2577,7 @@ func resourceClusterRead(ctx context.Context, clusterId string, backUpSchedules 
 	cluster.FaultTolerance.Value = string(clusterResp.Data.Spec.ClusterInfo.FaultTolerance)
 	cluster.NumFaultsToTolerate.Value = int64(*clusterResp.Data.Spec.ClusterInfo.NumFaultsToTolerate.Get())
 	cluster.IsMultiCloud.Value = clusterResp.Data.Spec.ClusterInfo.GetIsMultiCloud()
+	cluster.EnterpriseSecurity.Value = clusterResp.Data.Spec.ClusterInfo.GetEnterpriseSecurity()
 	nodeInfo := clusterResp.Data.Spec.ClusterInfo.NodeInfo.Get()
 	if nodeInfo != nil {
 		if cluster.NodeConfig == nil {
@@ -2865,6 +2882,18 @@ func (r resourceCluster) Update(ctx context.Context, req tfsdk.UpdateResourceReq
 		resp.Diagnostics.AddError(
 			"is_multi_cloud cannot be modified after creation",
 			"The 'is_multi_cloud' field can be set only at the time of creation and cannot be modified after creation.")
+		return
+	}
+
+	// enterprise_security can not be modified after creation.
+	var stateEnterpriseSecurity types.Bool
+	req.State.GetAttribute(ctx, path.Root("enterprise_security"), &stateEnterpriseSecurity)
+	if !stateEnterpriseSecurity.IsNull() && !stateEnterpriseSecurity.IsUnknown() &&
+		!plan.EnterpriseSecurity.IsNull() && !plan.EnterpriseSecurity.IsUnknown() &&
+		stateEnterpriseSecurity.Value != plan.EnterpriseSecurity.Value {
+		resp.Diagnostics.AddError(
+			"enterprise_security cannot be modified after creation",
+			"The 'enterprise_security' field can be set only at the time of creation and cannot be modified after creation.")
 		return
 	}
 

@@ -594,6 +594,11 @@ func (r dataClusterNameType) GetSchema(_ context.Context) (tfsdk.Schema, diag.Di
 				Type:        types.Int64Type,
 				Computed:    true,
 			},
+			"enterprise_security": {
+				Description: "Whether the advanced security profile (enterprise security) is enabled on the cluster.",
+				Type:        types.BoolType,
+				Computed:    true,
+			},
 			"cluster_allow_list_ids": {
 				Description: "List of IDs of the allow lists assigned to the cluster.",
 				Type: types.ListType{
