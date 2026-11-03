@@ -48,6 +48,7 @@ data "ybm_cluster" "example_cluster" {
 - `desired_connection_pooling_state` (String) The desired connection pooling state of the cluster, Enabled or Disabled.
 - `desired_state` (String) The desired state of the database, Active or Paused. This parameter can be used to pause/resume a cluster.
 - `endpoints` (Attributes List) The endpoints used to connect to the cluster. (see [below for nested schema](#nestedatt--endpoints))
+- `enterprise_security` (Boolean) Whether the advanced security profile (enterprise security) is enabled on the cluster.
 - `fault_tolerance` (String) The fault tolerance of the cluster.
 - `node_config` (Attributes, Deprecated) (see [below for nested schema](#nestedatt--node_config))
 - `num_faults_to_tolerate` (Number) The number of domain faults the cluster can tolerate.
