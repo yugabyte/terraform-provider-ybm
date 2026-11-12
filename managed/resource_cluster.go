@@ -1084,14 +1084,29 @@ func (r resourceCluster) ModifyPlan(ctx context.Context, req tfsdk.ModifyResourc
 // state carried false - and the apply fails with "Provider produced inconsistent result after
 // apply".
 func modifySingleRegionDefaultPlan(ctx context.Context, req tfsdk.ModifyResourcePlanRequest, resp *tfsdk.ModifyResourcePlanResponse) {
+	// With dynamically typed vars (e.g. list(any)), cluster_region_info can be wholly unknown
+	// here; decoding it into []RegionInfo then fails with "unhandled unknown value". A list that
+	// is unknown or null says nothing about the region count, so there is nothing to fix up.
+	var planList types.List
+	resp.Diagnostics.Append(req.Plan.GetAttribute(ctx, path.Root("cluster_region_info"), &planList)...)
+	if resp.Diagnostics.HasError() || planList.IsNull() || planList.IsUnknown() {
+		return
+	}
+
+	var configList types.List
+	resp.Diagnostics.Append(req.Config.GetAttribute(ctx, path.Root("cluster_region_info"), &configList)...)
+	if resp.Diagnostics.HasError() || configList.IsNull() || configList.IsUnknown() {
+		return
+	}
+
 	var planRegions []RegionInfo
-	resp.Diagnostics.Append(req.Plan.GetAttribute(ctx, path.Root("cluster_region_info"), &planRegions)...)
+	resp.Diagnostics.Append(planList.ElementsAs(ctx, &planRegions, false)...)
 	if resp.Diagnostics.HasError() || len(planRegions) != 1 {
 		return
 	}
 
 	var configRegions []RegionInfo
-	resp.Diagnostics.Append(req.Config.GetAttribute(ctx, path.Root("cluster_region_info"), &configRegions)...)
+	resp.Diagnostics.Append(configList.ElementsAs(ctx, &configRegions, false)...)
 	if resp.Diagnostics.HasError() {
 		return
 	}

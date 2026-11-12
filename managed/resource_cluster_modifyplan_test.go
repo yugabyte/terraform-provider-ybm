@@ -44,6 +44,29 @@ func clusterValue(t *testing.T, schemaType tftypes.Type, regions tftypes.Value) 
 	return tftypes.NewValue(schemaType, attrs)
 }
 
+// runModifyPlanWithRegions drives ModifyPlan over a cluster_region_info list given verbatim, so a
+// test can hand it a list that is itself unknown or null.
+func runModifyPlanWithRegions(t *testing.T, regions func(regionType tftypes.Type) tftypes.Value) tfsdk.ModifyResourcePlanResponse {
+	t.Helper()
+	ctx := context.Background()
+	schema, diags := resourceClusterType{}.GetSchema(ctx)
+	if diags.HasError() {
+		t.Fatalf("GetSchema: %v", diags)
+	}
+	schemaType := schema.TerraformType(ctx)
+	regionType := schemaType.(tftypes.Object).AttributeTypes["cluster_region_info"].(tftypes.List).ElementType
+
+	value := clusterValue(t, schemaType, regions(regionType))
+	req := tfsdk.ModifyResourcePlanRequest{
+		Config: tfsdk.Config{Schema: schema, Raw: value},
+		Plan:   tfsdk.Plan{Schema: schema, Raw: value},
+		State:  tfsdk.State{Schema: schema, Raw: tftypes.NewValue(schemaType, nil)},
+	}
+	resp := tfsdk.ModifyResourcePlanResponse{Plan: req.Plan}
+	resourceCluster{}.ModifyPlan(ctx, req, &resp)
+	return resp
+}
+
 func runModifyPlan(t *testing.T, planDefault, configDefault tftypes.Value, hasState bool) tfsdk.ModifyResourcePlanResponse {
 	t.Helper()
 	ctx := context.Background()
@@ -130,5 +153,25 @@ func TestModifyPlanSingleRegionCreateKeepsUnknown(t *testing.T) {
 	}
 	if planned := plannedIsDefault(t, resp); !planned.Unknown {
 		t.Fatalf("planned is_default = %+v, want unknown", planned)
+	}
+}
+
+// A dynamically typed var (e.g. list(any)) can leave the whole list unknown at plan time.
+// Decoding it into []RegionInfo would fail with "unhandled unknown value", so it is skipped.
+func TestModifyPlanUnknownRegionListIsSkipped(t *testing.T) {
+	resp := runModifyPlanWithRegions(t, func(regionType tftypes.Type) tftypes.Value {
+		return tftypes.NewValue(tftypes.List{ElementType: regionType}, tftypes.UnknownValue)
+	})
+	if resp.Diagnostics.HasError() {
+		t.Fatalf("unexpected diagnostics for an unknown cluster_region_info: %v", resp.Diagnostics)
+	}
+}
+
+func TestModifyPlanNullRegionListIsSkipped(t *testing.T) {
+	resp := runModifyPlanWithRegions(t, func(regionType tftypes.Type) tftypes.Value {
+		return tftypes.NewValue(tftypes.List{ElementType: regionType}, nil)
+	})
+	if resp.Diagnostics.HasError() {
+		t.Fatalf("unexpected diagnostics for a null cluster_region_info: %v", resp.Diagnostics)
 	}
 }
