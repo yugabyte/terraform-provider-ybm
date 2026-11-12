@@ -998,8 +998,18 @@ var _ tfsdk.ResourceWithModifyPlan = resourceCluster{}
 func (r resourceCluster) ModifyPlan(ctx context.Context, req tfsdk.ModifyResourcePlanRequest, resp *tfsdk.ModifyResourcePlanResponse) {
 	resp.Plan = req.Plan
 
-	// Destroy plans have a null planned state; create has no prior state to compare.
-	if req.Plan.Raw.IsNull() || req.State.Raw.IsNull() {
+	// Destroy plans have a null planned state.
+	if req.Plan.Raw.IsNull() {
+		return
+	}
+
+	modifySingleRegionDefaultPlan(ctx, req, resp)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	// Create has no prior state to compare.
+	if req.State.Raw.IsNull() {
 		return
 	}
 
@@ -1065,6 +1075,51 @@ func (r resourceCluster) ModifyPlan(ctx context.Context, req tfsdk.ModifyResourc
 	}
 
 	addIgnoreNumNodesDriftErrors(&resp.Diagnostics, configRegions, stateRegions, liveNumNodesByRegion)
+}
+
+// modifySingleRegionDefaultPlan keeps the plan in step with createClusterSpec, which forces
+// is_default on the only region of a single-region cluster because YugabyteDB Aeon requires such
+// a cluster to have a default region. Without this the provider reads back true where the plan
+// said false - as happens when a multi-region cluster is shrunk to one region and the prior
+// state carried false - and the apply fails with "Provider produced inconsistent result after
+// apply".
+func modifySingleRegionDefaultPlan(ctx context.Context, req tfsdk.ModifyResourcePlanRequest, resp *tfsdk.ModifyResourcePlanResponse) {
+	var planRegions []RegionInfo
+	resp.Diagnostics.Append(req.Plan.GetAttribute(ctx, path.Root("cluster_region_info"), &planRegions)...)
+	if resp.Diagnostics.HasError() || len(planRegions) != 1 {
+		return
+	}
+
+	var configRegions []RegionInfo
+	resp.Diagnostics.Append(req.Config.GetAttribute(ctx, path.Root("cluster_region_info"), &configRegions)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	// An explicit is_default = false can never hold for a single-region cluster, so report it at
+	// plan time instead of letting the apply run and then fail.
+	if len(configRegions) == 1 {
+		configDefault := configRegions[0].IsDefault
+		if !configDefault.IsNull() && !configDefault.IsUnknown() && !configDefault.Value {
+			resp.Diagnostics.AddError(
+				"Invalid is_default for a single region cluster",
+				"The only region of a single region cluster is always its default region. Set is_default = true "+
+					"for region "+configRegions[0].Region.Value+", or leave it unset and the provider will.",
+			)
+			return
+		}
+	}
+
+	// Unknown already resolves to whatever the apply returns; true is what the apply returns.
+	if planRegions[0].IsDefault.IsUnknown() || planRegions[0].IsDefault.Value {
+		return
+	}
+
+	resp.Diagnostics.Append(resp.Plan.SetAttribute(
+		ctx,
+		path.Root("cluster_region_info").AtListIndex(0).AtName("is_default"),
+		types.Bool{Unknown: true},
+	)...)
 }
 
 func EditBackupSchedule(ctx context.Context, backupScheduleStruct BackupScheduleInfo, scheduleId string, backupDes string, accountId string, projectId string, clusterId string, apiClient *openapiclient.APIClient) error {
