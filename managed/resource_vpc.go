@@ -384,7 +384,7 @@ func (r resourceVPC) Delete(ctx context.Context, req tfsdk.DeleteResourceRequest
 	}
 
 	retryPolicy := retry.NewConstant(10 * time.Second)
-	retryPolicy = retry.WithMaxDuration(300*time.Second, retryPolicy)
+	retryPolicy = retry.WithMaxDuration(900*time.Second, retryPolicy)
 	err = retry.Do(ctx, retryPolicy, func(ctx context.Context) error {
 		_, resp, err := apiClient.NetworkApi.GetSingleTenantVpc(context.Background(), accountId, projectId, vpcId).Execute()
 		if err != nil {
