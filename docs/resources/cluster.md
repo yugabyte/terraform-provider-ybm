@@ -1056,6 +1056,7 @@ resource "ybm_autoscaler_policy" "example_us_west1" {
 > - `Preview` and `Early Access` are deprecated in favor of `Rapid`.
 - `desired_connection_pooling_state` (String) The desired connection pooling state of the cluster, Enabled or Disabled. Can be used during or after cluster creation.
 - `desired_state` (String) The desired state of the cluster, Active or Paused. This parameter can be used to pause/resume a cluster.
+- `enterprise_security` (Boolean) Set to true to enable the advanced security profile (enterprise security) on the cluster. Optional; defaults to false. This value cannot be modified after the cluster is created.
 - `fault_tolerance` (String) The fault tolerance of the cluster. NONE, NODE, ZONE or REGION.
 - `is_multi_cloud` (Boolean) Set to true to deploy a cluster that spans multiple cloud providers. Optional; defaults to false. This value cannot be modified after the cluster is created.
 - `node_config` (Attributes, Deprecated) (see [below for nested schema](#nestedatt--node_config))

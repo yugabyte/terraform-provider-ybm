@@ -10,7 +10,7 @@ require (
 	github.com/hashicorp/terraform-plugin-framework-validators v0.4.0
 	github.com/hashicorp/terraform-plugin-log v0.9.0
 	github.com/sethvargo/go-retry v0.2.3
-	github.com/yugabyte/yugabytedb-managed-go-client-internal v0.0.0-20261007145644-c750e6312016
+	github.com/yugabyte/yugabytedb-managed-go-client-internal v0.0.0-20261102160755-7460dcbe8239
 )
 
 require github.com/stretchr/testify v1.8.2 // indirect
@@ -22,7 +22,7 @@ require (
 	github.com/hashicorp/go-hclog v1.6.3 // indirect
 	github.com/hashicorp/go-plugin v1.4.10 // indirect
 	github.com/hashicorp/go-uuid v1.0.3 // indirect
-	github.com/hashicorp/terraform-plugin-go v0.18.0 // indirect
+	github.com/hashicorp/terraform-plugin-go v0.18.0
 	github.com/hashicorp/terraform-registry-address v0.2.1 // indirect
 	github.com/hashicorp/terraform-svchost v0.1.1 // indirect
 	github.com/hashicorp/yamux v0.0.0-20180604194846-3520598351bb // indirect
