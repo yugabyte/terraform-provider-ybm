@@ -1,0 +1,31 @@
+---
+page_title: "{{.Name}} {{.Type}} - {{.RenderedProviderName}}"
+description: |-
+{{ .Description | plainmarkdown | trimspace | prefixlines "  " }}
+---
+
+# {{.Name}} ({{.Type}})
+
+{{ .Description | trimspace }}
+
+~> **Note:** This resource is behind a feature flag. Set the environment variable `YBM_FF_AEON_PG=true` to use it.
+
+
+A storage pool groups clusters in a BYOC environment, for example for a team or business unit. One environment can hold several. Creating a pool waits for the environment's agent to enroll, like `ybm_aeon_pg_byoc_cluster`. `owner_user_id` defaults to the account ID, as in the console. Creating a pool that already exists fails; import it instead.
+
+!> **Warning:** Storage pools cannot be deleted, and the console treats them as undeletable. Destroying this resource only removes it from Terraform state; the pool stays in the environment, and you can import it again.
+
+## Example Usage
+
+{{ tffile "examples/resources/ybm_byoc_storage_pool/resource.tf" }}
+
+{{ .SchemaMarkdown | trimspace }}
+{{- if .HasImport }}
+
+## Import
+
+Import is supported using the following syntax:
+
+{{ codefile "shell" "examples/resources/ybm_byoc_storage_pool/import.sh" }}
+
+{{- end }}

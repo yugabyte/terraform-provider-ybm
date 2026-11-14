@@ -1,0 +1,5 @@
+# A branch of a shared cluster is imported by <cluster_name>/<branch_name>
+terraform import ybm_aeon_pg_branch.dev orders/dev
+
+# A branch of a BYOC cluster is imported by <environment_id>/<storage_pool>/<cluster_name>/<branch_name>
+terraform import ybm_aeon_pg_branch.byoc_dev acme-prod/payments/orders/dev
