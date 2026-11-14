@@ -93,7 +93,8 @@ func (r resourceAmpCluster) Create(ctx context.Context, req tfsdk.CreateResource
 	}
 	// The cluster exists from here on, so its state is saved even when the create did not finish:
 	// Terraform then marks it tainted rather than losing track of it.
-	cluster, _, err := resourceAmpClusterRead(ctx, scope, clusterName, plan)
+	cluster, found, err := resourceAmpClusterRead(ctx, scope, clusterName, plan)
+	err = requireAmpFound(found, err, "cluster "+clusterName)
 	if err != nil {
 		resp.Diagnostics.AddError("Unable to read the state of cluster "+clusterName, err.Error())
 		return
@@ -201,7 +202,8 @@ func (r resourceAmpCluster) Update(ctx context.Context, req tfsdk.UpdateResource
 		resp.Diagnostics.AddError("Cluster "+clusterName+" did not converge", err.Error())
 		return
 	}
-	cluster, _, err := resourceAmpClusterRead(ctx, scope, clusterName, plan)
+	cluster, found, err := resourceAmpClusterRead(ctx, scope, clusterName, plan)
+	err = requireAmpFound(found, err, "cluster "+clusterName)
 	if err != nil {
 		resp.Diagnostics.AddError("Unable to read the state of cluster "+clusterName, err.Error())
 		return

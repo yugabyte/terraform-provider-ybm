@@ -103,7 +103,8 @@ func (r resourceByocStoragePool) Create(ctx context.Context, req tfsdk.CreateRes
 	}
 	scope := newAmpScope(r.p.client, accountId, environmentId, name)
 	waitErr := waitForAmp(ctx, scope, []ampTarget{{Kind: ampKindStoragePool, Name: name}})
-	pool, _, err := resourceByocStoragePoolRead(ctx, scope)
+	pool, found, err := resourceByocStoragePoolRead(ctx, scope)
+	err = requireAmpFound(found, err, "storage pool "+name)
 	if err != nil {
 		resp.Diagnostics.AddError("Unable to read the state of storage pool "+name, err.Error())
 		return
@@ -180,7 +181,8 @@ func (r resourceByocStoragePool) Update(ctx context.Context, req tfsdk.UpdateRes
 		return
 	}
 	scope := newAmpScope(r.p.client, state.AccountID.Value, state.EnvironmentID.Value, state.Name.Value)
-	pool, _, err := resourceByocStoragePoolRead(ctx, scope)
+	pool, found, err := resourceByocStoragePoolRead(ctx, scope)
+	err = requireAmpFound(found, err, "storage pool "+state.Name.Value)
 	if err != nil {
 		resp.Diagnostics.AddError("Unable to read the state of storage pool "+state.Name.Value, err.Error())
 		return

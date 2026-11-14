@@ -228,6 +228,15 @@ func ampDependents(env ampEnvironmentResources, roots []string, keep map[string]
 	return dependents
 }
 
+// requireAmpFound turns a read-back that found nothing into an error, so a create or update never
+// saves an empty state for a resource that was deleted from under it.
+func requireAmpFound(found bool, err error, what string) error {
+	if err == nil && !found {
+		return fmt.Errorf("%s is no longer declared; it may have been deleted outside Terraform", what)
+	}
+	return err
+}
+
 type ampTarget struct {
 	Kind string
 	Name string

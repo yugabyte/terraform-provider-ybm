@@ -153,7 +153,8 @@ func (r resourceAmpEndpoint) Create(ctx context.Context, req tfsdk.CreateResourc
 	// The endpoint exists from here on, so its state is saved even when it did not become ready:
 	// Terraform then marks it tainted rather than losing track of it.
 	plan.BranchName = types.String{Value: branchName}
-	endpoint, _, err := resourceAmpEndpointRead(ctx, scope, plan)
+	endpoint, found, err := resourceAmpEndpointRead(ctx, scope, plan)
+	err = requireAmpFound(found, err, "endpoint "+endpointName)
 	if err != nil {
 		resp.Diagnostics.AddError("Unable to read the state of endpoint "+endpointName, err.Error())
 		return
@@ -265,7 +266,8 @@ func (r resourceAmpEndpoint) Update(ctx context.Context, req tfsdk.UpdateResourc
 		resp.Diagnostics.AddError("Endpoint "+endpointName+" did not converge", err.Error())
 		return
 	}
-	endpoint, _, err := resourceAmpEndpointRead(ctx, scope, plan)
+	endpoint, found, err := resourceAmpEndpointRead(ctx, scope, plan)
+	err = requireAmpFound(found, err, "endpoint "+endpointName)
 	if err != nil {
 		resp.Diagnostics.AddError("Unable to read the state of endpoint "+endpointName, err.Error())
 		return

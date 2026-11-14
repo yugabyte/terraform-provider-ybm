@@ -291,7 +291,8 @@ func (r resourceAmpBranch) Create(ctx context.Context, req tfsdk.CreateResourceR
 	// The branch exists from here on, so its state is saved even when the create did not finish:
 	// Terraform then marks it tainted rather than losing track of it.
 	plan.ParentBranch = types.String{Value: parent}
-	branch, _, err := resourceAmpBranchRead(ctx, scope, clusterName, branchName, plan)
+	branch, found, err := resourceAmpBranchRead(ctx, scope, clusterName, branchName, plan)
+	err = requireAmpFound(found, err, "branch "+branchName)
 	if err != nil {
 		resp.Diagnostics.AddError("Unable to read the state of branch "+branchName, err.Error())
 		return
@@ -410,7 +411,8 @@ func (r resourceAmpBranch) Update(ctx context.Context, req tfsdk.UpdateResourceR
 		resp.Diagnostics.AddError("Branch "+branchName+" did not converge", err.Error())
 		return
 	}
-	branch, _, err := resourceAmpBranchRead(ctx, scope, clusterName, branchName, plan)
+	branch, found, err := resourceAmpBranchRead(ctx, scope, clusterName, branchName, plan)
+	err = requireAmpFound(found, err, "branch "+branchName)
 	if err != nil {
 		resp.Diagnostics.AddError("Unable to read the state of branch "+branchName, err.Error())
 		return

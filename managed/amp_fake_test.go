@@ -34,6 +34,9 @@ type fakeYcp struct {
 	byoc     map[string]*fakeByocEnv
 	requests []string
 	bodies   []map[string]interface{}
+	// afterWrite, when set, runs after each desired-state write with the lock held, as another
+	// client would change it.
+	afterWrite func(f *fakeYcp)
 }
 
 type fakeByocEnv struct {
@@ -226,6 +229,9 @@ func (f *fakeYcp) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			_ = json.Unmarshal(body, &req)
 			bumpGenerations(env.desired, req.Resources)
 			env.desired = req.Resources
+			if f.afterWrite != nil {
+				f.afterWrite(f)
+			}
 			f.write(w, http.StatusAccepted, nil)
 		default:
 			f.fail(w, &ycpError{StatusCode: http.StatusNotFound, Message: "no route"})
@@ -271,6 +277,9 @@ func (f *fakeYcp) serveManaged(w http.ResponseWriter, r *http.Request, body []by
 		}
 		bumpGenerations(before, after)
 		f.managed[region.Region] = after
+	}
+	if f.afterWrite != nil {
+		f.afterWrite(f)
 	}
 	f.write(w, http.StatusOK, map[string]interface{}{"environments": []interface{}{}})
 }

@@ -5,6 +5,7 @@
 package managed
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"sort"
@@ -12,6 +13,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/hashicorp/terraform-plugin-go/tfprotov6"
 	"github.com/hashicorp/terraform-plugin-go/tftypes"
 )
 
@@ -633,5 +635,36 @@ func TestByocClusterWaitsForTheAgent(t *testing.T) {
 		"branch_pg_settings": map[string]string{"work_mem": "64MB"},
 	})); !strings.Contains(diagText(diags), "DRAINING") {
 		t.Errorf("a cluster was updated in a draining environment: %s", diagText(diags))
+	}
+}
+
+func TestAeonPgCreateFailsWhenTheClusterDisappears(t *testing.T) {
+	h := newTfHarness(t)
+	h.fake.addByocEnv("acme", "READY")
+	h.fake.addByocPool("acme", "payments")
+	// Another client deletes every cluster as soon as it is written.
+	h.fake.afterWrite = func(f *fakeYcp) {
+		f.managed["us-east-1"] = withoutAmpSubtree(f.managed["us-east-1"], testAccountID+"/orders")
+		f.byoc["acme"].desired = withoutAmpSubtree(f.byoc["acme"].desired, "payments/orders")
+	}
+	for name, config := range map[string]map[string]interface{}{
+		"ybm_aeon_pg_cluster":      {"cluster_name": "orders", "region": "us-east-1"},
+		"ybm_aeon_pg_byoc_cluster": {"environment_id": "acme", "storage_pool": "payments", "cluster_name": "orders"},
+	} {
+		typ := h.resourceType(name)
+		p := h.plan(name, tftypes.NewValue(typ, nil), config)
+		resp, err := h.srv.ApplyResourceChange(context.Background(), &tfprotov6.ApplyResourceChangeRequest{
+			TypeName: name, PriorState: dynamic(t, typ, tftypes.NewValue(typ, nil)), PlannedState: dynamic(t, typ, p.planned),
+			Config: dynamic(t, typ, tfObject(t, typ, config)),
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !strings.Contains(diagText(resp.Diagnostics), "no longer declared") {
+			t.Errorf("%s: create of a cluster that disappeared: %s", name, diagText(resp.Diagnostics))
+		}
+		if state, _ := resp.NewState.Unmarshal(typ); !state.IsNull() {
+			t.Errorf("%s: saved state for a cluster that does not exist: %v", name, state)
+		}
 	}
 }
