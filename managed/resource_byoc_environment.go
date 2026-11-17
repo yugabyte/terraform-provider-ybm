@@ -13,9 +13,12 @@ import (
 	"strings"
 
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
-	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/path"
-	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
+	"github.com/hashicorp/terraform-plugin-framework/resource"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
 	openapiclient "github.com/yugabyte/yugabytedb-managed-go-client-internal"
@@ -23,85 +26,79 @@ import (
 
 const byocEnvironmentDeregistered = "DEREGISTERED"
 
-type resourceByocEnvironmentType struct{}
-
-func (r resourceByocEnvironmentType) GetSchema(_ context.Context) (tfsdk.Schema, diag.Diagnostics) {
-	return tfsdk.Schema{
+func (r *resourceByocEnvironment) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
+	resp.Schema = schema.Schema{
 		Description: `The resource to register a BYOC (bring your own cloud) environment for PostgreSQL clusters. ` +
 			`Registering returns an API key for the environment's agent; install the agent in your Kubernetes cluster ` +
 			`with install_hint, and the environment becomes READY once the agent enrolls. ` +
 			`The key is only returned by the apply that registers the environment: importing cannot recover it, and replacing ` +
 			`or destroying the environment revokes it. An environment's name stays claimed after it is destroyed, so it cannot be registered again.`,
-		Attributes: map[string]tfsdk.Attribute{
-			"account_id": {
+		Attributes: map[string]schema.Attribute{
+			"account_id": schema.StringAttribute{
 				Description:   "The ID of the account this environment belongs to.",
-				Type:          types.StringType,
 				Computed:      true,
-				PlanModifiers: []tfsdk.AttributePlanModifier{tfsdk.UseStateForUnknown()},
+				PlanModifiers: []planmodifier.String{stringplanmodifier.UseNonNullStateForUnknown()},
 			},
-			"environment_id": {
+			"environment_id": schema.StringAttribute{
 				Description:   "The ID of the environment, derived from its name.",
-				Type:          types.StringType,
 				Computed:      true,
-				PlanModifiers: []tfsdk.AttributePlanModifier{tfsdk.UseStateForUnknown()},
+				PlanModifiers: []planmodifier.String{stringplanmodifier.UseNonNullStateForUnknown()},
 			},
-			"name": {
+			"name": schema.StringAttribute{
 				Description: "The name of the environment, 3 to 60 characters. Its environment_id is derived from it: lowercased, " +
 					"with spaces, underscores and slashes turned into hyphens. A change that derives the same ID, such as the case, " +
 					"is applied in place, so after an import the name may be written as registered or as the ID. " +
 					"Any other change forces a new environment.",
-				Type:       types.StringType,
 				Required:   true,
-				Validators: []tfsdk.AttributeValidator{stringvalidator.LengthBetween(3, 60)},
+				Validators: []validator.String{stringvalidator.LengthBetween(3, 60)},
 			},
-			"region": {
+			"region": schema.StringAttribute{
 				Description: "The region the environment's agent reported when it enrolled.",
-				Type:        types.StringType,
 				Computed:    true,
 			},
-			"placement": {
+			"placement": schema.StringAttribute{
 				Description: "Where the environment runs, which the install command passes to the agent. Defaults to cloud. " +
 					"It only applies when the environment is registered.",
-				Type:          types.StringType,
 				Optional:      true,
 				Computed:      true,
-				PlanModifiers: []tfsdk.AttributePlanModifier{tfsdk.UseStateForUnknown()},
+				PlanModifiers: []planmodifier.String{stringplanmodifier.UseNonNullStateForUnknown()},
 			},
-			"state": {
+			"state": schema.StringAttribute{
 				Description: "The state of the environment, such as PENDING, ENROLLING or READY.",
-				Type:        types.StringType,
 				Computed:    true,
 			},
-			"cloud_provider": {
+			"cloud_provider": schema.StringAttribute{
 				Description: "The cloud provider the agent reported.",
-				Type:        types.StringType,
 				Computed:    true,
 			},
-			"k8s_version": {
+			"k8s_version": schema.StringAttribute{
 				Description: "The Kubernetes version the agent reported.",
-				Type:        types.StringType,
 				Computed:    true,
 			},
-			"agent_api_key": {
+			"agent_api_key": schema.StringAttribute{
 				Description:   "The API key the environment's agent authenticates with. Only available from the apply that registers the environment, and not after an import.",
-				Type:          types.StringType,
 				Computed:      true,
 				Sensitive:     true,
-				PlanModifiers: []tfsdk.AttributePlanModifier{tfsdk.UseStateForUnknown()},
+				PlanModifiers: []planmodifier.String{stringplanmodifier.UseNonNullStateForUnknown()},
 			},
-			"install_hint": {
+			"install_hint": schema.StringAttribute{
 				Description: "The command that installs the environment's agent.",
-				Type:        types.StringType,
 				Computed:    true,
 			},
 		},
-	}, nil
+	}
 }
 
-func (r resourceByocEnvironmentType) NewResource(_ context.Context, p tfsdk.Provider) (tfsdk.Resource, diag.Diagnostics) {
-	return resourceByocEnvironment{
-		p: *(p.(*provider)),
-	}, nil
+func newResourceByocEnvironment() resource.Resource {
+	return &resourceByocEnvironment{}
+}
+
+func (r *resourceByocEnvironment) Metadata(_ context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
+	resp.TypeName = req.ProviderTypeName + "_amp_byoc_environment"
+}
+
+func (r *resourceByocEnvironment) Configure(_ context.Context, req resource.ConfigureRequest, _ *resource.ConfigureResponse) {
+	r.p = configuredProvider(req.ProviderData)
 }
 
 type resourceByocEnvironment struct {
@@ -116,7 +113,7 @@ func byocEnvironmentID(name string) string {
 
 // ModifyPlan replaces the environment only for a name that derives another ID, since a
 // replacement revokes the agent's key and the old name stays claimed.
-func (r resourceByocEnvironment) ModifyPlan(ctx context.Context, req tfsdk.ModifyResourcePlanRequest, resp *tfsdk.ModifyResourcePlanResponse) {
+func (r resourceByocEnvironment) ModifyPlan(ctx context.Context, req resource.ModifyPlanRequest, resp *resource.ModifyPlanResponse) {
 	if req.State.Raw.IsNull() || req.Plan.Raw.IsNull() {
 		return
 	}
@@ -126,7 +123,7 @@ func (r resourceByocEnvironment) ModifyPlan(ctx context.Context, req tfsdk.Modif
 	if resp.Diagnostics.HasError() {
 		return
 	}
-	if name.Unknown || byocEnvironmentID(name.Value) != environmentId.Value {
+	if name.IsUnknown() || byocEnvironmentID(name.ValueString()) != environmentId.ValueString() {
 		resp.RequiresReplace = append(resp.RequiresReplace, path.Root("name"))
 	}
 }
@@ -148,9 +145,9 @@ func byocEnvironmentToState(accountId string, name string, env ycpEnvironment, a
 		installHint = env.InstallHint
 	}
 	return ByocEnvironment{
-		AccountID:     types.String{Value: accountId},
-		EnvironmentID: types.String{Value: env.ID},
-		Name:          types.String{Value: name},
+		AccountID:     types.StringValue(accountId),
+		EnvironmentID: types.StringValue(env.ID),
+		Name:          types.StringValue(name),
 		Region:        tfString(env.Region),
 		Placement:     tfString(env.Placement),
 		State:         tfString(env.State),
@@ -173,7 +170,7 @@ func getByocEnvironment(ctx context.Context, apiClient *openapiclient.APIClient,
 	return env, nil
 }
 
-func (r resourceByocEnvironment) Create(ctx context.Context, req tfsdk.CreateResourceRequest, resp *tfsdk.CreateResourceResponse) {
+func (r resourceByocEnvironment) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
 	if !r.p.configured {
 		resp.Diagnostics.AddError(
 			"Provider not configured",
@@ -196,16 +193,16 @@ func (r resourceByocEnvironment) Create(ctx context.Context, req tfsdk.CreateRes
 	}
 
 	body := map[string]interface{}{
-		"name": plan.Name.Value,
+		"name": plan.Name.ValueString(),
 		"kind": "amp",
 		"type": "BYOC",
 	}
-	if known(plan.Placement.Null, plan.Placement.Unknown) {
-		body["placement"] = plan.Placement.Value
+	if known(plan.Placement.IsNull(), plan.Placement.IsUnknown()) {
+		body["placement"] = plan.Placement.ValueString()
 	}
 	data, err := ycpDo(ctx, apiClient, http.MethodPost, accountId, "/environments", nil, body)
 	if err != nil {
-		resp.Diagnostics.AddError("Unable to register environment "+plan.Name.Value, err.Error())
+		resp.Diagnostics.AddError("Unable to register environment "+plan.Name.ValueString(), err.Error())
 		return
 	}
 	var registered struct {
@@ -218,20 +215,20 @@ func (r resourceByocEnvironment) Create(ctx context.Context, req tfsdk.CreateRes
 		return
 	}
 
-	state := byocEnvironmentToState(accountId, plan.Name.Value, registered.Environment, tfString(registered.ApiKey), registered.InstallHint)
-	if known(plan.Placement.Null, plan.Placement.Unknown) {
+	state := byocEnvironmentToState(accountId, plan.Name.ValueString(), registered.Environment, tfString(registered.ApiKey), registered.InstallHint)
+	if known(plan.Placement.IsNull(), plan.Placement.IsUnknown()) {
 		state.Placement = plan.Placement
 	}
 	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
 }
 
-func (r resourceByocEnvironment) Read(ctx context.Context, req tfsdk.ReadResourceRequest, resp *tfsdk.ReadResourceResponse) {
+func (r resourceByocEnvironment) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
 	var state ByocEnvironment
 	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
-	accountId := state.AccountID.Value
+	accountId := state.AccountID.ValueString()
 	if accountId == "" {
 		var ok bool
 		var message string
@@ -242,28 +239,28 @@ func (r resourceByocEnvironment) Read(ctx context.Context, req tfsdk.ReadResourc
 		}
 	}
 
-	env, err := getByocEnvironment(ctx, r.p.client, accountId, state.EnvironmentID.Value)
+	env, err := getByocEnvironment(ctx, r.p.client, accountId, state.EnvironmentID.ValueString())
 	if isYcpNotFound(err) || (err == nil && env.State == byocEnvironmentDeregistered) {
-		tflog.Warn(ctx, "Environment "+state.EnvironmentID.Value+" no longer exists; removing it from state")
+		tflog.Warn(ctx, "Environment "+state.EnvironmentID.ValueString()+" no longer exists; removing it from state")
 		resp.State.RemoveResource(ctx)
 		return
 	}
 	if err != nil {
-		resp.Diagnostics.AddError("Unable to read environment "+state.EnvironmentID.Value, err.Error())
+		resp.Diagnostics.AddError("Unable to read environment "+state.EnvironmentID.ValueString(), err.Error())
 		return
 	}
 
-	name := state.Name.Value
+	name := state.Name.ValueString()
 	if name == "" {
 		// An import knows only the ID, which is derived from the name.
 		name = env.ID
 	}
 	newState := byocEnvironmentToState(accountId, name, env, state.AgentApiKey, "")
-	if newState.AgentApiKey.Unknown {
-		newState.AgentApiKey = types.String{Null: true}
+	if newState.AgentApiKey.IsUnknown() {
+		newState.AgentApiKey = types.StringNull()
 	}
 	// The agent reports its own placement when it enrolls; the configured one is what was registered.
-	if known(state.Placement.Null, state.Placement.Unknown) {
+	if known(state.Placement.IsNull(), state.Placement.IsUnknown()) {
 		newState.Placement = state.Placement
 	}
 	resp.Diagnostics.Append(resp.State.Set(ctx, &newState)...)
@@ -271,41 +268,41 @@ func (r resourceByocEnvironment) Read(ctx context.Context, req tfsdk.ReadResourc
 
 // Update records a name that derives the same ID and a placement, which only applies at
 // registration, and refreshes the computed attributes.
-func (r resourceByocEnvironment) Update(ctx context.Context, req tfsdk.UpdateResourceRequest, resp *tfsdk.UpdateResourceResponse) {
+func (r resourceByocEnvironment) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
 	var plan, state ByocEnvironment
 	resp.Diagnostics.Append(req.Plan.Get(ctx, &plan)...)
 	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
-	env, err := getByocEnvironment(ctx, r.p.client, state.AccountID.Value, state.EnvironmentID.Value)
+	env, err := getByocEnvironment(ctx, r.p.client, state.AccountID.ValueString(), state.EnvironmentID.ValueString())
 	if err != nil {
-		resp.Diagnostics.AddError("Unable to read environment "+state.EnvironmentID.Value, err.Error())
+		resp.Diagnostics.AddError("Unable to read environment "+state.EnvironmentID.ValueString(), err.Error())
 		return
 	}
-	newState := byocEnvironmentToState(state.AccountID.Value, plan.Name.Value, env, state.AgentApiKey, "")
-	if known(plan.Placement.Null, plan.Placement.Unknown) {
+	newState := byocEnvironmentToState(state.AccountID.ValueString(), plan.Name.ValueString(), env, state.AgentApiKey, "")
+	if known(plan.Placement.IsNull(), plan.Placement.IsUnknown()) {
 		newState.Placement = plan.Placement
 	}
 	resp.Diagnostics.Append(resp.State.Set(ctx, &newState)...)
 }
 
-func (r resourceByocEnvironment) Delete(ctx context.Context, req tfsdk.DeleteResourceRequest, resp *tfsdk.DeleteResourceResponse) {
+func (r resourceByocEnvironment) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
 	var state ByocEnvironment
 	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
 	// Deregistering also revokes the agent's API key.
-	_, err := ycpDo(ctx, r.p.client, http.MethodDelete, state.AccountID.Value, "/environments/"+url.PathEscape(state.EnvironmentID.Value), nil, nil)
+	_, err := ycpDo(ctx, r.p.client, http.MethodDelete, state.AccountID.ValueString(), "/environments/"+url.PathEscape(state.EnvironmentID.ValueString()), nil, nil)
 	if err != nil && !isYcpNotFound(err) {
-		resp.Diagnostics.AddError("Unable to deregister environment "+state.EnvironmentID.Value, err.Error())
+		resp.Diagnostics.AddError("Unable to deregister environment "+state.EnvironmentID.ValueString(), err.Error())
 		return
 	}
 	resp.State.RemoveResource(ctx)
 }
 
 // ImportState imports an environment by its ID.
-func (r resourceByocEnvironment) ImportState(ctx context.Context, req tfsdk.ImportResourceStateRequest, resp *tfsdk.ImportResourceStateResponse) {
-	tfsdk.ResourceImportStatePassthroughID(ctx, path.Root("environment_id"), req, resp)
+func (r resourceByocEnvironment) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
+	resource.ImportStatePassthroughID(ctx, path.Root("environment_id"), req, resp)
 }

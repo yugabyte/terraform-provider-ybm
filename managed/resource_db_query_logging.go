@@ -9,6 +9,11 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/path"
+	"github.com/hashicorp/terraform-plugin-framework/resource"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
@@ -16,129 +21,118 @@ import (
 	openapiclient "github.com/yugabyte/yugabytedb-managed-go-client-internal"
 )
 
-type resourceDbQueryLoggingType struct{}
-
-func (r resourceDbQueryLoggingType) GetSchema(ctx context.Context) (tfsdk.Schema, diag.Diagnostics) {
-	return tfsdk.Schema{
+func (r *resourceDbQueryLogging) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
+	resp.Schema = schema.Schema{
 		Description: "Use this resource to configure database query logging for a cluster, and specify the export configuration (created using the `ybm_integration` resource) to use for log export. When assigned to a cluster, cluster query logs are exported to the sink defined in the export configuration.",
-		Attributes: map[string]tfsdk.Attribute{
-			"integration_name": {
+		Attributes: map[string]schema.Attribute{
+			"integration_name": schema.StringAttribute{
 				Description: "Name of the integration for this DB query logging configuration.",
-				Type:        types.StringType,
 				Required:    true,
 			},
-			"account_id": {
+			"account_id": schema.StringAttribute{
 				Description: "ID of the account this DB query logging configuration belongs to.",
-				Type:        types.StringType,
 				Computed:    true,
-				PlanModifiers: []tfsdk.AttributePlanModifier{
-					tfsdk.UseStateForUnknown(),
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseNonNullStateForUnknown(),
 				},
 			},
-			"project_id": {
+			"project_id": schema.StringAttribute{
 				Description: "ID of the project this DB query logging configuration belongs to.",
-				Type:        types.StringType,
 				Computed:    true,
-				PlanModifiers: []tfsdk.AttributePlanModifier{
-					tfsdk.UseStateForUnknown(),
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseNonNullStateForUnknown(),
 				},
 			},
-			"cluster_id": {
+			"cluster_id": schema.StringAttribute{
 				Description: "ID of the cluster with which this DB query logging configuration will be associated.",
-				Type:        types.StringType,
 				Required:    true,
-				PlanModifiers: []tfsdk.AttributePlanModifier{
-					tfsdk.UseStateForUnknown(),
-					tfsdk.RequiresReplace(),
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseNonNullStateForUnknown(),
+					stringplanmodifier.RequiresReplace(),
 				},
 			},
-			"config_id": {
+			"config_id": schema.StringAttribute{
 				Description: "ID of the DB query logging configuration. Created automatically when enabling DB query logs.",
-				Type:        types.StringType,
 				Computed:    true,
-				PlanModifiers: []tfsdk.AttributePlanModifier{
-					tfsdk.UseStateForUnknown(),
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseNonNullStateForUnknown(),
 				},
 			},
-			"state": {
+			"state": schema.StringAttribute{
 				Description: "The status of the association of the cluster with DB query logging config.",
-				Type:        types.StringType,
 				Computed:    true,
-				PlanModifiers: []tfsdk.AttributePlanModifier{
-					tfsdk.UseStateForUnknown(),
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseNonNullStateForUnknown(),
 				},
 			},
-			"log_config": {
+			"log_config": schema.SingleNestedAttribute{
 				Description: "The Log config.",
 				Required:    true,
-				Attributes: tfsdk.SingleNestedAttributes(map[string]tfsdk.Attribute{
-					"log_min_duration_statement": {
+				Attributes: map[string]schema.Attribute{
+					"log_min_duration_statement": schema.Int64Attribute{
 						Description: "Duration(in ms) of each completed statement to be logged if the statement ran for at least the specified amount of time.",
-						Type:        types.Int64Type,
 						Optional:    true,
 						Computed:    true,
 					},
-					"debug_print_plan": {
+					"debug_print_plan": schema.BoolAttribute{
 						Description: "Enable debug print plan for statements.",
-						Type:        types.BoolType,
 						Optional:    true,
 						Computed:    true,
 					},
-					"log_connections": {
+					"log_connections": schema.BoolAttribute{
 						Description: "Log connections to the database.",
-						Type:        types.BoolType,
 						Optional:    true,
 						Computed:    true,
 					},
-					"log_disconnections": {
+					"log_disconnections": schema.BoolAttribute{
 						Description: "Log disconnections from the database.",
-						Type:        types.BoolType,
 						Optional:    true,
 						Computed:    true,
 					},
-					"log_duration": {
+					"log_duration": schema.BoolAttribute{
 						Description: "Log the duration of each statement.",
-						Type:        types.BoolType,
 						Optional:    true,
 						Computed:    true,
 					},
-					"log_error_verbosity": {
+					"log_error_verbosity": schema.StringAttribute{
 						Description: "Sets the verbosity level of logged errors.",
-						Type:        types.StringType,
 						Optional:    true,
 						Computed:    true,
-						Validators:  []tfsdk.AttributeValidator{stringvalidator.OneOf("DEFAULT", "TERSE", "VERBOSE")},
+						Validators:  []validator.String{stringvalidator.OneOf("DEFAULT", "TERSE", "VERBOSE")},
 					},
-					"log_statement": {
+					"log_statement": schema.StringAttribute{
 						Description: "The type of statements to be logged.",
-						Type:        types.StringType,
 						Optional:    true,
 						Computed:    true,
-						Validators:  []tfsdk.AttributeValidator{stringvalidator.OneOf("NONE", "DDL", "MOD", "ALL")},
+						Validators:  []validator.String{stringvalidator.OneOf("NONE", "DDL", "MOD", "ALL")},
 					},
-					"log_min_error_statement": {
+					"log_min_error_statement": schema.StringAttribute{
 						Description: "Minimum severity for error statements to be logged.",
-						Type:        types.StringType,
 						Optional:    true,
 						Computed:    true,
-						Validators:  []tfsdk.AttributeValidator{stringvalidator.OneOf("ERROR")},
+						Validators:  []validator.String{stringvalidator.OneOf("ERROR")},
 					},
-					"log_line_prefix": {
+					"log_line_prefix": schema.StringAttribute{
 						Description: "A printf-style format string for log line prefixes.",
-						Type:        types.StringType,
 						Optional:    true,
 						Computed:    true,
 					},
-				}),
+				},
 			},
 		},
-	}, nil
+	}
 }
 
-func (r resourceDbQueryLoggingType) NewResource(_ context.Context, p tfsdk.Provider) (tfsdk.Resource, diag.Diagnostics) {
-	return resourceDbQueryLogging{
-		p: *(p.(*provider)),
-	}, nil
+func newResourceDbQueryLogging() resource.Resource {
+	return &resourceDbQueryLogging{}
+}
+
+func (r *resourceDbQueryLogging) Metadata(_ context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
+	resp.TypeName = req.ProviderTypeName + "_db_query_logging"
+}
+
+func (r *resourceDbQueryLogging) Configure(_ context.Context, req resource.ConfigureRequest, _ *resource.ConfigureResponse) {
+	r.p = configuredProvider(req.ProviderData)
 }
 
 type resourceDbQueryLogging struct {
@@ -169,27 +163,27 @@ func buildDbQueryLoggingSpec(config DbQueryLoggingConfig, integrationId string, 
 	if config.LogConfig != nil {
 		tfLogConfig := *config.LogConfig
 		if !tfLogConfig.LogConnections.IsNull() && !tfLogConfig.LogConnections.IsUnknown() {
-			newLogConfig.SetLogConnections(tfLogConfig.LogConnections.Value)
+			newLogConfig.SetLogConnections(tfLogConfig.LogConnections.ValueBool())
 		}
 
 		if !tfLogConfig.DebugPrintPlan.IsNull() && !tfLogConfig.DebugPrintPlan.IsUnknown() {
-			newLogConfig.SetDebugPrintPlan(tfLogConfig.DebugPrintPlan.Value)
+			newLogConfig.SetDebugPrintPlan(tfLogConfig.DebugPrintPlan.ValueBool())
 		}
 
 		if !tfLogConfig.LogDisconnections.IsNull() && !tfLogConfig.LogDisconnections.IsUnknown() {
-			newLogConfig.SetLogDisconnections(tfLogConfig.LogDisconnections.Value)
+			newLogConfig.SetLogDisconnections(tfLogConfig.LogDisconnections.ValueBool())
 		}
 
 		if !tfLogConfig.LogDuration.IsNull() && !tfLogConfig.LogDuration.IsUnknown() {
-			newLogConfig.SetLogDuration(tfLogConfig.LogDuration.Value)
+			newLogConfig.SetLogDuration(tfLogConfig.LogDuration.ValueBool())
 		}
 
 		if !tfLogConfig.LogMinDurationStatement.IsNull() && !tfLogConfig.LogMinDurationStatement.IsUnknown() {
-			newLogConfig.SetLogMinDurationStatement(int32(tfLogConfig.LogMinDurationStatement.Value))
+			newLogConfig.SetLogMinDurationStatement(int32(tfLogConfig.LogMinDurationStatement.ValueInt64()))
 		}
 
 		if !tfLogConfig.LogErrorVerbosity.IsNull() && !tfLogConfig.LogErrorVerbosity.IsUnknown() {
-			logErrorVerbosityEnum, err := openapiclient.NewLogErrorVerbosityEnumFromValue(strings.ToUpper(tfLogConfig.LogErrorVerbosity.Value))
+			logErrorVerbosityEnum, err := openapiclient.NewLogErrorVerbosityEnumFromValue(strings.ToUpper(tfLogConfig.LogErrorVerbosity.ValueString()))
 			if err != nil {
 				return nil, err
 			}
@@ -197,7 +191,7 @@ func buildDbQueryLoggingSpec(config DbQueryLoggingConfig, integrationId string, 
 		}
 
 		if !tfLogConfig.LogStatement.IsNull() && !tfLogConfig.LogStatement.IsUnknown() {
-			logStatementEnum, err := openapiclient.NewLogStatementEnumFromValue(strings.ToUpper(tfLogConfig.LogStatement.Value))
+			logStatementEnum, err := openapiclient.NewLogStatementEnumFromValue(strings.ToUpper(tfLogConfig.LogStatement.ValueString()))
 			if err != nil {
 				return nil, err
 			}
@@ -205,7 +199,7 @@ func buildDbQueryLoggingSpec(config DbQueryLoggingConfig, integrationId string, 
 		}
 
 		if !tfLogConfig.LogMinErrorStatement.IsNull() && !tfLogConfig.LogMinErrorStatement.IsUnknown() {
-			logMinErrorStatementEnum, err := openapiclient.NewLogMinErrorStatementEnumFromValue(strings.ToUpper(tfLogConfig.LogMinErrorStatement.Value))
+			logMinErrorStatementEnum, err := openapiclient.NewLogMinErrorStatementEnumFromValue(strings.ToUpper(tfLogConfig.LogMinErrorStatement.ValueString()))
 			if err != nil {
 				return nil, err
 			}
@@ -213,7 +207,7 @@ func buildDbQueryLoggingSpec(config DbQueryLoggingConfig, integrationId string, 
 		}
 
 		if !tfLogConfig.LogLinePrefix.IsNull() && !tfLogConfig.LogLinePrefix.IsUnknown() {
-			newLogConfig.SetLogLinePrefix(tfLogConfig.LogLinePrefix.Value)
+			newLogConfig.SetLogLinePrefix(tfLogConfig.LogLinePrefix.ValueString())
 		}
 	}
 
@@ -265,35 +259,35 @@ func resourceRead(ctx context.Context, clusterId string, apiClient *openapiclien
 
 	// Initialize the LogConfig object from PgLogExportConfig
 	logConfig := LogConfig{
-		LogMinDurationStatement: types.Int64{Value: int64(exportConfig.LogMinDurationStatement)},
-		DebugPrintPlan:          types.Bool{Value: exportConfig.DebugPrintPlan},
-		LogConnections:          types.Bool{Value: exportConfig.LogConnections},
-		LogDisconnections:       types.Bool{Value: exportConfig.LogDisconnections},
-		LogDuration:             types.Bool{Value: exportConfig.LogDuration},
-		LogErrorVerbosity:       types.String{Value: string(exportConfig.LogErrorVerbosity)},
-		LogStatement:            types.String{Value: string(exportConfig.LogStatement)},
-		LogMinErrorStatement:    types.String{Value: string(exportConfig.LogMinErrorStatement)},
-		LogLinePrefix:           types.String{Value: exportConfig.LogLinePrefix},
+		LogMinDurationStatement: types.Int64Value(int64(exportConfig.LogMinDurationStatement)),
+		DebugPrintPlan:          types.BoolValue(exportConfig.DebugPrintPlan),
+		LogConnections:          types.BoolValue(exportConfig.LogConnections),
+		LogDisconnections:       types.BoolValue(exportConfig.LogDisconnections),
+		LogDuration:             types.BoolValue(exportConfig.LogDuration),
+		LogErrorVerbosity:       types.StringValue(string(exportConfig.LogErrorVerbosity)),
+		LogStatement:            types.StringValue(string(exportConfig.LogStatement)),
+		LogMinErrorStatement:    types.StringValue(string(exportConfig.LogMinErrorStatement)),
+		LogLinePrefix:           types.StringValue(exportConfig.LogLinePrefix),
 	}
 
 	dbQueryLoggingConfig = DbQueryLoggingConfig{
-		AccountID:       types.String{Value: accountId},
-		ProjectID:       types.String{Value: projectId},
-		ClusterID:       types.String{Value: clusterId},
-		IntegrationName: types.String{Value: integrationName},
-		State:           types.String{Value: string(spec.Info.State)},
-		ConfigID:        types.String{Value: spec.Info.Id},
+		AccountID:       types.StringValue(accountId),
+		ProjectID:       types.StringValue(projectId),
+		ClusterID:       types.StringValue(clusterId),
+		IntegrationName: types.StringValue(integrationName),
+		State:           types.StringValue(string(spec.Info.State)),
+		ConfigID:        types.StringValue(spec.Info.Id),
 		LogConfig:       &logConfig,
 	}
 
 	return dbQueryLoggingConfig, true, ""
 }
 
-func (r resourceDbQueryLogging) Read(ctx context.Context, req tfsdk.ReadResourceRequest, resp *tfsdk.ReadResourceResponse) {
+func (r resourceDbQueryLogging) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
 	var state DbQueryLoggingConfig
 	getConfigFromState(ctx, req.State, &state)
 	apiClient := r.p.client
-	clusterId := state.ClusterID.Value
+	clusterId := state.ClusterID.ValueString()
 
 	dbqlConfig, readOK, message := resourceRead(ctx, clusterId, apiClient)
 	if !readOK {
@@ -308,22 +302,22 @@ func (r resourceDbQueryLogging) Read(ctx context.Context, req tfsdk.ReadResource
 	}
 }
 
-func (r resourceDbQueryLogging) Update(ctx context.Context, req tfsdk.UpdateResourceRequest, resp *tfsdk.UpdateResourceResponse) {
+func (r resourceDbQueryLogging) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
 	var planConfig DbQueryLoggingConfig
 	resp.Diagnostics.Append(getConfigFromPlan(ctx, req.Plan, &planConfig)...)
 	if resp.Diagnostics.HasError() {
 		tflog.Debug(ctx, "Error while getting the plan for the Db query logging configuration")
 		return
 	}
-	integrationName := planConfig.IntegrationName.Value
+	integrationName := planConfig.IntegrationName.ValueString()
 
 	apiClient := r.p.client
 	var stateConfig DbQueryLoggingConfig
 	getConfigFromState(ctx, req.State, &stateConfig)
-	accountId := stateConfig.AccountID.Value
-	projectId := stateConfig.ProjectID.Value
-	clusterId := stateConfig.ClusterID.Value
-	configId := stateConfig.ConfigID.Value
+	accountId := stateConfig.AccountID.ValueString()
+	projectId := stateConfig.ProjectID.ValueString()
+	clusterId := stateConfig.ClusterID.ValueString()
+	configId := stateConfig.ConfigID.ValueString()
 
 	if planConfig.ClusterID != stateConfig.ClusterID {
 		errMsg := "Field cluster_id cannot be changed after resource creation"
@@ -383,7 +377,7 @@ func (r resourceDbQueryLogging) Update(ctx context.Context, req tfsdk.UpdateReso
 		return
 	}
 
-	planConfig.ConfigID.Value = configId
+	planConfig.ConfigID = types.StringValue(configId)
 
 	dbqlConfig, readOK, readErrMsg := resourceRead(ctx, clusterId, apiClient)
 	if !readOK {
@@ -398,14 +392,14 @@ func (r resourceDbQueryLogging) Update(ctx context.Context, req tfsdk.UpdateReso
 	}
 }
 
-func (r resourceDbQueryLogging) Delete(ctx context.Context, req tfsdk.DeleteResourceRequest, resp *tfsdk.DeleteResourceResponse) {
+func (r resourceDbQueryLogging) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
 	apiClient := r.p.client
 	var state DbQueryLoggingConfig
 	getConfigFromState(ctx, req.State, &state)
-	accountId := state.AccountID.Value
-	projectId := state.ProjectID.Value
-	clusterId := state.ClusterID.Value
-	configId := state.ConfigID.Value
+	accountId := state.AccountID.ValueString()
+	projectId := state.ProjectID.ValueString()
+	clusterId := state.ClusterID.ValueString()
+	configId := state.ConfigID.ValueString()
 
 	_, err := apiClient.ClusterApi.RemovePgLogExporterConfig(ctx, accountId, projectId, clusterId, configId).Execute()
 	if err != nil {
@@ -438,13 +432,13 @@ func (r resourceDbQueryLogging) Delete(ctx context.Context, req tfsdk.DeleteReso
 }
 
 // Import
-func (r resourceDbQueryLogging) ImportState(ctx context.Context, req tfsdk.ImportResourceStateRequest, resp *tfsdk.ImportResourceStateResponse) {
+func (r resourceDbQueryLogging) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
 	// Save the import identifier in the cluster_id attribute
-	tfsdk.ResourceImportStatePassthroughID(ctx, path.Root("cluster_id"), req, resp)
+	resource.ImportStatePassthroughID(ctx, path.Root("cluster_id"), req, resp)
 }
 
 // Create a new Db Query Log Configuration for a Cluster
-func (r resourceDbQueryLogging) Create(ctx context.Context, req tfsdk.CreateResourceRequest, resp *tfsdk.CreateResourceResponse) {
+func (r resourceDbQueryLogging) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
 	if !r.p.configured {
 		resp.Diagnostics.AddError(
 			"Provider not configured",
@@ -474,10 +468,10 @@ func (r resourceDbQueryLogging) Create(ctx context.Context, req tfsdk.CreateReso
 		return
 	}
 
-	var clusterId = config.ClusterID.Value
+	var clusterId = config.ClusterID.ValueString()
 	var integrationId string
 
-	integrationName := config.IntegrationName.Value
+	integrationName := config.IntegrationName.ValueString()
 
 	integrationConfig, err := GetIntegrationDataByName(ctx, apiClient, accountId, projectId, integrationName)
 	if err != nil {

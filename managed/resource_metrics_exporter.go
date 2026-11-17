@@ -9,139 +9,132 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/hashicorp/terraform-plugin-framework-validators/schemavalidator"
+	"github.com/hashicorp/terraform-plugin-framework-validators/objectvalidator"
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/path"
+	"github.com/hashicorp/terraform-plugin-framework/resource"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
 	openapiclient "github.com/yugabyte/yugabytedb-managed-go-client-internal"
 )
 
-type resourceMetricsExporterType struct{}
-
-func (r resourceMetricsExporterType) GetSchema(_ context.Context) (tfsdk.Schema, diag.Diagnostics) {
-	return tfsdk.Schema{
+func (r *resourceMetricsExporter) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
+	resp.Schema = schema.Schema{
 		Description: `[DEPRECATED] The resource to create a metrics exporter config in YugabyteDB Aeon.
 
 This resource has been deprecated on 2024-11-30 and will be supported until 2025-2-28. Please use ` + "`ybm_integration`" + ` instead.`,
 		DeprecationMessage: `This resource has been deprecated on 2024-11-30 and will be supported until 2025-2-28. Please use ` + "`ybm_integration`" + ` instead.`,
-		Attributes: map[string]tfsdk.Attribute{
-			"account_id": {
+		Attributes: map[string]schema.Attribute{
+			"account_id": schema.StringAttribute{
 				Description: "The ID of the account this metrics exporter config belongs to.",
-				Type:        types.StringType,
 				Computed:    true,
 			},
-			"project_id": {
+			"project_id": schema.StringAttribute{
 				Description: "The ID of the project this metrics exporter config belongs to.",
-				Type:        types.StringType,
 				Computed:    true,
 			},
-			"config_id": {
+			"config_id": schema.StringAttribute{
 				Description: "The ID of the metrics exporter config.",
-				Type:        types.StringType,
 				Computed:    true,
 			},
-			"config_name": {
+			"config_name": schema.StringAttribute{
 				Description: "The name of the metrics exporter configuration",
-				Type:        types.StringType,
 				Required:    true,
 			},
-			"type": {
+			"type": schema.StringAttribute{
 				Description: "The type of third party metrics sink. ",
-				Type:        types.StringType,
 				Required:    true,
-				Validators:  []tfsdk.AttributeValidator{stringvalidator.OneOf("DATADOG", "GRAFANA", "SUMOLOGIC")},
+				Validators:  []validator.String{stringvalidator.OneOf("DATADOG", "GRAFANA", "SUMOLOGIC")},
 			},
-			"datadog_spec": {
+			"datadog_spec": schema.SingleNestedAttribute{
 				Description: "Configuration for Datadog metrics sink.",
 				Optional:    true,
-				Validators: []tfsdk.AttributeValidator{
-					schemavalidator.ConflictsWith(path.MatchRoot("grafana_spec")),
-					schemavalidator.ConflictsWith(path.MatchRoot("sumologic_spec")),
+				Validators: []validator.Object{
+					objectvalidator.ConflictsWith(path.MatchRoot("grafana_spec")),
+					objectvalidator.ConflictsWith(path.MatchRoot("sumologic_spec")),
 				},
-				Attributes: tfsdk.SingleNestedAttributes(map[string]tfsdk.Attribute{
-					"api_key": {
+				Attributes: map[string]schema.Attribute{
+					"api_key": schema.StringAttribute{
 						Description: "Datadog Api Key",
-						Type:        types.StringType,
 						Required:    true,
 						Sensitive:   true,
 					},
-					"site": {
+					"site": schema.StringAttribute{
 						Description: "Datadog site.",
-						Type:        types.StringType,
 						Required:    true,
 					},
-				}),
+				},
 			},
-			"grafana_spec": {
+			"grafana_spec": schema.SingleNestedAttribute{
 				Description: "Configuration for Grafana metrics sink.",
 				Optional:    true,
-				Validators: []tfsdk.AttributeValidator{
-					schemavalidator.ConflictsWith(path.MatchRoot("datadog_spec")),
-					schemavalidator.ConflictsWith(path.MatchRoot("sumologic_spec")),
+				Validators: []validator.Object{
+					objectvalidator.ConflictsWith(path.MatchRoot("datadog_spec")),
+					objectvalidator.ConflictsWith(path.MatchRoot("sumologic_spec")),
 				},
-				Attributes: tfsdk.SingleNestedAttributes(map[string]tfsdk.Attribute{
-					"access_policy_token": {
+				Attributes: map[string]schema.Attribute{
+					"access_policy_token": schema.StringAttribute{
 						Description: "Grafana Access Policy Token",
-						Type:        types.StringType,
 						Required:    true,
 						Sensitive:   true,
 					},
-					"zone": {
+					"zone": schema.StringAttribute{
 						Description: "Grafana Zone.",
-						Type:        types.StringType,
 						Required:    true,
 					},
-					"instance_id": {
+					"instance_id": schema.StringAttribute{
 						Description: "Grafana InstanceID.",
-						Type:        types.StringType,
 						Required:    true,
 					},
-					"org_slug": {
+					"org_slug": schema.StringAttribute{
 						Description: "Grafana OrgSlug.",
-						Type:        types.StringType,
 						Required:    true,
 					},
-				}),
+				},
 			},
-			"sumologic_spec": {
+			"sumologic_spec": schema.SingleNestedAttribute{
 				Description: "Configuration for Sumologic metrics sink.",
 				Optional:    true,
-				Validators: []tfsdk.AttributeValidator{
-					schemavalidator.ConflictsWith(path.MatchRoot("datadog_spec")),
-					schemavalidator.ConflictsWith(path.MatchRoot("grafana_spec")),
+				Validators: []validator.Object{
+					objectvalidator.ConflictsWith(path.MatchRoot("datadog_spec")),
+					objectvalidator.ConflictsWith(path.MatchRoot("grafana_spec")),
 				},
-				Attributes: tfsdk.SingleNestedAttributes(map[string]tfsdk.Attribute{
-					"access_id": {
+				Attributes: map[string]schema.Attribute{
+					"access_id": schema.StringAttribute{
 						Description: "Sumo Logic Access Key ID",
-						Type:        types.StringType,
 						Required:    true,
 						Sensitive:   true,
 					},
-					"access_key": {
+					"access_key": schema.StringAttribute{
 						Description: "Sumo Logic Access Key",
-						Type:        types.StringType,
 						Required:    true,
 						Sensitive:   true,
 					},
-					"installation_token": {
+					"installation_token": schema.StringAttribute{
 						Description: "A SumoLogic installation token to export metrics",
-						Type:        types.StringType,
 						Required:    true,
 						Sensitive:   true,
 					},
-				}),
+				},
 			},
 		},
-	}, nil
+	}
 }
 
-func (r resourceMetricsExporterType) NewResource(_ context.Context, p tfsdk.Provider) (tfsdk.Resource, diag.Diagnostics) {
-	return resourceMetricsExporter{
-		p: *(p.(*provider)),
-	}, nil
+func newResourceMetricsExporter() resource.Resource {
+	return &resourceMetricsExporter{}
+}
+
+func (r *resourceMetricsExporter) Metadata(_ context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
+	resp.TypeName = req.ProviderTypeName + "_metrics_exporter"
+}
+
+func (r *resourceMetricsExporter) Configure(_ context.Context, req resource.ConfigureRequest, _ *resource.ConfigureResponse) {
+	r.p = configuredProvider(req.ProviderData)
 }
 
 type resourceMetricsExporter struct {
@@ -163,7 +156,7 @@ func getIDsFromMetricsExporterState(ctx context.Context, state tfsdk.State, me *
 	state.GetAttribute(ctx, path.Root("project_id"), &me.ProjectID)
 	state.GetAttribute(ctx, path.Root("config_id"), &me.ConfigID)
 	state.GetAttribute(ctx, path.Root("type"), &me.Type)
-	switch me.Type.Value {
+	switch me.Type.ValueString() {
 	case string(openapiclient.METRICSEXPORTERCONFIGTYPEENUM_DATADOG):
 		state.GetAttribute(ctx, path.Root("datadog_spec"), &me.DataDogSpec)
 	case string(openapiclient.METRICSEXPORTERCONFIGTYPEENUM_GRAFANA):
@@ -173,7 +166,7 @@ func getIDsFromMetricsExporterState(ctx context.Context, state tfsdk.State, me *
 	}
 }
 
-func (r resourceMetricsExporter) Create(ctx context.Context, req tfsdk.CreateResourceRequest, resp *tfsdk.CreateResourceResponse) {
+func (r resourceMetricsExporter) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
 
 	if !r.p.configured {
 		resp.Diagnostics.AddError(
@@ -192,7 +185,7 @@ func (r resourceMetricsExporter) Create(ctx context.Context, req tfsdk.CreateRes
 		return
 	}
 
-	if plan.ConfigID.Value != "" {
+	if plan.ConfigID.ValueString() != "" {
 		resp.Diagnostics.AddError(
 			"Metrics exporter Config ID provided for new metrics exporter config",
 			"The config_id was provided even though a new metrics exporter config is being created. Please include this field in the provider when creating it.",
@@ -214,8 +207,8 @@ func (r resourceMetricsExporter) Create(ctx context.Context, req tfsdk.CreateRes
 		return
 	}
 
-	sinkType := plan.Type.Value
-	configName := plan.ConfigName.Value
+	sinkType := plan.Type.ValueString()
+	configName := plan.ConfigName.ValueString()
 
 	metricsSinkTypeEnum, err := openapiclient.NewMetricsExporterConfigTypeEnumFromValue(strings.ToUpper(sinkType))
 	if err != nil {
@@ -235,9 +228,9 @@ func (r resourceMetricsExporter) Create(ctx context.Context, req tfsdk.CreateRes
 			)
 			return
 		}
-		datadogSpec := openapiclient.NewDatadogMetricsExporterConfigurationSpec(plan.DataDogSpec.ApiKey.Value, plan.DataDogSpec.Site.Value)
+		datadogSpec := openapiclient.NewDatadogMetricsExporterConfigurationSpec(plan.DataDogSpec.ApiKey.ValueString(), plan.DataDogSpec.Site.ValueString())
 		metricsExporterConfigSpec.SetDatadogSpec(*datadogSpec)
-		apiKey = plan.DataDogSpec.ApiKey.Value
+		apiKey = plan.DataDogSpec.ApiKey.ValueString()
 	case openapiclient.METRICSEXPORTERCONFIGTYPEENUM_GRAFANA:
 		if plan.GrafanaSpec == nil {
 			resp.Diagnostics.AddError(
@@ -246,9 +239,9 @@ func (r resourceMetricsExporter) Create(ctx context.Context, req tfsdk.CreateRes
 			)
 			return
 		}
-		grafanaSpec := openapiclient.NewGrafanaMetricsExporterConfigurationSpec(plan.GrafanaSpec.AccessTokenPolicy.Value, plan.GrafanaSpec.Zone.Value, plan.GrafanaSpec.InstanceId.Value, plan.GrafanaSpec.OrgSlug.Value)
+		grafanaSpec := openapiclient.NewGrafanaMetricsExporterConfigurationSpec(plan.GrafanaSpec.AccessTokenPolicy.ValueString(), plan.GrafanaSpec.Zone.ValueString(), plan.GrafanaSpec.InstanceId.ValueString(), plan.GrafanaSpec.OrgSlug.ValueString())
 		metricsExporterConfigSpec.SetGrafanaSpec(*grafanaSpec)
-		apiKey = plan.GrafanaSpec.AccessTokenPolicy.Value
+		apiKey = plan.GrafanaSpec.AccessTokenPolicy.ValueString()
 	case openapiclient.METRICSEXPORTERCONFIGTYPEENUM_SUMOLOGIC:
 		if plan.SumoLogicSpec == nil {
 			resp.Diagnostics.AddError(
@@ -257,7 +250,7 @@ func (r resourceMetricsExporter) Create(ctx context.Context, req tfsdk.CreateRes
 			)
 			return
 		}
-		sumoLogicSpec := openapiclient.NewSumologicMetricsExporterConfigurationSpec(plan.SumoLogicSpec.InstallationToken.Value, plan.SumoLogicSpec.AccessId.Value, plan.SumoLogicSpec.AccessKey.Value)
+		sumoLogicSpec := openapiclient.NewSumologicMetricsExporterConfigurationSpec(plan.SumoLogicSpec.InstallationToken.ValueString(), plan.SumoLogicSpec.AccessId.ValueString(), plan.SumoLogicSpec.AccessKey.ValueString())
 		metricsExporterConfigSpec.SetSumologicSpec(*sumoLogicSpec)
 		sumoSpec = plan.SumoLogicSpec
 	default:
@@ -291,21 +284,21 @@ func (r resourceMetricsExporter) Create(ctx context.Context, req tfsdk.CreateRes
 
 }
 
-func (r resourceMetricsExporter) Read(ctx context.Context, req tfsdk.ReadResourceRequest, resp *tfsdk.ReadResourceResponse) {
+func (r resourceMetricsExporter) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
 	var state MetricsExporter
 
 	getIDsFromMetricsExporterState(ctx, req.State, &state)
-	configID := state.ConfigID.Value
+	configID := state.ConfigID.ValueString()
 	apiKey := ""
 	var sumoSpec *SumoLogicSpec
 
 	// We cannot use the api return as the apikey return by the api is masked.
 	// We need to use the one provided by the user which should be in the state
-	switch state.Type.Value {
+	switch state.Type.ValueString() {
 	case string(openapiclient.METRICSEXPORTERCONFIGTYPEENUM_DATADOG):
-		apiKey = state.DataDogSpec.ApiKey.Value
+		apiKey = state.DataDogSpec.ApiKey.ValueString()
 	case string(openapiclient.METRICSEXPORTERCONFIGTYPEENUM_GRAFANA):
-		apiKey = state.GrafanaSpec.AccessTokenPolicy.Value
+		apiKey = state.GrafanaSpec.AccessTokenPolicy.ValueString()
 	case string(openapiclient.METRICSEXPORTERCONFIGTYPEENUM_SUMOLOGIC):
 		sumoSpec = state.SumoLogicSpec
 	}
@@ -331,25 +324,25 @@ func (r resourceMetricsExporter) Read(ctx context.Context, req tfsdk.ReadResourc
 	}
 	// If value returned by API is the same as the encrypted version of our KEY
 	// then we use the api key in the state
-	switch state.Type.Value {
+	switch state.Type.ValueString() {
 	case string(openapiclient.METRICSEXPORTERCONFIGTYPEENUM_DATADOG):
-		if config.DataDogSpec.ApiKey.Value == state.DataDogSpec.EncryptedKey() {
-			config.DataDogSpec.ApiKey.Value = apiKey
+		if config.DataDogSpec.ApiKey.ValueString() == state.DataDogSpec.EncryptedKey() {
+			config.DataDogSpec.ApiKey = types.StringValue(apiKey)
 
 		}
 	case string(openapiclient.METRICSEXPORTERCONFIGTYPEENUM_GRAFANA):
-		if config.GrafanaSpec.AccessTokenPolicy.Value == state.GrafanaSpec.EncryptedKey() {
-			config.GrafanaSpec.AccessTokenPolicy.Value = apiKey
+		if config.GrafanaSpec.AccessTokenPolicy.ValueString() == state.GrafanaSpec.EncryptedKey() {
+			config.GrafanaSpec.AccessTokenPolicy = types.StringValue(apiKey)
 		}
 	case string(openapiclient.METRICSEXPORTERCONFIGTYPEENUM_SUMOLOGIC):
-		if config.SumoLogicSpec.AccessKey.Value == state.SumoLogicSpec.EncryptedKey("access_key") {
-			config.SumoLogicSpec.AccessKey.Value = sumoSpec.AccessKey.Value
+		if config.SumoLogicSpec.AccessKey.ValueString() == state.SumoLogicSpec.EncryptedKey("access_key") {
+			config.SumoLogicSpec.AccessKey = types.StringValue(sumoSpec.AccessKey.ValueString())
 		}
-		if config.SumoLogicSpec.AccessId.Value == state.SumoLogicSpec.EncryptedKey("access_id") {
-			config.SumoLogicSpec.AccessId.Value = sumoSpec.AccessId.Value
+		if config.SumoLogicSpec.AccessId.ValueString() == state.SumoLogicSpec.EncryptedKey("access_id") {
+			config.SumoLogicSpec.AccessId = types.StringValue(sumoSpec.AccessId.ValueString())
 		}
-		if config.SumoLogicSpec.InstallationToken.Value == state.SumoLogicSpec.EncryptedKey("installation_token") {
-			config.SumoLogicSpec.InstallationToken.Value = sumoSpec.InstallationToken.Value
+		if config.SumoLogicSpec.InstallationToken.ValueString() == state.SumoLogicSpec.EncryptedKey("installation_token") {
+			config.SumoLogicSpec.InstallationToken = types.StringValue(sumoSpec.InstallationToken.ValueString())
 		}
 	}
 
@@ -359,7 +352,7 @@ func (r resourceMetricsExporter) Read(ctx context.Context, req tfsdk.ReadResourc
 		return
 	}
 }
-func (r resourceMetricsExporter) Update(ctx context.Context, req tfsdk.UpdateResourceRequest, resp *tfsdk.UpdateResourceResponse) {
+func (r resourceMetricsExporter) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
 	var plan MetricsExporter
 	resp.Diagnostics.Append(getMetricsExporterPlan(ctx, req.Plan, &plan)...)
 	if resp.Diagnostics.HasError() {
@@ -370,11 +363,11 @@ func (r resourceMetricsExporter) Update(ctx context.Context, req tfsdk.UpdateRes
 	apiClient := r.p.client
 	var state MetricsExporter
 	getIDsFromMetricsExporterState(ctx, req.State, &state)
-	accountId := state.AccountID.Value
-	projectId := state.ProjectID.Value
-	configId := state.ConfigID.Value
-	sinkType := plan.Type.Value
-	configName := plan.ConfigName.Value
+	accountId := state.AccountID.ValueString()
+	projectId := state.ProjectID.ValueString()
+	configId := state.ConfigID.ValueString()
+	sinkType := plan.Type.ValueString()
+	configName := plan.ConfigName.ValueString()
 
 	metricsSinkTypeEnum, err := openapiclient.NewMetricsExporterConfigTypeEnumFromValue(strings.ToUpper(sinkType))
 	if err != nil {
@@ -394,9 +387,9 @@ func (r resourceMetricsExporter) Update(ctx context.Context, req tfsdk.UpdateRes
 			)
 			return
 		}
-		datadogSpec := openapiclient.NewDatadogMetricsExporterConfigurationSpec(plan.DataDogSpec.ApiKey.Value, plan.DataDogSpec.Site.Value)
+		datadogSpec := openapiclient.NewDatadogMetricsExporterConfigurationSpec(plan.DataDogSpec.ApiKey.ValueString(), plan.DataDogSpec.Site.ValueString())
 		metricsExporterConfigSpec.SetDatadogSpec(*datadogSpec)
-		apiKey = plan.DataDogSpec.ApiKey.Value
+		apiKey = plan.DataDogSpec.ApiKey.ValueString()
 	case openapiclient.METRICSEXPORTERCONFIGTYPEENUM_GRAFANA:
 		if plan.GrafanaSpec == nil {
 			resp.Diagnostics.AddError(
@@ -405,9 +398,9 @@ func (r resourceMetricsExporter) Update(ctx context.Context, req tfsdk.UpdateRes
 			)
 			return
 		}
-		grafanaSpec := openapiclient.NewGrafanaMetricsExporterConfigurationSpec(plan.GrafanaSpec.AccessTokenPolicy.Value, plan.GrafanaSpec.Zone.Value, plan.GrafanaSpec.InstanceId.Value, plan.GrafanaSpec.OrgSlug.Value)
+		grafanaSpec := openapiclient.NewGrafanaMetricsExporterConfigurationSpec(plan.GrafanaSpec.AccessTokenPolicy.ValueString(), plan.GrafanaSpec.Zone.ValueString(), plan.GrafanaSpec.InstanceId.ValueString(), plan.GrafanaSpec.OrgSlug.ValueString())
 		metricsExporterConfigSpec.SetGrafanaSpec(*grafanaSpec)
-		apiKey = plan.GrafanaSpec.AccessTokenPolicy.Value
+		apiKey = plan.GrafanaSpec.AccessTokenPolicy.ValueString()
 	case openapiclient.METRICSEXPORTERCONFIGTYPEENUM_SUMOLOGIC:
 		if plan.SumoLogicSpec == nil {
 			resp.Diagnostics.AddError(
@@ -416,7 +409,7 @@ func (r resourceMetricsExporter) Update(ctx context.Context, req tfsdk.UpdateRes
 			)
 			return
 		}
-		sumoLogicSpec := openapiclient.NewSumologicMetricsExporterConfigurationSpec(plan.SumoLogicSpec.InstallationToken.Value, plan.SumoLogicSpec.AccessId.Value, plan.SumoLogicSpec.AccessKey.Value)
+		sumoLogicSpec := openapiclient.NewSumologicMetricsExporterConfigurationSpec(plan.SumoLogicSpec.InstallationToken.ValueString(), plan.SumoLogicSpec.AccessId.ValueString(), plan.SumoLogicSpec.AccessKey.ValueString())
 		metricsExporterConfigSpec.SetSumologicSpec(*sumoLogicSpec)
 		sumoSpec = plan.SumoLogicSpec
 	default:
@@ -444,24 +437,24 @@ func (r resourceMetricsExporter) Update(ctx context.Context, req tfsdk.UpdateRes
 
 	// If value returned by API is the same as the encrypted version of our KEY
 	// then we use the api key in the plan
-	switch plan.Type.Value {
+	switch plan.Type.ValueString() {
 	case string(openapiclient.METRICSEXPORTERCONFIGTYPEENUM_DATADOG):
-		if config.DataDogSpec.ApiKey.Value == plan.DataDogSpec.EncryptedKey() {
-			config.DataDogSpec.ApiKey.Value = apiKey
+		if config.DataDogSpec.ApiKey.ValueString() == plan.DataDogSpec.EncryptedKey() {
+			config.DataDogSpec.ApiKey = types.StringValue(apiKey)
 		}
 	case string(openapiclient.METRICSEXPORTERCONFIGTYPEENUM_GRAFANA):
-		if config.GrafanaSpec.AccessTokenPolicy.Value == plan.GrafanaSpec.EncryptedKey() {
-			config.GrafanaSpec.AccessTokenPolicy.Value = apiKey
+		if config.GrafanaSpec.AccessTokenPolicy.ValueString() == plan.GrafanaSpec.EncryptedKey() {
+			config.GrafanaSpec.AccessTokenPolicy = types.StringValue(apiKey)
 		}
 	case string(openapiclient.METRICSEXPORTERCONFIGTYPEENUM_SUMOLOGIC):
-		if config.SumoLogicSpec.AccessKey.Value == plan.SumoLogicSpec.EncryptedKey("access_key") {
-			config.SumoLogicSpec.AccessKey.Value = sumoSpec.AccessKey.Value
+		if config.SumoLogicSpec.AccessKey.ValueString() == plan.SumoLogicSpec.EncryptedKey("access_key") {
+			config.SumoLogicSpec.AccessKey = types.StringValue(sumoSpec.AccessKey.ValueString())
 		}
-		if config.SumoLogicSpec.AccessId.Value == plan.SumoLogicSpec.EncryptedKey("access_id") {
-			config.SumoLogicSpec.AccessId.Value = sumoSpec.AccessId.Value
+		if config.SumoLogicSpec.AccessId.ValueString() == plan.SumoLogicSpec.EncryptedKey("access_id") {
+			config.SumoLogicSpec.AccessId = types.StringValue(sumoSpec.AccessId.ValueString())
 		}
-		if config.SumoLogicSpec.InstallationToken.Value == plan.SumoLogicSpec.EncryptedKey("installation_token") {
-			config.SumoLogicSpec.InstallationToken.Value = sumoSpec.InstallationToken.Value
+		if config.SumoLogicSpec.InstallationToken.ValueString() == plan.SumoLogicSpec.EncryptedKey("installation_token") {
+			config.SumoLogicSpec.InstallationToken = types.StringValue(sumoSpec.InstallationToken.ValueString())
 		}
 	}
 	diags := resp.State.Set(ctx, &config)
@@ -479,27 +472,27 @@ func resourceMetricsExporterRead(accountId string, projectId string, configID st
 		return me, false, GetApiErrorDetails(err)
 	}
 
-	me.AccountID.Value = accountId
-	me.ProjectID.Value = projectId
-	me.ConfigName.Value = config.GetSpec().Name
-	me.ConfigID.Value = config.GetInfo().Id
-	me.Type.Value = string(config.GetSpec().Type)
+	me.AccountID = types.StringValue(accountId)
+	me.ProjectID = types.StringValue(projectId)
+	me.ConfigName = types.StringValue(config.GetSpec().Name)
+	me.ConfigID = types.StringValue(config.GetInfo().Id)
+	me.Type = types.StringValue(string(config.GetSpec().Type))
 	switch config.GetSpec().Type {
 	case openapiclient.METRICSEXPORTERCONFIGTYPEENUM_DATADOG:
 		// We cannot use the api return as the apikey return by the api is masked.
 		// We need to use the one provided by the user
 		me.DataDogSpec = &DataDogSpec{
-			ApiKey: types.String{Value: apiKey},
-			Site:   types.String{Value: config.GetSpec().DatadogSpec.Get().Site},
+			ApiKey: types.StringValue(apiKey),
+			Site:   types.StringValue(config.GetSpec().DatadogSpec.Get().Site),
 		}
 	case openapiclient.METRICSEXPORTERCONFIGTYPEENUM_GRAFANA:
 		// We cannot use the api return as the apikey return by the api is masked.
 		// We need to use the one provided by the user
 		me.GrafanaSpec = &GrafanaSpec{
-			AccessTokenPolicy: types.String{Value: string(apiKey)},
-			Zone:              types.String{Value: string(config.GetSpec().GrafanaSpec.Get().Zone)},
-			InstanceId:        types.String{Value: string(config.GetSpec().GrafanaSpec.Get().InstanceId)},
-			OrgSlug:           types.String{Value: string(config.GetSpec().GrafanaSpec.Get().OrgSlug)},
+			AccessTokenPolicy: types.StringValue(string(apiKey)),
+			Zone:              types.StringValue(string(config.GetSpec().GrafanaSpec.Get().Zone)),
+			InstanceId:        types.StringValue(string(config.GetSpec().GrafanaSpec.Get().InstanceId)),
+			OrgSlug:           types.StringValue(string(config.GetSpec().GrafanaSpec.Get().OrgSlug)),
 		}
 	case openapiclient.METRICSEXPORTERCONFIGTYPEENUM_SUMOLOGIC:
 		me.SumoLogicSpec = sumoSpec
@@ -509,13 +502,13 @@ func resourceMetricsExporterRead(accountId string, projectId string, configID st
 
 }
 
-func (r resourceMetricsExporter) Delete(ctx context.Context, req tfsdk.DeleteResourceRequest, resp *tfsdk.DeleteResourceResponse) {
+func (r resourceMetricsExporter) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
 	apiClient := r.p.client
 	var state MetricsExporter
 	getIDsFromMetricsExporterState(ctx, req.State, &state)
-	accountId := state.AccountID.Value
-	projectId := state.ProjectID.Value
-	configId := state.ConfigID.Value
+	accountId := state.AccountID.ValueString()
+	projectId := state.ProjectID.ValueString()
+	configId := state.ConfigID.ValueString()
 
 	_, err := apiClient.MetricsExporterConfigApi.DeleteMetricsExporterConfig(ctx, accountId, projectId, configId).Execute()
 	if err != nil {
@@ -578,7 +571,7 @@ func GetClusterByNameorID(accountId string, projectId string, clusterID string, 
 }
 
 // Import API Key
-func (r resourceMetricsExporter) ImportState(ctx context.Context, req tfsdk.ImportResourceStateRequest, resp *tfsdk.ImportResourceStateResponse) {
+func (r resourceMetricsExporter) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
 	// Save the import identifier in the id attribute
-	tfsdk.ResourceImportStatePassthroughID(ctx, path.Root("id"), req, resp)
+	resource.ImportStatePassthroughID(ctx, path.Root("id"), req, resp)
 }

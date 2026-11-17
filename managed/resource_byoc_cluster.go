@@ -13,9 +13,12 @@ import (
 	"strings"
 
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
-	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/path"
-	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
+	"github.com/hashicorp/terraform-plugin-framework/resource"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
 	openapiclient "github.com/yugabyte/yugabytedb-managed-go-client-internal"
@@ -30,41 +33,43 @@ var byocInactiveStates = map[string]string{
 	"DEREGISTERED": "it is deregistered",
 }
 
-func ampStoragePoolAttribute(description string, required bool) tfsdk.Attribute {
-	return tfsdk.Attribute{
+func ampStoragePoolAttribute(description string, required bool) schema.Attribute {
+	return schema.StringAttribute{
 		Description:   description,
-		Type:          types.StringType,
 		Required:      required,
 		Optional:      !required,
-		Validators:    []tfsdk.AttributeValidator{stringvalidator.RegexMatches(ampNamePattern, ampNameRule)},
-		PlanModifiers: []tfsdk.AttributePlanModifier{tfsdk.RequiresReplace()},
+		Validators:    []validator.String{stringvalidator.RegexMatches(ampNamePattern, ampNameRule)},
+		PlanModifiers: []planmodifier.String{stringplanmodifier.RequiresReplace()},
 	}
 }
 
-type resourceByocClusterType struct{}
-
-func (r resourceByocClusterType) GetSchema(_ context.Context) (tfsdk.Schema, diag.Diagnostics) {
+func (r *resourceByocCluster) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
 	attributes := ampClusterAttributes()
-	attributes["environment_id"] = tfsdk.Attribute{
+	attributes["environment_id"] = schema.StringAttribute{
 		Description:   "The ID of the BYOC environment to create the cluster in. Changing it forces a new cluster.",
-		Type:          types.StringType,
 		Required:      true,
-		PlanModifiers: []tfsdk.AttributePlanModifier{tfsdk.RequiresReplace()},
+		PlanModifiers: []planmodifier.String{stringplanmodifier.RequiresReplace()},
 	}
 	attributes["storage_pool"] = ampStoragePoolAttribute(
 		"The name of the storage pool to create the cluster in, such as a ybm_amp_byoc_storage_pool's name. Changing it forces a new cluster.", true)
-	return tfsdk.Schema{
+	resp.Schema = schema.Schema{
 		Description: `The resource to create a PostgreSQL cluster in a storage pool of a BYOC environment registered with ybm_amp_byoc_environment. ` +
 			`The cluster is created with its main branch once the environment's agent picks it up. ` +
 			`Connect to it through a ybm_amp_endpoint on main with role read_write, and add branches with ybm_amp_branch.`,
 		Attributes: attributes,
-	}, nil
+	}
 }
 
-func (r resourceByocClusterType) NewResource(_ context.Context, p tfsdk.Provider) (tfsdk.Resource, diag.Diagnostics) {
-	return resourceByocCluster{
-		p: *(p.(*provider)),
-	}, nil
+func newResourceByocCluster() resource.Resource {
+	return &resourceByocCluster{}
+}
+
+func (r *resourceByocCluster) Metadata(_ context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
+	resp.TypeName = req.ProviderTypeName + "_amp_byoc_cluster"
+}
+
+func (r *resourceByocCluster) Configure(_ context.Context, req resource.ConfigureRequest, _ *resource.ConfigureResponse) {
+	r.p = configuredProvider(req.ProviderData)
 }
 
 type resourceByocCluster struct {
@@ -148,18 +153,18 @@ func waitForActiveByocEnvironment(ctx context.Context, apiClient *openapiclient.
 }
 
 func byocClusterConfigFromPlan(plan ByocCluster, prior *ByocCluster) ampClusterConfig {
-	priorPg := types.Map{Null: true}
+	priorPg := types.MapNull(types.StringType)
 	if prior != nil {
 		priorPg = prior.BranchPgSettings
 	}
 	return newAmpClusterConfig(plan.PgVersion, plan.Engine, plan.Extensions, plan.BranchPgSettings, plan.BranchExtensions, priorPg)
 }
 
-func (r resourceByocCluster) ModifyPlan(ctx context.Context, req tfsdk.ModifyResourcePlanRequest, resp *tfsdk.ModifyResourcePlanResponse) {
+func (r resourceByocCluster) ModifyPlan(ctx context.Context, req resource.ModifyPlanRequest, resp *resource.ModifyPlanResponse) {
 	modifyAmpClusterPlan(ctx, req, resp)
 }
 
-func (r resourceByocCluster) Create(ctx context.Context, req tfsdk.CreateResourceRequest, resp *tfsdk.CreateResourceResponse) {
+func (r resourceByocCluster) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
 	if !r.p.configured {
 		resp.Diagnostics.AddError(
 			"Provider not configured",
@@ -178,14 +183,14 @@ func (r resourceByocCluster) Create(ctx context.Context, req tfsdk.CreateResourc
 		resp.Diagnostics.AddError("Unable to get account ID", message)
 		return
 	}
-	environmentId := plan.EnvironmentID.Value
-	clusterName := plan.ClusterName.Value
+	environmentId := plan.EnvironmentID.ValueString()
+	clusterName := plan.ClusterName.ValueString()
 	if err := waitForActiveByocEnvironment(ctx, r.p.client, accountId, environmentId); err != nil {
 		resp.Diagnostics.AddError("Environment "+environmentId+" cannot run clusters", err.Error())
 		return
 	}
 
-	scope := newAmpScope(r.p.client, accountId, environmentId, plan.StoragePool.Value)
+	scope := newAmpScope(r.p.client, accountId, environmentId, plan.StoragePool.ValueString())
 	created, createErr := createAmpCluster(ctx, scope, "", clusterName, byocClusterConfigFromPlan(plan, nil))
 	if !created {
 		resp.Diagnostics.AddError("Unable to create cluster "+clusterName, createErr.Error())
@@ -215,10 +220,10 @@ func resourceByocClusterRead(ctx context.Context, scope ampScope, clusterName st
 		return cluster, ok, err
 	}
 	cluster = ByocCluster{
-		AccountID:        types.String{Value: scope.accountId},
-		EnvironmentID:    types.String{Value: scope.environmentId},
-		StoragePool:      types.String{Value: scope.pool()},
-		ClusterName:      types.String{Value: clusterName},
+		AccountID:        types.StringValue(scope.accountId),
+		EnvironmentID:    types.StringValue(scope.environmentId),
+		StoragePool:      types.StringValue(scope.pool()),
+		ClusterName:      types.StringValue(clusterName),
 		PgVersion:        tfInt64(status.Config.PgVersion),
 		Engine:           tfString(status.Config.Engine),
 		Extensions:       stringsToTf(status.Config.Extensions, prior.Extensions),
@@ -231,13 +236,13 @@ func resourceByocClusterRead(ctx context.Context, scope ampScope, clusterName st
 	return cluster, true, nil
 }
 
-func (r resourceByocCluster) Read(ctx context.Context, req tfsdk.ReadResourceRequest, resp *tfsdk.ReadResourceResponse) {
+func (r resourceByocCluster) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
 	var state ByocCluster
 	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
-	accountId := state.AccountID.Value
+	accountId := state.AccountID.ValueString()
 	if accountId == "" {
 		var ok bool
 		var message string
@@ -248,29 +253,29 @@ func (r resourceByocCluster) Read(ctx context.Context, req tfsdk.ReadResourceReq
 		}
 	}
 
-	scope := newAmpScope(r.p.client, accountId, state.EnvironmentID.Value, state.StoragePool.Value)
-	cluster, found, err := resourceByocClusterRead(ctx, scope, state.ClusterName.Value, state)
+	scope := newAmpScope(r.p.client, accountId, state.EnvironmentID.ValueString(), state.StoragePool.ValueString())
+	cluster, found, err := resourceByocClusterRead(ctx, scope, state.ClusterName.ValueString(), state)
 	if isYcpNotFound(err) || (err == nil && !found) {
-		tflog.Warn(ctx, "Cluster "+state.ClusterName.Value+" no longer exists; removing it from state")
+		tflog.Warn(ctx, "Cluster "+state.ClusterName.ValueString()+" no longer exists; removing it from state")
 		resp.State.RemoveResource(ctx)
 		return
 	}
 	if err != nil {
-		resp.Diagnostics.AddError("Unable to read the state of cluster "+state.ClusterName.Value, err.Error())
+		resp.Diagnostics.AddError("Unable to read the state of cluster "+state.ClusterName.ValueString(), err.Error())
 		return
 	}
 	resp.Diagnostics.Append(resp.State.Set(ctx, &cluster)...)
 }
 
-func (r resourceByocCluster) Update(ctx context.Context, req tfsdk.UpdateResourceRequest, resp *tfsdk.UpdateResourceResponse) {
+func (r resourceByocCluster) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
 	var plan, state ByocCluster
 	resp.Diagnostics.Append(req.Plan.Get(ctx, &plan)...)
 	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
-	scope := newAmpScope(r.p.client, state.AccountID.Value, state.EnvironmentID.Value, state.StoragePool.Value)
-	clusterName := state.ClusterName.Value
+	scope := newAmpScope(r.p.client, state.AccountID.ValueString(), state.EnvironmentID.ValueString(), state.StoragePool.ValueString())
+	clusterName := state.ClusterName.ValueString()
 	// The agent will never act on a change to an environment that is not READY, so this fails at
 	// once rather than after the whole wait.
 	if err := waitForActiveByocEnvironment(ctx, r.p.client, scope.accountId, scope.environmentId); err != nil {
@@ -294,14 +299,14 @@ func (r resourceByocCluster) Update(ctx context.Context, req tfsdk.UpdateResourc
 	resp.Diagnostics.Append(resp.State.Set(ctx, &cluster)...)
 }
 
-func (r resourceByocCluster) Delete(ctx context.Context, req tfsdk.DeleteResourceRequest, resp *tfsdk.DeleteResourceResponse) {
+func (r resourceByocCluster) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
 	var state ByocCluster
 	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
-	scope := newAmpScope(r.p.client, state.AccountID.Value, state.EnvironmentID.Value, state.StoragePool.Value)
-	clusterName := state.ClusterName.Value
+	scope := newAmpScope(r.p.client, state.AccountID.ValueString(), state.EnvironmentID.ValueString(), state.StoragePool.ValueString())
+	clusterName := state.ClusterName.ValueString()
 	// The agent garbage-collects what desired state no longer declares.
 	err := deleteAmpCluster(ctx, scope, "", clusterName, boolValue(state.ForceDestroy))
 	if err != nil && !isYcpNotFound(err) {
@@ -312,7 +317,7 @@ func (r resourceByocCluster) Delete(ctx context.Context, req tfsdk.DeleteResourc
 }
 
 // ImportState imports a cluster by "<environment_id>/<storage_pool>/<cluster_name>".
-func (r resourceByocCluster) ImportState(ctx context.Context, req tfsdk.ImportResourceStateRequest, resp *tfsdk.ImportResourceStateResponse) {
+func (r resourceByocCluster) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
 	parts := strings.Split(req.ID, "/")
 	if len(parts) != 3 || parts[0] == "" || parts[1] == "" || parts[2] == "" {
 		resp.Diagnostics.AddError("Invalid import ID", "Expected <environment_id>/<storage_pool>/<cluster_name>, got "+req.ID)

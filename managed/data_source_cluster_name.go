@@ -8,738 +8,636 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/hashicorp/terraform-plugin-framework/diag"
+	"github.com/hashicorp/terraform-plugin-framework/datasource"
+	"github.com/hashicorp/terraform-plugin-framework/datasource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/path"
-	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	//"github.com/hashicorp/terraform-plugin-log/tflog"
 	//"fmt"
 )
 
-type dataClusterNameType struct{}
+func (r *dataClusterName) Schema(_ context.Context, _ datasource.SchemaRequest, resp *datasource.SchemaResponse) {
 
-func (r dataClusterNameType) GetSchema(_ context.Context) (tfsdk.Schema, diag.Diagnostics) {
-
-	return tfsdk.Schema{
+	resp.Schema = schema.Schema{
 		Description: "The data source to fetch the cluster ID and other information about a cluster given the cluster name.",
-		Attributes: map[string]tfsdk.Attribute{
-			"account_id": {
+		Attributes: map[string]schema.Attribute{
+			"account_id": schema.StringAttribute{
 				Description: "The ID of the account this cluster belongs to.",
-				Type:        types.StringType,
 				Computed:    true,
 			},
-			"project_id": {
+			"project_id": schema.StringAttribute{
 				Description: "The ID of the project this cluster belongs to.",
-				Type:        types.StringType,
 				Computed:    true,
 			},
-			"cluster_id": {
+			"cluster_id": schema.StringAttribute{
 				Description: "The ID of the cluster. Created automatically when a cluster is created. Used to get a specific cluster.",
-				Type:        types.StringType,
 				Computed:    true,
 			},
-			"cluster_name": {
+			"cluster_name": schema.StringAttribute{
 				Description: "The name of the cluster.",
-				Type:        types.StringType,
 				Required:    true,
 			},
-			"cluster_type": {
+			"cluster_type": schema.StringAttribute{
 				Description: "The type of the cluster.",
-				Type:        types.StringType,
 				Computed:    true,
 			},
-			"cloud_type": {
+			"cloud_type": schema.StringAttribute{
 				Description: "The cloud provider where the cluster is deployed: AWS or GCP. Default GCP.",
-				Type:        types.StringType,
 				Computed:    true,
 			},
-			"cluster_region_info": {
+			"cluster_region_info": schema.ListNestedAttribute{
 				Computed: true,
-				Attributes: tfsdk.ListNestedAttributes(map[string]tfsdk.Attribute{
-					"num_nodes": {
-						Type:     types.Int64Type,
-						Computed: true,
+				NestedObject: schema.NestedAttributeObject{
+					Attributes: map[string]schema.Attribute{
+						"num_nodes": schema.Int64Attribute{
+							Computed: true,
+						},
+						"region": schema.StringAttribute{
+							Computed: true,
+						},
+						"num_zones": schema.Int64Attribute{
+							Description: "Number of zones in the region.",
+							Computed:    true,
+						},
+						"num_cores": schema.Int64Attribute{
+							Computed: true,
+						},
+						"disk_size_gb": schema.Int64Attribute{
+							Computed: true,
+						},
+						"disk_iops": schema.Int64Attribute{
+							Computed: true,
+						},
+						"vpc_id": schema.StringAttribute{
+							Computed: true,
+						},
+						"vpc_name": schema.StringAttribute{
+							Computed: true,
+						},
+						"public_access": schema.BoolAttribute{
+							Computed: true,
+						},
+						"is_preferred": schema.BoolAttribute{
+							Computed: true,
+						},
+						"is_default": schema.BoolAttribute{
+							Computed: true,
+						},
+						"backup_replication_gcp_target": schema.StringAttribute{
+							Description: "GCS bucket name set as backup replication target.",
+							Computed:    true,
+						},
+						"backup_region": schema.BoolAttribute{
+							Description: "Indicates whether cluster backup data will be stored in this region.",
+							Computed:    true,
+						},
 					},
-					"region": {
-						Type:     types.StringType,
-						Computed: true,
-					},
-					"num_zones": {
-						Description: "Number of zones in the region.",
-						Type:        types.Int64Type,
-						Computed:    true,
-					},
-					"num_cores": {
-						Type:     types.Int64Type,
-						Computed: true,
-					},
-					"disk_size_gb": {
-						Type:     types.Int64Type,
-						Computed: true,
-					},
-					"disk_iops": {
-						Type:     types.Int64Type,
-						Computed: true,
-					},
-					"vpc_id": {
-						Type:     types.StringType,
-						Computed: true,
-					},
-					"vpc_name": {
-						Type:     types.StringType,
-						Computed: true,
-					},
-					"public_access": {
-						Type:     types.BoolType,
-						Computed: true,
-					},
-					"is_preferred": {
-						Type:     types.BoolType,
-						Computed: true,
-					},
-					"is_default": {
-						Type:     types.BoolType,
-						Computed: true,
-					},
-					"backup_replication_gcp_target": {
-						Description: "GCS bucket name set as backup replication target.",
-						Type:        types.StringType,
-						Computed:    true,
-					},
-					"backup_region": {
-						Description: "Indicates whether cluster backup data will be stored in this region.",
-						Type:        types.BoolType,
-						Computed:    true,
-					},
-				}),
+				},
 			},
-			"backup_schedules": {
+			"backup_schedules": schema.ListNestedAttribute{
 				Computed: true,
-				Attributes: tfsdk.ListNestedAttributes(map[string]tfsdk.Attribute{
+				NestedObject: schema.NestedAttributeObject{
+					Attributes: map[string]schema.Attribute{
 
-					"state": {
+						"state": schema.StringAttribute{
 
-						Description: "The state of the backup schedule. Used to pause or resume the backup schedule. Valid values are ACTIVE or PAUSED.",
-						Type:        types.StringType,
-						Computed:    true,
+							Description: "The state of the backup schedule. Used to pause or resume the backup schedule. Valid values are ACTIVE or PAUSED.",
+							Computed:    true,
+						},
+
+						"cron_expression": schema.StringAttribute{
+							Description: "The cron expression for the backup schedule.",
+							Computed:    true,
+						},
+
+						"time_interval_in_days": schema.Int64Attribute{
+							Description: "The time interval in days for the backup schedule.",
+							Computed:    true,
+						},
+
+						"retention_period_in_days": schema.Int64Attribute{
+							Description: "The retention period of the backup schedule.",
+							Computed:    true,
+						},
+
+						"backup_description": schema.StringAttribute{
+							Description: "The description of the backup schedule.",
+							Computed:    true,
+						},
+
+						"schedule_id": schema.StringAttribute{
+							Description: "The ID of the backup schedule. Created automatically when the backup schedule is created. Used to get a specific backup schedule.",
+							Computed:    true,
+						},
+
+						"incremental_interval_in_mins": schema.Int64Attribute{
+							Description: "The time interval in minutes for the incremental backup schedule.",
+							Computed:    true,
+						},
+
+						"use_roles": schema.BoolAttribute{
+							Description: "Backup global YSQL roles in scheduled backups. Defaults to false.",
+							Computed:    true,
+						},
 					},
-
-					"cron_expression": {
-						Description: "The cron expression for the backup schedule.",
-						Type:        types.StringType,
-						Computed:    true,
-					},
-
-					"time_interval_in_days": {
-						Description: "The time interval in days for the backup schedule.",
-						Type:        types.Int64Type,
-						Computed:    true,
-					},
-
-					"retention_period_in_days": {
-						Description: "The retention period of the backup schedule.",
-						Type:        types.Int64Type,
-						Computed:    true,
-					},
-
-					"backup_description": {
-						Description: "The description of the backup schedule.",
-						Type:        types.StringType,
-						Computed:    true,
-					},
-
-					"schedule_id": {
-						Description: "The ID of the backup schedule. Created automatically when the backup schedule is created. Used to get a specific backup schedule.",
-						Type:        types.StringType,
-						Computed:    true,
-					},
-
-					"incremental_interval_in_mins": {
-						Description: "The time interval in minutes for the incremental backup schedule.",
-						Type:        types.Int64Type,
-						Computed:    true,
-					},
-
-					"use_roles": {
-						Description: "Backup global YSQL roles in scheduled backups. Defaults to false.",
-						Type:        types.BoolType,
-						Computed:    true,
-					},
-				}),
+				},
 			},
-			"cmk_spec": {
+			"cmk_spec": schema.SingleNestedAttribute{
 				Description: "KMS Provider Configuration.",
 				Computed:    true,
-				Attributes: tfsdk.SingleNestedAttributes(map[string]tfsdk.Attribute{
-					"provider_type": {
+				Attributes: map[string]schema.Attribute{
+					"provider_type": schema.StringAttribute{
 						Description: "CMK Provider Type.",
-						Type:        types.StringType,
 						Computed:    true,
 					},
-					"is_enabled": {
+					"is_enabled": schema.BoolAttribute{
 						Description: "Is Enabled",
-						Type:        types.BoolType,
 						Computed:    true,
 					},
-					"aws_cmk_spec": {
+					"aws_cmk_spec": schema.SingleNestedAttribute{
 						Description: "AWS CMK Provider Configuration.",
 						Computed:    true,
-						Attributes: tfsdk.SingleNestedAttributes(map[string]tfsdk.Attribute{
-							"access_key": {
+						Attributes: map[string]schema.Attribute{
+							"access_key": schema.StringAttribute{
 								Description: "Access Key",
-								Type:        types.StringType,
 								Computed:    true,
 							},
-							"secret_key": {
+							"secret_key": schema.StringAttribute{
 								Description: "Secret Key",
-								Type:        types.StringType,
 								Computed:    true,
 							},
-							"arn_list": {
+							"arn_list": schema.ListAttribute{
 								Description: "AWS ARN List",
-								Type:        types.ListType{ElemType: types.StringType},
+								ElementType: types.StringType,
 								Computed:    true,
 							},
-						}),
+						},
 					},
-					"gcp_cmk_spec": {
+					"gcp_cmk_spec": schema.SingleNestedAttribute{
 						Description: "GCP CMK Provider Configuration.",
 						Computed:    true,
-						Attributes: tfsdk.SingleNestedAttributes(map[string]tfsdk.Attribute{
-							"key_ring_name": {
+						Attributes: map[string]schema.Attribute{
+							"key_ring_name": schema.StringAttribute{
 								Description: "Key Ring Name",
-								Type:        types.StringType,
 								Computed:    true,
 							},
-							"key_name": {
+							"key_name": schema.StringAttribute{
 								Description: "Key Name",
-								Type:        types.StringType,
 								Computed:    true,
 							},
-							"location": {
+							"location": schema.StringAttribute{
 								Description: "Location",
-								Type:        types.StringType,
 								Computed:    true,
 							},
-							"protection_level": {
+							"protection_level": schema.StringAttribute{
 								Description: "Key Protection Level",
-								Type:        types.StringType,
 								Computed:    true,
 							},
-							"gcp_service_account": {
+							"gcp_service_account": schema.SingleNestedAttribute{
 								Description: "GCP Service Account",
 								Computed:    true,
-								Attributes: tfsdk.SingleNestedAttributes(map[string]tfsdk.Attribute{
-									"type": {
+								Attributes: map[string]schema.Attribute{
+									"type": schema.StringAttribute{
 										Description: "Service Account Type",
-										Type:        types.StringType,
 										Computed:    true,
 									},
-									"project_id": {
+									"project_id": schema.StringAttribute{
 										Description: "GCP Project ID",
-										Type:        types.StringType,
 										Computed:    true,
 									},
-									"private_key": {
+									"private_key": schema.StringAttribute{
 										Description: "Private Key",
-										Type:        types.StringType,
 										Computed:    true,
 									},
-									"private_key_id": {
+									"private_key_id": schema.StringAttribute{
 										Description: "Private Key ID",
-										Type:        types.StringType,
 										Computed:    true,
 									},
-									"client_email": {
+									"client_email": schema.StringAttribute{
 										Description: "Client Email",
-										Type:        types.StringType,
 										Computed:    true,
 									},
-									"client_id": {
+									"client_id": schema.StringAttribute{
 										Description: "Client ID",
-										Type:        types.StringType,
 										Computed:    true,
 									},
-									"auth_uri": {
+									"auth_uri": schema.StringAttribute{
 										Description: "Auth URI",
-										Type:        types.StringType,
 										Computed:    true,
 									},
-									"token_uri": {
+									"token_uri": schema.StringAttribute{
 										Description: "Token URI",
-										Type:        types.StringType,
 										Computed:    true,
 									},
-									"auth_provider_x509_cert_url": {
+									"auth_provider_x509_cert_url": schema.StringAttribute{
 										Description: "Auth Provider X509 Cert URL",
-										Type:        types.StringType,
 										Computed:    true,
 									},
-									"client_x509_cert_url": {
+									"client_x509_cert_url": schema.StringAttribute{
 										Description: "Client X509 Cert URL",
-										Type:        types.StringType,
 										Computed:    true,
 									},
-									"universe_domain": {
+									"universe_domain": schema.StringAttribute{
 										Description: "Google Universe Domain",
-										Type:        types.StringType,
 										Computed:    true,
 									},
-								}),
+								},
 							},
-						}),
+						},
 					},
-					"azure_cmk_spec": {
+					"azure_cmk_spec": schema.SingleNestedAttribute{
 						Description: "AZURE CMK Provider Configuration.",
 						Computed:    true,
-						Attributes: tfsdk.SingleNestedAttributes(map[string]tfsdk.Attribute{
-							"client_id": {
+						Attributes: map[string]schema.Attribute{
+							"client_id": schema.StringAttribute{
 								Description: "Client ID",
-								Type:        types.StringType,
 								Computed:    true,
 							},
-							"client_secret": {
+							"client_secret": schema.StringAttribute{
 								Description: "Client Secret",
-								Type:        types.StringType,
 								Computed:    true,
 							},
-							"tenant_id": {
+							"tenant_id": schema.StringAttribute{
 								Description: "Tenant ID",
-								Type:        types.StringType,
 								Computed:    true,
 							},
-							"key_vault_uri": {
+							"key_vault_uri": schema.StringAttribute{
 								Description: "Key Vault URI",
-								Type:        types.StringType,
 								Computed:    true,
 							},
-							"key_name": {
+							"key_name": schema.StringAttribute{
 								Description: "Key Name",
-								Type:        types.StringType,
 								Computed:    true,
 							},
-						}),
+						},
 					},
-				}),
+				},
 			},
-			"backup_replication_spec": {
+			"backup_replication_spec": schema.SingleNestedAttribute{
 				Description: "Configuration for backup replication. Enables replication of cluster backups to offsite buckets.",
 				Computed:    true,
-				Attributes: tfsdk.SingleNestedAttributes(map[string]tfsdk.Attribute{
-					"gcp_spec": {
+				Attributes: map[string]schema.Attribute{
+					"gcp_spec": schema.SingleNestedAttribute{
 						Description: "GCP-specific backup replication configuration.",
 						Computed:    true,
-						Attributes: tfsdk.SingleNestedAttributes(map[string]tfsdk.Attribute{
-							"enabled": {
+						Attributes: map[string]schema.Attribute{
+							"enabled": schema.BoolAttribute{
 								Description: "Whether GCP backup replication is enabled for this cluster.",
-								Type:        types.BoolType,
 								Computed:    true,
 							},
-							"sync_cluster_spec": {
+							"sync_cluster_spec": schema.SingleNestedAttribute{
 								Description: "Backup replication configuration for SYNCHRONOUS clusters.",
 								Computed:    true,
-								Attributes: tfsdk.SingleNestedAttributes(map[string]tfsdk.Attribute{
-									"replication_config": {
+								Attributes: map[string]schema.Attribute{
+									"replication_config": schema.SingleNestedAttribute{
 										Description: "Replication configuration specifying the target GCS bucket and status information.",
 										Computed:    true,
-										Attributes: tfsdk.SingleNestedAttributes(map[string]tfsdk.Attribute{
-											"target": {
+										Attributes: map[string]schema.Attribute{
+											"target": schema.StringAttribute{
 												Description: "The GCS bucket name where backups will be replicated",
-												Type:        types.StringType,
 												Computed:    true,
 											},
-											"assigned_region": {
+											"assigned_region": schema.StringAttribute{
 												Description: "The desginated backup region from where the backups will be replicated",
-												Type:        types.StringType,
 												Computed:    true,
 											},
-											"config_state": {
+											"config_state": schema.StringAttribute{
 												Description: "The current state of the replication configuration (e.g., ENABLED, DISABLED etc.).",
-												Type:        types.StringType,
 												Computed:    true,
 											},
-											"id": {
+											"id": schema.StringAttribute{
 												Description: "Unique identifier for the replication configuration.",
-												Type:        types.StringType,
 												Computed:    true,
 											},
-											"next_transfer_operation_time": {
+											"next_transfer_operation_time": schema.StringAttribute{
 												Description: "Timestamp of the next scheduled backup transfer operation.",
-												Type:        types.StringType,
 												Computed:    true,
 											},
-											"latest_transfer_operation_details": {
+											"latest_transfer_operation_details": schema.SingleNestedAttribute{
 												Description: "Details about the most recent backup transfer operation.",
 												Computed:    true,
-												Attributes: tfsdk.SingleNestedAttributes(map[string]tfsdk.Attribute{
-													"start_time": {
+												Attributes: map[string]schema.Attribute{
+													"start_time": schema.StringAttribute{
 														Description: "Start time of the latest transfer operation.",
-														Type:        types.StringType,
 														Computed:    true,
 													},
-													"end_time": {
+													"end_time": schema.StringAttribute{
 														Description: "End time of the latest transfer operation.",
-														Type:        types.StringType,
 														Computed:    true,
 													},
-													"status": {
+													"status": schema.StringAttribute{
 														Description: "Status of the latest transfer operation (e.g., SUCCESS, FAILED, IN_PROGRESS).",
-														Type:        types.StringType,
 														Computed:    true,
 													},
-												}),
+												},
 											},
-											"expiry_on": {
+											"expiry_on": schema.StringAttribute{
 												Description: "Timestamp when this replication configuration expires, if applicable.",
-												Type:        types.StringType,
 												Computed:    true,
 											},
-										}),
+										},
 									},
-									"configs_set_for_expiry": {
+									"configs_set_for_expiry": schema.ListNestedAttribute{
 										Description: "List of replication configurations that are set to expire.",
 										Computed:    true,
-										Attributes: tfsdk.ListNestedAttributes(map[string]tfsdk.Attribute{
-											"region": {
-												Description: "The region associated with this replication configuration.",
-												Type:        types.StringType,
-												Computed:    true,
-											},
-											"target": {
-												Description: "The GCS bucket name for this replication configuration",
-												Type:        types.StringType,
-												Computed:    true,
-											},
-											"config_state": {
-												Description: "The current state of the replication configuration (e.g., ENABLED, DISABLED etc.).",
-												Type:        types.StringType,
-												Computed:    true,
-											},
-											"id": {
-												Description: "Unique identifier for the replication configuration.",
-												Type:        types.StringType,
-												Computed:    true,
-											},
-											"next_transfer_operation_time": {
-												Description: "Timestamp of the next scheduled backup transfer operation.",
-												Type:        types.StringType,
-												Computed:    true,
-											},
-											"latest_transfer_operation_details": {
-												Description: "Details about the most recent backup transfer operation.",
-												Computed:    true,
-												Attributes: tfsdk.SingleNestedAttributes(map[string]tfsdk.Attribute{
-													"start_time": {
-														Description: "Start time of the latest transfer operation.",
-														Type:        types.StringType,
-														Computed:    true,
+										NestedObject: schema.NestedAttributeObject{
+											Attributes: map[string]schema.Attribute{
+												"region": schema.StringAttribute{
+													Description: "The region associated with this replication configuration.",
+													Computed:    true,
+												},
+												"target": schema.StringAttribute{
+													Description: "The GCS bucket name for this replication configuration",
+													Computed:    true,
+												},
+												"config_state": schema.StringAttribute{
+													Description: "The current state of the replication configuration (e.g., ENABLED, DISABLED etc.).",
+													Computed:    true,
+												},
+												"id": schema.StringAttribute{
+													Description: "Unique identifier for the replication configuration.",
+													Computed:    true,
+												},
+												"next_transfer_operation_time": schema.StringAttribute{
+													Description: "Timestamp of the next scheduled backup transfer operation.",
+													Computed:    true,
+												},
+												"latest_transfer_operation_details": schema.SingleNestedAttribute{
+													Description: "Details about the most recent backup transfer operation.",
+													Computed:    true,
+													Attributes: map[string]schema.Attribute{
+														"start_time": schema.StringAttribute{
+															Description: "Start time of the latest transfer operation.",
+															Computed:    true,
+														},
+														"end_time": schema.StringAttribute{
+															Description: "End time of the latest transfer operation.",
+															Computed:    true,
+														},
+														"status": schema.StringAttribute{
+															Description: "Status of the latest transfer operation (e.g., SUCCESS, FAILED, IN_PROGRESS).",
+															Computed:    true,
+														},
 													},
-													"end_time": {
-														Description: "End time of the latest transfer operation.",
-														Type:        types.StringType,
-														Computed:    true,
-													},
-													"status": {
-														Description: "Status of the latest transfer operation (e.g., SUCCESS, FAILED, IN_PROGRESS).",
-														Type:        types.StringType,
-														Computed:    true,
-													},
-												}),
+												},
+												"expiry_on": schema.StringAttribute{
+													Description: "Timestamp when this replication configuration expires.",
+													Computed:    true,
+												},
 											},
-											"expiry_on": {
-												Description: "Timestamp when this replication configuration expires.",
-												Type:        types.StringType,
-												Computed:    true,
-											},
-										}),
+										},
 									},
-								}),
+								},
 							},
-							"geo_partitioned_cluster_spec": {
+							"geo_partitioned_cluster_spec": schema.SingleNestedAttribute{
 								Description: "Backup replication configuration for GEO_PARTITIONED clusters.",
 								Computed:    true,
-								Attributes: tfsdk.SingleNestedAttributes(map[string]tfsdk.Attribute{
-									"replication_configs": {
+								Attributes: map[string]schema.Attribute{
+									"replication_configs": schema.ListNestedAttribute{
 										Description: "List of replication configurations, one for each region in the geo-partitioned cluster.",
 										Computed:    true,
-										Attributes: tfsdk.ListNestedAttributes(map[string]tfsdk.Attribute{
-											"desired_region": {
-												Description: "The region name for this replication configuration. Must match one of the cluster's regions.",
-												Type:        types.StringType,
-												Computed:    true,
-											},
-											"target": {
-												Description: "The GCS bucket name where backups for this region will be replicated.",
-												Type:        types.StringType,
-												Computed:    true,
-											},
-											"config_state": {
-												Description: "The current state of the replication configuration (e.g., ENABLED, DISABLED etc.).",
-												Type:        types.StringType,
-												Computed:    true,
-											},
-											"id": {
-												Description: "Unique identifier for the replication configuration.",
-												Type:        types.StringType,
-												Computed:    true,
-											},
-											"next_transfer_operation_time": {
-												Description: "Timestamp of the next scheduled backup transfer operation.",
-												Type:        types.StringType,
-												Computed:    true,
-											},
-											"latest_transfer_operation_details": {
-												Description: "Details about the most recent backup transfer operation.",
-												Computed:    true,
-												Attributes: tfsdk.SingleNestedAttributes(map[string]tfsdk.Attribute{
-													"start_time": {
-														Description: "Start time of the latest transfer operation.",
-														Type:        types.StringType,
-														Computed:    true,
+										NestedObject: schema.NestedAttributeObject{
+											Attributes: map[string]schema.Attribute{
+												"desired_region": schema.StringAttribute{
+													Description: "The region name for this replication configuration. Must match one of the cluster's regions.",
+													Computed:    true,
+												},
+												"target": schema.StringAttribute{
+													Description: "The GCS bucket name where backups for this region will be replicated.",
+													Computed:    true,
+												},
+												"config_state": schema.StringAttribute{
+													Description: "The current state of the replication configuration (e.g., ENABLED, DISABLED etc.).",
+													Computed:    true,
+												},
+												"id": schema.StringAttribute{
+													Description: "Unique identifier for the replication configuration.",
+													Computed:    true,
+												},
+												"next_transfer_operation_time": schema.StringAttribute{
+													Description: "Timestamp of the next scheduled backup transfer operation.",
+													Computed:    true,
+												},
+												"latest_transfer_operation_details": schema.SingleNestedAttribute{
+													Description: "Details about the most recent backup transfer operation.",
+													Computed:    true,
+													Attributes: map[string]schema.Attribute{
+														"start_time": schema.StringAttribute{
+															Description: "Start time of the latest transfer operation.",
+															Computed:    true,
+														},
+														"end_time": schema.StringAttribute{
+															Description: "End time of the latest transfer operation.",
+															Computed:    true,
+														},
+														"status": schema.StringAttribute{
+															Description: "Status of the latest transfer operation (e.g., SUCCESS, FAILED, IN_PROGRESS).",
+															Computed:    true,
+														},
 													},
-													"end_time": {
-														Description: "End time of the latest transfer operation.",
-														Type:        types.StringType,
-														Computed:    true,
-													},
-													"status": {
-														Description: "Status of the latest transfer operation (e.g., SUCCESS, FAILED, IN_PROGRESS).",
-														Type:        types.StringType,
-														Computed:    true,
-													},
-												}),
+												},
+												"expiry_on": schema.StringAttribute{
+													Description: "Timestamp when this replication configuration expires, if applicable.",
+													Computed:    true,
+												},
 											},
-											"expiry_on": {
-												Description: "Timestamp when this replication configuration expires, if applicable.",
-												Type:        types.StringType,
-												Computed:    true,
-											},
-										}),
+										},
 									},
-									"configs_set_for_expiry": {
+									"configs_set_for_expiry": schema.ListNestedAttribute{
 										Description: "List of replication configurations that are set to expire.",
 										Computed:    true,
-										Attributes: tfsdk.ListNestedAttributes(map[string]tfsdk.Attribute{
-											"region": {
-												Description: "The region associated with this replication configuration.",
-												Type:        types.StringType,
-												Computed:    true,
-											},
-											"target": {
-												Description: "The GCS bucket name for this replication configuration.",
-												Type:        types.StringType,
-												Computed:    true,
-											},
-											"config_state": {
-												Description: "The current state of the replication configuration (e.g., ACTIVE, PENDING, ERROR).",
-												Type:        types.StringType,
-												Computed:    true,
-											},
-											"id": {
-												Description: "Unique identifier for the replication configuration.",
-												Type:        types.StringType,
-												Computed:    true,
-											},
-											"next_transfer_operation_time": {
-												Description: "Timestamp of the next scheduled backup transfer operation.",
-												Type:        types.StringType,
-												Computed:    true,
-											},
-											"latest_transfer_operation_details": {
-												Description: "Details about the most recent backup transfer operation.",
-												Computed:    true,
-												Attributes: tfsdk.SingleNestedAttributes(map[string]tfsdk.Attribute{
-													"start_time": {
-														Description: "Start time of the latest transfer operation.",
-														Type:        types.StringType,
-														Computed:    true,
+										NestedObject: schema.NestedAttributeObject{
+											Attributes: map[string]schema.Attribute{
+												"region": schema.StringAttribute{
+													Description: "The region associated with this replication configuration.",
+													Computed:    true,
+												},
+												"target": schema.StringAttribute{
+													Description: "The GCS bucket name for this replication configuration.",
+													Computed:    true,
+												},
+												"config_state": schema.StringAttribute{
+													Description: "The current state of the replication configuration (e.g., ACTIVE, PENDING, ERROR).",
+													Computed:    true,
+												},
+												"id": schema.StringAttribute{
+													Description: "Unique identifier for the replication configuration.",
+													Computed:    true,
+												},
+												"next_transfer_operation_time": schema.StringAttribute{
+													Description: "Timestamp of the next scheduled backup transfer operation.",
+													Computed:    true,
+												},
+												"latest_transfer_operation_details": schema.SingleNestedAttribute{
+													Description: "Details about the most recent backup transfer operation.",
+													Computed:    true,
+													Attributes: map[string]schema.Attribute{
+														"start_time": schema.StringAttribute{
+															Description: "Start time of the latest transfer operation.",
+															Computed:    true,
+														},
+														"end_time": schema.StringAttribute{
+															Description: "End time of the latest transfer operation.",
+															Computed:    true,
+														},
+														"status": schema.StringAttribute{
+															Description: "Status of the latest transfer operation (e.g., SUCCESS, FAILED, IN_PROGRESS).",
+															Computed:    true,
+														},
 													},
-													"end_time": {
-														Description: "End time of the latest transfer operation.",
-														Type:        types.StringType,
-														Computed:    true,
-													},
-													"status": {
-														Description: "Status of the latest transfer operation (e.g., SUCCESS, FAILED, IN_PROGRESS).",
-														Type:        types.StringType,
-														Computed:    true,
-													},
-												}),
+												},
+												"expiry_on": schema.StringAttribute{
+													Description: "Timestamp when this replication configuration expires.",
+													Computed:    true,
+												},
 											},
-											"expiry_on": {
-												Description: "Timestamp when this replication configuration expires.",
-												Type:        types.StringType,
-												Computed:    true,
-											},
-										}),
+										},
 									},
-								}),
+								},
 							},
-						}),
+						},
 					},
-				}),
-			},
-			"cluster_tier": {
-				Description: "FREE (Sandbox) or PAID (Dedicated).",
-				Type:        types.StringType,
-				Computed:    true,
-			},
-			"fault_tolerance": {
-				Description: "The fault tolerance of the cluster.",
-				Type:        types.StringType,
-				Computed:    true,
-			},
-			"num_faults_to_tolerate": {
-				Description: "The number of domain faults the cluster can tolerate.",
-				Type:        types.Int64Type,
-				Computed:    true,
-			},
-			"enterprise_security": {
-				Description: "Whether the advanced security profile (enterprise security) is enabled on the cluster.",
-				Type:        types.BoolType,
-				Computed:    true,
-			},
-			"cluster_allow_list_ids": {
-				Description: "List of IDs of the allow lists assigned to the cluster.",
-				Type: types.ListType{
-					ElemType: types.StringType,
 				},
-				Computed: true,
 			},
-			"restore_backup_id": {
-				Description: "The ID of the backup to be restored to the cluster.",
-				Type:        types.StringType,
+			"cluster_tier": schema.StringAttribute{
+				Description: "FREE (Sandbox) or PAID (Dedicated).",
 				Computed:    true,
 			},
-			"node_config": {
+			"fault_tolerance": schema.StringAttribute{
+				Description: "The fault tolerance of the cluster.",
+				Computed:    true,
+			},
+			"num_faults_to_tolerate": schema.Int64Attribute{
+				Description: "The number of domain faults the cluster can tolerate.",
+				Computed:    true,
+			},
+			"enterprise_security": schema.BoolAttribute{
+				Description: "Whether the advanced security profile (enterprise security) is enabled on the cluster.",
+				Computed:    true,
+			},
+			"cluster_allow_list_ids": schema.ListAttribute{
+				Description: "List of IDs of the allow lists assigned to the cluster.",
+				ElementType: types.StringType,
+				Computed:    true,
+			},
+			"restore_backup_id": schema.StringAttribute{
+				Description: "The ID of the backup to be restored to the cluster.",
+				Computed:    true,
+			},
+			"node_config": schema.SingleNestedAttribute{
 				Computed: true,
-				Attributes: tfsdk.SingleNestedAttributes(map[string]tfsdk.Attribute{
-					"num_cores": {
-						Type:     types.Int64Type,
+				Attributes: map[string]schema.Attribute{
+					"num_cores": schema.Int64Attribute{
 						Computed: true,
 					},
-					"disk_size_gb": {
-						Type:     types.Int64Type,
+					"disk_size_gb": schema.Int64Attribute{
 						Computed: true,
 					},
-					"disk_iops": {
-						Type:     types.Int64Type,
+					"disk_iops": schema.Int64Attribute{
 						Computed: true,
 					},
-				}),
+				},
 				DeprecationMessage: "Remove reliance on the attribute as it will be removed in the next major version of the provider. Please use cluster_region_info to read node config instead.",
 			},
-			"credentials": {
+			"credentials": schema.SingleNestedAttribute{
 				Computed: true,
-				Attributes: tfsdk.SingleNestedAttributes(map[string]tfsdk.Attribute{
-					"username": {
-						Type:     types.StringType,
+				Attributes: map[string]schema.Attribute{
+					"username": schema.StringAttribute{
 						Computed: true,
 					},
-					"password": {
-						Type:     types.StringType,
+					"password": schema.StringAttribute{
 						Computed: true,
 					},
-					"ysql_username": {
-						Type:     types.StringType,
+					"ysql_username": schema.StringAttribute{
 						Computed: true,
 					},
-					"ysql_password": {
-						Type:     types.StringType,
+					"ysql_password": schema.StringAttribute{
 						Computed: true,
 					},
-					"ycql_username": {
-						Type:     types.StringType,
+					"ycql_username": schema.StringAttribute{
 						Computed: true,
 					},
-					"ycql_password": {
-						Type:     types.StringType,
+					"ycql_password": schema.StringAttribute{
 						Computed: true,
 					},
-				}),
-			},
-			"cluster_info": {
-				Computed: true,
-				Attributes: tfsdk.SingleNestedAttributes(map[string]tfsdk.Attribute{
-					"state": {
-						Type:     types.StringType,
-						Computed: true,
-					},
-					"software_version": {
-						Type:     types.StringType,
-						Computed: true,
-					},
-					"created_time": {
-						Type:     types.StringType,
-						Computed: true,
-					},
-					"updated_time": {
-						Type:     types.StringType,
-						Computed: true,
-					},
-				}),
-			},
-			"cluster_version": {
-				Type:     types.StringType,
-				Computed: true,
-			},
-			"database_track": {
-				Description: "The track of the database. Stable or Preview.",
-				Type:        types.StringType,
-				Computed:    true,
-			},
-			"desired_state": {
-				Description: "The desired state of the database, Active or Paused. This parameter can be used to pause/resume a cluster.",
-				Type:        types.StringType,
-				Computed:    true,
-			},
-			"desired_connection_pooling_state": {
-				Description: "The desired connection pooling state of the cluster, Enabled or Disabled.",
-				Type:        types.StringType,
-				Computed:    true,
-			},
-			"cluster_endpoints": {
-				Description: "The endpoints used to connect to the cluster by region.",
-				Type: types.MapType{
-					ElemType: types.StringType,
 				},
-				Optional: true,
+			},
+			"cluster_info": schema.SingleNestedAttribute{
+				Computed: true,
+				Attributes: map[string]schema.Attribute{
+					"state": schema.StringAttribute{
+						Computed: true,
+					},
+					"software_version": schema.StringAttribute{
+						Computed: true,
+					},
+					"created_time": schema.StringAttribute{
+						Computed: true,
+					},
+					"updated_time": schema.StringAttribute{
+						Computed: true,
+					},
+				},
+			},
+			"cluster_version": schema.StringAttribute{
 				Computed: true,
 			},
-			"endpoints": {
+			"database_track": schema.StringAttribute{
+				Description: "The track of the database. Stable or Preview.",
+				Computed:    true,
+			},
+			"desired_state": schema.StringAttribute{
+				Description: "The desired state of the database, Active or Paused. This parameter can be used to pause/resume a cluster.",
+				Computed:    true,
+			},
+			"desired_connection_pooling_state": schema.StringAttribute{
+				Description: "The desired connection pooling state of the cluster, Enabled or Disabled.",
+				Computed:    true,
+			},
+			"cluster_endpoints": schema.MapAttribute{
+				Description: "The endpoints used to connect to the cluster by region.",
+				ElementType: types.StringType,
+				Optional:    true,
+				Computed:    true,
+			},
+			"endpoints": schema.ListNestedAttribute{
 				Description: "The endpoints used to connect to the cluster.",
-				Attributes: tfsdk.ListNestedAttributes(map[string]tfsdk.Attribute{
-					"accessibility_type": {
-						Description: "The accessibility type of the endpoint. PUBLIC or PRIVATE.",
-						Type:        types.StringType,
-						Computed:    true,
+				NestedObject: schema.NestedAttributeObject{
+					Attributes: map[string]schema.Attribute{
+						"accessibility_type": schema.StringAttribute{
+							Description: "The accessibility type of the endpoint. PUBLIC or PRIVATE.",
+							Computed:    true,
+						},
+						"host": schema.StringAttribute{
+							Description: "The host of the endpoint.",
+							Computed:    true,
+						},
+						"region": schema.StringAttribute{
+							Description: "The region of the endpoint.",
+							Computed:    true,
+						},
 					},
-					"host": {
-						Description: "The host of the endpoint.",
-						Type:        types.StringType,
-						Computed:    true,
-					},
-					"region": {
-						Description: "The region of the endpoint.",
-						Type:        types.StringType,
-						Computed:    true,
-					},
-				}),
+				},
 				Computed: true,
 			},
-			"cluster_certificate": {
+			"cluster_certificate": schema.StringAttribute{
 				Description: "The certificate used to connect to the cluster.",
-				Type:        types.StringType,
 				Computed:    true,
 			},
 		},
-	}, nil
+	}
 }
 
-func (r dataClusterNameType) NewDataSource(_ context.Context, p tfsdk.Provider) (tfsdk.DataSource, diag.Diagnostics) {
-	return dataClusterName{
-		p: *(p.(*provider)),
-	}, nil
+func newDataClusterName() datasource.DataSource {
+	return &dataClusterName{}
+}
+
+func (r *dataClusterName) Metadata(_ context.Context, req datasource.MetadataRequest, resp *datasource.MetadataResponse) {
+	resp.TypeName = req.ProviderTypeName + "_cluster"
+}
+
+func (r *dataClusterName) Configure(_ context.Context, req datasource.ConfigureRequest, _ *datasource.ConfigureResponse) {
+	r.p = configuredProvider(req.ProviderData)
 }
 
 type dataClusterName struct {
@@ -751,7 +649,7 @@ type inputClusterDetails struct {
 	cluster_name string
 }
 
-func (r dataClusterName) Read(ctx context.Context, req tfsdk.ReadDataSourceRequest, resp *tfsdk.ReadDataSourceResponse) {
+func (r dataClusterName) Read(ctx context.Context, req datasource.ReadRequest, resp *datasource.ReadResponse) {
 
 	if !r.p.configured {
 		resp.Diagnostics.AddError(
@@ -814,7 +712,7 @@ func (r dataClusterName) Read(ctx context.Context, req tfsdk.ReadDataSourceReque
 
 	backUpInfo := BackupScheduleInfo{
 
-		ScheduleID: types.String{Value: scheduleId},
+		ScheduleID: types.StringValue(scheduleId),
 	}
 	backUpSchedule = append(backUpSchedule, backUpInfo)
 	cluster, readOK, message := resourceClusterRead(ctx, clusterId, backUpSchedule, make([]string, 0), true, make([]string, 0), true, "", apiClient)
@@ -823,6 +721,7 @@ func (r dataClusterName) Read(ctx context.Context, req tfsdk.ReadDataSourceReque
 		resp.Diagnostics.AddError("Unable to read the state of the cluster", message)
 		return
 	}
+	cluster.RestoreBackupID = types.StringValue("")
 
 	diags := resp.State.Set(ctx, &cluster)
 	resp.Diagnostics.Append(diags...)

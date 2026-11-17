@@ -12,6 +12,11 @@ import (
 
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/path"
+	"github.com/hashicorp/terraform-plugin-framework/resource"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/setplanmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
@@ -20,64 +25,59 @@ import (
 	openapiclient "github.com/yugabyte/yugabytedb-managed-go-client-internal"
 )
 
-type resourceAllowListType struct{}
-
-func (r resourceAllowListType) GetSchema(_ context.Context) (tfsdk.Schema, diag.Diagnostics) {
-	return tfsdk.Schema{
+func (r *resourceAllowList) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
+	resp.Schema = schema.Schema{
 		Description: `The resource to create an allow list in YugabyteDB Aeon.`,
-		Attributes: map[string]tfsdk.Attribute{
-			"account_id": {
+		Attributes: map[string]schema.Attribute{
+			"account_id": schema.StringAttribute{
 				Description: "The ID of the account this allow list belongs to.",
-				Type:        types.StringType,
 				Computed:    true,
 			},
-			"project_id": {
+			"project_id": schema.StringAttribute{
 				Description: "The ID of the project this allow list belongs to.",
-				Type:        types.StringType,
 				Computed:    true,
 			},
-			"allow_list_id": {
+			"allow_list_id": schema.StringAttribute{
 				Description:   "The ID of the allow list. Created automatically when an allow list is created. Use this ID to get a specific allow list.",
-				Type:          types.StringType,
 				Computed:      true,
 				Optional:      true,
-				PlanModifiers: tfsdk.AttributePlanModifiers{tfsdk.RequiresReplace()},
+				PlanModifiers: []planmodifier.String{stringplanmodifier.RequiresReplaceIfConfigured()},
 			},
-			"allow_list_name": {
+			"allow_list_name": schema.StringAttribute{
 				Description:   "The name of the allow list.",
-				Type:          types.StringType,
 				Required:      true,
-				PlanModifiers: tfsdk.AttributePlanModifiers{tfsdk.RequiresReplace()},
+				PlanModifiers: []planmodifier.String{stringplanmodifier.RequiresReplace()},
 			},
-			"allow_list_description": {
+			"allow_list_description": schema.StringAttribute{
 				Description:   "The description of the allow list.",
-				Type:          types.StringType,
 				Optional:      true,
-				PlanModifiers: tfsdk.AttributePlanModifiers{tfsdk.RequiresReplace()},
+				PlanModifiers: []planmodifier.String{stringplanmodifier.RequiresReplace()},
 			},
-			"cidr_list": {
-				Description: "The CIDR list of the allow list.",
-				Type: types.SetType{
-					ElemType: types.StringType,
-				},
+			"cidr_list": schema.SetAttribute{
+				Description:   "The CIDR list of the allow list.",
+				ElementType:   types.StringType,
 				Required:      true,
-				PlanModifiers: tfsdk.AttributePlanModifiers{tfsdk.RequiresReplace()},
+				PlanModifiers: []planmodifier.Set{setplanmodifier.RequiresReplace()},
 			},
-			"cluster_ids": {
+			"cluster_ids": schema.SetAttribute{
 				Description: "List of the IDs of the clusters the allow list is assigned to.",
-				Type: types.SetType{
-					ElemType: types.StringType,
-				},
-				Computed: true,
+				ElementType: types.StringType,
+				Computed:    true,
 			},
 		},
-	}, nil
+	}
 }
 
-func (r resourceAllowListType) NewResource(_ context.Context, p tfsdk.Provider) (tfsdk.Resource, diag.Diagnostics) {
-	return resourceAllowList{
-		p: *(p.(*provider)),
-	}, nil
+func newResourceAllowList() resource.Resource {
+	return &resourceAllowList{}
+}
+
+func (r *resourceAllowList) Metadata(_ context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
+	resp.TypeName = req.ProviderTypeName + "_allow_list"
+}
+
+func (r *resourceAllowList) Configure(_ context.Context, req resource.ConfigureRequest, _ *resource.ConfigureResponse) {
+	r.p = configuredProvider(req.ProviderData)
 }
 
 type resourceAllowList struct {
@@ -100,7 +100,7 @@ func getAllowListPlan(ctx context.Context, plan tfsdk.Plan, allowList *AllowList
 }
 
 // Create allow list
-func (r resourceAllowList) Create(ctx context.Context, req tfsdk.CreateResourceRequest, resp *tfsdk.CreateResourceResponse) {
+func (r resourceAllowList) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
 
 	if !r.p.configured {
 		resp.Diagnostics.AddError(
@@ -127,7 +127,7 @@ func (r resourceAllowList) Create(ctx context.Context, req tfsdk.CreateResourceR
 		return
 	}
 
-	if (!plan.AllowListID.Unknown && !plan.AllowListID.Null) || plan.AllowListID.Value != "" {
+	if (!plan.AllowListID.IsUnknown() && !plan.AllowListID.IsNull()) || plan.AllowListID.ValueString() != "" {
 		resp.Diagnostics.AddError(
 			"Allow list ID provided for new allow list",
 			"The allow_list_id was provided even though a new allow list is being created. Do not include this field in the provider when creating an allow list.",
@@ -141,11 +141,11 @@ func (r resourceAllowList) Create(ctx context.Context, req tfsdk.CreateResourceR
 		return
 	}
 
-	allowListName := plan.AllowListName.Value
-	allowListDesc := plan.AllowListDescription.Value
+	allowListName := plan.AllowListName.ValueString()
+	allowListDesc := plan.AllowListDescription.ValueString()
 	cidrList := []string{}
 	for i := range plan.CIDRList {
-		cidrList = append(cidrList, plan.CIDRList[i].Value)
+		cidrList = append(cidrList, plan.CIDRList[i].ValueString())
 	}
 
 	allowListListResp, _, err := apiClient.NetworkApi.ListNetworkAllowLists(ctx, accountId, projectId).Execute()
@@ -205,22 +205,22 @@ func resourceAllowListRead(accountId string, projectId string, allowListName str
 		return allowList, false, errMsg
 	}
 
-	allowList.AccountID.Value = accountId
-	allowList.ProjectID.Value = projectId
-	allowList.AllowListID.Value = allowListId
+	allowList.AccountID = types.StringValue(accountId)
+	allowList.ProjectID = types.StringValue(projectId)
+	allowList.AllowListID = types.StringValue(allowListId)
 
-	allowList.AllowListName.Value = allowListResp.Data.Spec.Name
-	allowList.AllowListDescription.Value = allowListResp.Data.Spec.Description
+	allowList.AllowListName = types.StringValue(allowListResp.Data.Spec.Name)
+	allowList.AllowListDescription = types.StringValue(allowListResp.Data.Spec.Description)
 
 	cidrList := []types.String{}
 	for _, elem := range allowListResp.Data.Spec.AllowList {
-		cidrList = append(cidrList, types.String{Value: elem})
+		cidrList = append(cidrList, types.StringValue(elem))
 	}
 	allowList.CIDRList = cidrList
 
 	clusterIDs := []types.String{}
 	for _, elem := range allowListResp.Data.Info.ClusterIds {
-		clusterIDs = append(clusterIDs, types.String{Value: elem})
+		clusterIDs = append(clusterIDs, types.StringValue(elem))
 	}
 	allowList.ClusterIDs = clusterIDs
 
@@ -228,7 +228,7 @@ func resourceAllowListRead(accountId string, projectId string, allowListName str
 }
 
 // Read allow list
-func (r resourceAllowList) Read(ctx context.Context, req tfsdk.ReadResourceRequest, resp *tfsdk.ReadResourceResponse) {
+func (r resourceAllowList) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
 	var state AllowList
 	getIDsFromAllowListState(ctx, req.State, &state)
 
@@ -249,13 +249,13 @@ func (r resourceAllowList) Read(ctx context.Context, req tfsdk.ReadResourceReque
 
 	cidrList := []string{}
 	for i := range state.CIDRList {
-		cidrList = append(cidrList, state.CIDRList[i].Value)
+		cidrList = append(cidrList, state.CIDRList[i].ValueString())
 	}
 
 	tflog.Debug(ctx, "Allow List Read: CIDR List from state", map[string]interface{}{
 		"CIDR List": state.CIDRList})
 
-	allowList, readOK, message := resourceAllowListRead(accountId, projectId, state.AllowListName.Value, apiClient)
+	allowList, readOK, message := resourceAllowListRead(accountId, projectId, state.AllowListName.ValueString(), apiClient)
 	if !readOK {
 		resp.Diagnostics.AddError("Unable to read the state of the allow list ", message)
 		return
@@ -271,7 +271,7 @@ func (r resourceAllowList) Read(ctx context.Context, req tfsdk.ReadResourceReque
 }
 
 // Update allow list
-func (r resourceAllowList) Update(ctx context.Context, req tfsdk.UpdateResourceRequest, resp *tfsdk.UpdateResourceResponse) {
+func (r resourceAllowList) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
 
 	resp.Diagnostics.AddError("Unable to update allow list", "Updating allow lists is not currently supported. Delete and recreate the provider.")
 	return
@@ -279,12 +279,12 @@ func (r resourceAllowList) Update(ctx context.Context, req tfsdk.UpdateResourceR
 }
 
 // Delete allow list
-func (r resourceAllowList) Delete(ctx context.Context, req tfsdk.DeleteResourceRequest, resp *tfsdk.DeleteResourceResponse) {
+func (r resourceAllowList) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
 	var state AllowList
 	getIDsFromAllowListState(ctx, req.State, &state)
-	accountId := state.AccountID.Value
-	projectId := state.ProjectID.Value
-	allowListId := state.AllowListID.Value
+	accountId := state.AccountID.ValueString()
+	projectId := state.ProjectID.ValueString()
+	allowListId := state.AllowListID.ValueString()
 	clusterIds := util.SliceTypesStringToSliceString(state.ClusterIDs)
 
 	apiClient := r.p.client
@@ -309,7 +309,7 @@ func (r resourceAllowList) Delete(ctx context.Context, req tfsdk.DeleteResourceR
 }
 
 // Import allow list
-func (r resourceAllowList) ImportState(ctx context.Context, req tfsdk.ImportResourceStateRequest, resp *tfsdk.ImportResourceStateResponse) {
+func (r resourceAllowList) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
 
 	resp.State.SetAttribute(ctx, path.Root("allow_list_name"), req.ID)
 }

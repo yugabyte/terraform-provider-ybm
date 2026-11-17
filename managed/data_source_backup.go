@@ -7,8 +7,8 @@ package managed
 import (
 	"context"
 
-	"github.com/hashicorp/terraform-plugin-framework/diag"
-	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
+	"github.com/hashicorp/terraform-plugin-framework/datasource"
+	"github.com/hashicorp/terraform-plugin-framework/datasource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 
 	//"github.com/hashicorp/terraform-plugin-log/tflog"
@@ -16,65 +16,60 @@ import (
 	openapiclient "github.com/yugabyte/yugabytedb-managed-go-client-internal"
 )
 
-type dataSourceBackupType struct{}
-
-func (r dataSourceBackupType) GetSchema(_ context.Context) (tfsdk.Schema, diag.Diagnostics) {
-	return tfsdk.Schema{
+func (r *dataSourceBackup) Schema(_ context.Context, _ datasource.SchemaRequest, resp *datasource.SchemaResponse) {
+	resp.Schema = schema.Schema{
 		Description: "The data source to fetch the backup ID and other information about the most recent backup.",
-		Attributes: map[string]tfsdk.Attribute{
-			"account_id": {
+		Attributes: map[string]schema.Attribute{
+			"account_id": schema.StringAttribute{
 				Description: "The ID of the account this backup belongs to.",
-				Type:        types.StringType,
 				Computed:    true,
 			},
-			"cluster_id": {
+			"cluster_id": schema.StringAttribute{
 				Description: "The ID of the cluster to be backed up.",
-				Type:        types.StringType,
 				Required:    true,
 			},
-			"most_recent": {
+			"most_recent": schema.BoolAttribute{
 				Description: "Set to true to fetch the most recent backup.",
-				Type:        types.BoolType,
 				Optional:    true,
 			},
-			"timestamp": {
+			"timestamp": schema.StringAttribute{
 				Description: "The timestamp of the backup to be fetched. Format: '2022-07-08T00:06:01.890Z'.",
-				Type:        types.StringType,
 				Optional:    true,
 			},
-			"project_id": {
+			"project_id": schema.StringAttribute{
 				Description: "The ID of the project this backup belongs to.",
-				Type:        types.StringType,
 				Computed:    true,
 			},
-			"backup_id": {
+			"backup_id": schema.StringAttribute{
 				Description: "The ID of the backup. Fetched from read.",
-				Type:        types.StringType,
 				Computed:    true,
 			},
-			"backup_description": {
+			"backup_description": schema.StringAttribute{
 				Description: "The description of the backup.",
-				Type:        types.StringType,
 				Optional:    true,
 			},
-			"retention_period_in_days": {
+			"retention_period_in_days": schema.Int64Attribute{
 				Description: "The retention period of the backup.",
-				Type:        types.Int64Type,
 				Optional:    true,
 			},
-			"use_roles": {
+			"use_roles": schema.BoolAttribute{
 				Description: "Backup global YSQL roles. Defaults to false.",
-				Type:        types.BoolType,
 				Computed:    true,
 			},
 		},
-	}, nil
+	}
 }
 
-func (r dataSourceBackupType) NewDataSource(_ context.Context, p tfsdk.Provider) (tfsdk.DataSource, diag.Diagnostics) {
-	return dataSourceBackup{
-		p: *(p.(*provider)),
-	}, nil
+func newDataSourceBackup() datasource.DataSource {
+	return &dataSourceBackup{}
+}
+
+func (r *dataSourceBackup) Metadata(_ context.Context, req datasource.MetadataRequest, resp *datasource.MetadataResponse) {
+	resp.TypeName = req.ProviderTypeName + "_backup"
+}
+
+func (r *dataSourceBackup) Configure(_ context.Context, req datasource.ConfigureRequest, _ *datasource.ConfigureResponse) {
+	r.p = configuredProvider(req.ProviderData)
 }
 
 type dataSourceBackup struct {
@@ -94,14 +89,17 @@ func dataSourceBackupRead(ctx context.Context, accountId string, projectId strin
 		return backup, false, "No backups available."
 	}
 
-	backup.AccountID.Value = accountId
-	backup.ProjectID.Value = projectId
-	backup.ClusterID.Value = clusterId
+	backup.AccountID = types.StringValue(accountId)
+	backup.ProjectID = types.StringValue(projectId)
+	backup.ClusterID = types.StringValue(clusterId)
+	backup.BackupDescription = types.StringValue("")
+	backup.RetentionPeriodInDays = types.Int64Value(0)
+	backup.UseRoles = types.BoolValue(false)
 
 	if mostRecent {
-		backup.BackupID.Value = backupsResp.Data[0].Info.GetId()
-		backup.MostRecent.Value = mostRecent
-		backup.Timestamp.Null = true
+		backup.BackupID = types.StringValue(backupsResp.Data[0].Info.GetId())
+		backup.MostRecent = types.BoolValue(mostRecent)
+		backup.Timestamp = types.StringNull()
 	} else {
 		backupFound := false
 		backupAvailable := true
@@ -119,7 +117,7 @@ func dataSourceBackupRead(ctx context.Context, accountId string, projectId strin
 				}
 				if timestamp == createdOn {
 					backupFound = true
-					backup.BackupID.Value = data.Info.GetId()
+					backup.BackupID = types.StringValue(data.Info.GetId())
 					break
 				}
 			}
@@ -137,15 +135,15 @@ func dataSourceBackupRead(ctx context.Context, accountId string, projectId strin
 			return backup, false, "Backup with given timestamp not found."
 		}
 
-		backup.MostRecent.Null = true
-		backup.Timestamp.Value = timestamp
+		backup.MostRecent = types.BoolNull()
+		backup.Timestamp = types.StringValue(timestamp)
 	}
 
 	return backup, true, ""
 }
 
 // Read backup datasource
-func (r dataSourceBackup) Read(ctx context.Context, req tfsdk.ReadDataSourceRequest, resp *tfsdk.ReadDataSourceResponse) {
+func (r dataSourceBackup) Read(ctx context.Context, req datasource.ReadRequest, resp *datasource.ReadResponse) {
 
 	if !r.p.configured {
 		resp.Diagnostics.AddError(
@@ -172,7 +170,7 @@ func (r dataSourceBackup) Read(ctx context.Context, req tfsdk.ReadDataSourceRequ
 		return
 	}
 
-	if (!config.BackupID.Unknown && !config.BackupID.Null) || config.BackupID.Value != "" {
+	if (!config.BackupID.IsUnknown() && !config.BackupID.IsNull()) || config.BackupID.ValueString() != "" {
 		resp.Diagnostics.AddError(
 			"Backup ID provided for new backup",
 			"The backup_id was provided even though a new backup is being created. Do not include this field in the provider when creating a backup.",
@@ -186,18 +184,18 @@ func (r dataSourceBackup) Read(ctx context.Context, req tfsdk.ReadDataSourceRequ
 		return
 	}
 
-	clusterId := config.ClusterID.Value
+	clusterId := config.ClusterID.ValueString()
 
 	mostRecent := false
-	if !config.MostRecent.Unknown && !config.MostRecent.Null && config.MostRecent.Value {
+	if !config.MostRecent.IsUnknown() && !config.MostRecent.IsNull() && config.MostRecent.ValueBool() {
 		mostRecent = true
 	}
 
 	timestampPresent := false
 	timestamp := ""
-	if (!config.Timestamp.Unknown && !config.Timestamp.Null) || config.Timestamp.Value != "" {
+	if (!config.Timestamp.IsUnknown() && !config.Timestamp.IsNull()) || config.Timestamp.ValueString() != "" {
 		timestampPresent = true
-		timestamp = config.Timestamp.Value
+		timestamp = config.Timestamp.ValueString()
 	}
 
 	// Exactly one parameter amongst most_recent and timestamp must be present

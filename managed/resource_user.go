@@ -10,62 +10,61 @@ import (
 
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/path"
+	"github.com/hashicorp/terraform-plugin-framework/resource"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
 	openapiclient "github.com/yugabyte/yugabytedb-managed-go-client-internal"
 )
 
-type resourceUserType struct{}
-
-func (r resourceUserType) GetSchema(_ context.Context) (tfsdk.Schema, diag.Diagnostics) {
-	return tfsdk.Schema{
+func (r *resourceUser) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
+	resp.Schema = schema.Schema{
 		Description: `The resource to invite a user in YugabyteDB Aeon.`,
-		Attributes: map[string]tfsdk.Attribute{
-			"account_id": {
+		Attributes: map[string]schema.Attribute{
+			"account_id": schema.StringAttribute{
 				Description: "The ID of the account this user belongs to.",
-				Type:        types.StringType,
 				Computed:    true,
 			},
-			"project_id": {
+			"project_id": schema.StringAttribute{
 				Description: "The ID of the project this user belongs to.",
-				Type:        types.StringType,
 				Computed:    true,
 			},
-			"user_id": {
+			"user_id": schema.StringAttribute{
 				Description: "The ID of the user. Created automatically when a user is invited. Use this ID to get a specific user.",
-				Type:        types.StringType,
 				Computed:    true,
 				Optional:    true,
 			},
-			"email": {
+			"email": schema.StringAttribute{
 				Description: "The email of the user.",
-				Type:        types.StringType,
 				Required:    true,
 			},
-			"role_name": {
+			"role_name": schema.StringAttribute{
 				Description: "The role of the user.",
-				Type:        types.StringType,
 				Required:    true,
 			},
-			"user_name": {
+			"user_name": schema.StringAttribute{
 				Description: "The name of the user.",
-				Type:        types.StringType,
 				Computed:    true,
 			},
-			"user_state": {
+			"user_state": schema.StringAttribute{
 				Description: "The state of the user.",
-				Type:        types.StringType,
 				Computed:    true,
 			},
 		},
-	}, nil
+	}
 }
 
-func (r resourceUserType) NewResource(_ context.Context, p tfsdk.Provider) (tfsdk.Resource, diag.Diagnostics) {
-	return resourceUser{
-		p: *(p.(*provider)),
-	}, nil
+func newResourceUser() resource.Resource {
+	return &resourceUser{}
+}
+
+func (r *resourceUser) Metadata(_ context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
+	resp.TypeName = req.ProviderTypeName + "_user"
+}
+
+func (r *resourceUser) Configure(_ context.Context, req resource.ConfigureRequest, _ *resource.ConfigureResponse) {
+	r.p = configuredProvider(req.ProviderData)
 }
 
 type resourceUser struct {
@@ -83,7 +82,7 @@ func getUserPlan(ctx context.Context, plan tfsdk.Plan, user *User) diag.Diagnost
 }
 
 // Invite user
-func (r resourceUser) Create(ctx context.Context, req tfsdk.CreateResourceRequest, resp *tfsdk.CreateResourceResponse) {
+func (r resourceUser) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
 
 	if !r.p.configured {
 		resp.Diagnostics.AddError(
@@ -102,7 +101,7 @@ func (r resourceUser) Create(ctx context.Context, req tfsdk.CreateResourceReques
 		return
 	}
 
-	if (!plan.UserID.Unknown && !plan.UserID.Null) || plan.UserID.Value != "" {
+	if (!plan.UserID.IsUnknown() && !plan.UserID.IsNull()) || plan.UserID.ValueString() != "" {
 		resp.Diagnostics.AddError(
 			"User ID provided for new user",
 			"The user_id was provided even though a new user is being invited. Do not include this field in the provider when inviting a user.",
@@ -124,8 +123,8 @@ func (r resourceUser) Create(ctx context.Context, req tfsdk.CreateResourceReques
 		return
 	}
 
-	email := plan.Email.Value
-	roleName := plan.RoleName.Value
+	email := plan.Email.ValueString()
+	roleName := plan.RoleName.ValueString()
 
 	roleResp, response, err := apiClient.RoleApi.ListRbacRoles(ctx, accountId).RoleTypes("ALL").Limit(100).DisplayName(roleName).Execute()
 	if err != nil {
@@ -195,19 +194,19 @@ func resourceUserRead(accountId string, projectId string, email string, userId s
 		return user, false, errMsg
 	}
 
-	user.AccountID.Value = accountId
-	user.ProjectID.Value = projectId
-	user.UserID.Value = userId
-	user.Email.Value = email
-	user.RoleName.Value = userResp.Data[0].GetRoleInfo()[0].GetDisplayName()
-	user.UserName.Value = userResp.Data[0].Spec.GetFirstName() + userResp.Data[0].Spec.GetLastName()
-	user.UserState.Value = string(userResp.Data[0].Info.State)
+	user.AccountID = types.StringValue(accountId)
+	user.ProjectID = types.StringValue(projectId)
+	user.UserID = types.StringValue(userId)
+	user.Email = types.StringValue(email)
+	user.RoleName = types.StringValue(userResp.Data[0].GetRoleInfo()[0].GetDisplayName())
+	user.UserName = types.StringValue(userResp.Data[0].Spec.GetFirstName() + userResp.Data[0].Spec.GetLastName())
+	user.UserState = types.StringValue(string(userResp.Data[0].Info.State))
 
 	return user, true, ""
 }
 
 // Read user
-func (r resourceUser) Read(ctx context.Context, req tfsdk.ReadResourceRequest, resp *tfsdk.ReadResourceResponse) {
+func (r resourceUser) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
 	var state User
 	getIDsFromUserState(ctx, req.State, &state)
 
@@ -215,7 +214,7 @@ func (r resourceUser) Read(ctx context.Context, req tfsdk.ReadResourceRequest, r
 		"Email":    state.Email,
 		"RoleName": state.RoleName})
 
-	user, readOK, message := resourceUserRead(state.AccountID.Value, state.ProjectID.Value, state.Email.Value, state.UserID.Value, r.p.client)
+	user, readOK, message := resourceUserRead(state.AccountID.ValueString(), state.ProjectID.ValueString(), state.Email.ValueString(), state.UserID.ValueString(), r.p.client)
 	if !readOK {
 		resp.Diagnostics.AddError("Unable to read the state of the user ", message)
 		return
@@ -231,7 +230,7 @@ func (r resourceUser) Read(ctx context.Context, req tfsdk.ReadResourceRequest, r
 }
 
 // Update user
-func (r resourceUser) Update(ctx context.Context, req tfsdk.UpdateResourceRequest, resp *tfsdk.UpdateResourceResponse) {
+func (r resourceUser) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
 	var plan User
 	resp.Diagnostics.Append(getUserPlan(ctx, req.Plan, &plan)...)
 	if resp.Diagnostics.HasError() {
@@ -242,12 +241,12 @@ func (r resourceUser) Update(ctx context.Context, req tfsdk.UpdateResourceReques
 	apiClient := r.p.client
 	var state User
 	getIDsFromUserState(ctx, req.State, &state)
-	accountId := state.AccountID.Value
-	projectId := state.ProjectID.Value
-	userId := state.UserID.Value
-	email := state.Email.Value
+	accountId := state.AccountID.ValueString()
+	projectId := state.ProjectID.ValueString()
+	userId := state.UserID.ValueString()
+	email := state.Email.ValueString()
 
-	if plan.Email.Value != email {
+	if plan.Email.ValueString() != email {
 		resp.Diagnostics.AddError(
 			"User Email modified for existing user",
 			"The email was modified for an existing user. Do not modify this field in the provider when updating an existing user. Only the user role can be modified.",
@@ -255,7 +254,7 @@ func (r resourceUser) Update(ctx context.Context, req tfsdk.UpdateResourceReques
 		return
 	}
 
-	roleName := plan.RoleName.Value
+	roleName := plan.RoleName.ValueString()
 
 	roleResp, response, err := apiClient.RoleApi.ListRbacRoles(ctx, accountId).RoleTypes("ALL").Limit(100).DisplayName(roleName).Execute()
 	if err != nil {
@@ -296,11 +295,11 @@ func (r resourceUser) Update(ctx context.Context, req tfsdk.UpdateResourceReques
 }
 
 // Delete user
-func (r resourceUser) Delete(ctx context.Context, req tfsdk.DeleteResourceRequest, resp *tfsdk.DeleteResourceResponse) {
+func (r resourceUser) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
 	var state User
 	getIDsFromUserState(ctx, req.State, &state)
-	accountId := state.AccountID.Value
-	userId := state.UserID.Value
+	accountId := state.AccountID.ValueString()
+	userId := state.UserID.ValueString()
 
 	apiClient := r.p.client
 
@@ -316,7 +315,7 @@ func (r resourceUser) Delete(ctx context.Context, req tfsdk.DeleteResourceReques
 }
 
 // Import user
-func (r resourceUser) ImportState(ctx context.Context, req tfsdk.ImportResourceStateRequest, resp *tfsdk.ImportResourceStateResponse) {
+func (r resourceUser) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
 	// Save the import identifier in the id attribute
-	tfsdk.ResourceImportStatePassthroughID(ctx, path.Root("id"), req, resp)
+	resource.ImportStatePassthroughID(ctx, path.Root("id"), req, resp)
 }

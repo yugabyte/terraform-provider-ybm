@@ -8,8 +8,10 @@ import (
 	"context"
 	"os"
 
-	"github.com/hashicorp/terraform-plugin-framework/diag"
-	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
+	"github.com/hashicorp/terraform-plugin-framework/datasource"
+	fwprovider "github.com/hashicorp/terraform-plugin-framework/provider"
+	"github.com/hashicorp/terraform-plugin-framework/provider/schema"
+	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/yugabyte/terraform-provider-ybm/managed/fflags"
 	openapiclient "github.com/yugabyte/yugabytedb-managed-go-client-internal"
@@ -17,8 +19,8 @@ import (
 
 var stderr = os.Stderr
 
-func New(version string) func() tfsdk.Provider {
-	return func() tfsdk.Provider {
+func New(version string) func() fwprovider.Provider {
+	return func() fwprovider.Provider {
 		return &provider{
 			version: version,
 		}
@@ -31,8 +33,13 @@ type provider struct {
 	client     *openapiclient.APIClient
 }
 
-func (p *provider) GetSchema(_ context.Context) (tfsdk.Schema, diag.Diagnostics) {
-	return tfsdk.Schema{
+func (p *provider) Metadata(_ context.Context, _ fwprovider.MetadataRequest, resp *fwprovider.MetadataResponse) {
+	resp.TypeName = "ybm"
+	resp.Version = p.version
+}
+
+func (p *provider) Schema(_ context.Context, _ fwprovider.SchemaRequest, resp *fwprovider.SchemaResponse) {
+	resp.Schema = schema.Schema{
 		Description: `[YugabyteDB](https://github.com/yugabyte/yugabyte-db) is a high-performance, cloud-native distributed SQL database that aims to support all PostgreSQL
 features. It is best to fit for cloud-native OLTP (i.e. real-time, business-critical) applications that need absolute
 data correctness and require at least one of the following: scalability, high tolerance to failures, or
@@ -42,25 +49,22 @@ the operational overhead of managing a database.
 The YugabyteDB Aeon Provider can be used to interact with the resources provided by YugabyteDB Aeon like the YugabyteDB Clusters, Allow lists, VPCs,
 VPC Peerings, Read Replicas and so on. The provider needs to be configured with appropriate credentials before it can base used. The navigation bar on the left
 hand side provides the details about all the resources supported by the provider and the guides to use the provider.`,
-		Attributes: map[string]tfsdk.Attribute{
-			"auth_token": {
+		Attributes: map[string]schema.Attribute{
+			"auth_token": schema.StringAttribute{
 				Description: "The authentication token (API key) of the account this cluster belongs to.",
-				Type:        types.StringType,
 				Required:    true,
 				Sensitive:   true,
 			},
-			"host": {
+			"host": schema.StringAttribute{
 				Description: "The environment this cluster is being created in, for example, cloud.yugabyte.com ",
-				Type:        types.StringType,
 				Required:    true,
 			},
-			"use_secure_host": {
+			"use_secure_host": schema.BoolAttribute{
 				Description: "Set to true to use a secure connection (HTTPS) to the host.",
-				Type:        types.BoolType,
 				Optional:    true,
 			},
 		},
-	}, nil
+	}
 }
 
 type providerData struct {
@@ -69,7 +73,7 @@ type providerData struct {
 	UseSecureHost types.Bool   `tfsdk:"use_secure_host"`
 }
 
-func (p *provider) Configure(ctx context.Context, req tfsdk.ConfigureProviderRequest, resp *tfsdk.ConfigureProviderResponse) {
+func (p *provider) Configure(ctx context.Context, req fwprovider.ConfigureRequest, resp *fwprovider.ConfigureResponse) {
 	// Retrieve provider data from configuration
 	var config providerData
 	diags := req.Config.Get(ctx, &config)
@@ -79,16 +83,16 @@ func (p *provider) Configure(ctx context.Context, req tfsdk.ConfigureProviderReq
 	}
 
 	var auth_token string
-	if config.AuthToken.Unknown {
+	if config.AuthToken.IsUnknown() {
 		resp.Diagnostics.AddWarning(
 			"Unable to create client", "The authentication token is invalid.",
 		)
 		return
 	}
-	if config.AuthToken.Null {
+	if config.AuthToken.IsNull() {
 		auth_token = os.Getenv("YB_AUTH_TOKEN")
 	} else {
-		auth_token = config.AuthToken.Value
+		auth_token = config.AuthToken.ValueString()
 	}
 	if auth_token == "" {
 		resp.Diagnostics.AddError(
@@ -97,30 +101,30 @@ func (p *provider) Configure(ctx context.Context, req tfsdk.ConfigureProviderReq
 	}
 
 	var host string
-	if config.Host.Unknown {
+	if config.Host.IsUnknown() {
 		resp.Diagnostics.AddWarning(
 			"Unable to create client", "The provided host is not recognized.",
 		)
 		return
 	}
-	if config.Host.Null {
+	if config.Host.IsNull() {
 		host = os.Getenv("YB_CLOUD_HOST")
 	} else {
-		host = config.Host.Value
+		host = config.Host.ValueString()
 	}
 	if host == "" {
 		host = "localhost:9000"
 	}
 
 	use_secure_host := true
-	if config.UseSecureHost.Unknown {
+	if config.UseSecureHost.IsUnknown() {
 		resp.Diagnostics.AddWarning(
 			"Unable to create client", "You must specify use_secure_host; valid values are true or false.",
 		)
 		return
 	}
-	if !config.UseSecureHost.Null {
-		use_secure_host = config.UseSecureHost.Value
+	if !config.UseSecureHost.IsNull() {
+		use_secure_host = config.UseSecureHost.ValueBool()
 	}
 
 	configuration := openapiclient.NewConfiguration()
@@ -140,62 +144,73 @@ func (p *provider) Configure(ctx context.Context, req tfsdk.ConfigureProviderReq
 
 	p.client = api_client
 	p.configured = true
+	resp.ResourceData = p
+	resp.DataSourceData = p
 }
 
-func (p *provider) GetResources(_ context.Context) (map[string]tfsdk.ResourceType, diag.Diagnostics) {
-	resources := map[string]tfsdk.ResourceType{
-		"ybm_cluster":                            resourceClusterType{},
-		"ybm_allow_list":                         resourceAllowListType{},
-		"ybm_backup":                             resourceBackupType{},
-		"ybm_backup_restore":                     resourceBackupRestoreType{},
-		"ybm_vpc":                                resourceVPCType{},
-		"ybm_read_replicas":                      resourceReadReplicasType{},
-		"ybm_vpc_peering":                        resourceVPCPeeringType{},
-		"ybm_user":                               resourceUserType{},
-		"ybm_role":                               resourceRoleType{},
-		"ybm_private_service_endpoint":           resourcePrivateEndpointType{},
-		"ybm_api_key":                            resourceApiKeyType{},
-		"ybm_metrics_exporter":                   resourceMetricsExporterType{},
-		"ybm_associate_metrics_exporter_cluster": resourceAssociateMetricsExporterClusterType{},
-		"ybm_integration":                        resourceIntegrationType{},
-		"ybm_db_query_logging":                   resourceDbQueryLoggingType{},
-		"ybm_db_audit_logging":                   resourceDbAuditLoggingType{},
-		"ybm_pitr_config":                        resourcePitrConfigType{},
-		"ybm_pitr_clone":                         resourcePitrCloneType{},
+func (p *provider) Resources(_ context.Context) []func() resource.Resource {
+	resources := []func() resource.Resource{
+		newResourceCluster,
+		newResourceAllowList,
+		newResourceBackup,
+		newResourceBackupRestore,
+		newResourceVPC,
+		newResourceReadReplicas,
+		newResourceVPCPeering,
+		newResourceUser,
+		newResourceRole,
+		newResourcePrivateEndpoint,
+		newResourceApiKey,
+		newResourceMetricsExporter,
+		newResourceAssociateMetricsExporterCluster,
+		newResourceIntegration,
+		newResourceDbQueryLogging,
+		newResourceDbAuditLogging,
+		newResourcePitrConfig,
+		newResourcePitrClone,
 	}
 
 	// Add DR config resource only if the feature flag is enabled
 	if fflags.IsFeatureFlagEnabled(fflags.DR) {
-		resources["ybm_dr_config"] = resourceDrConfigType{}
+		resources = append(resources, newResourceDrConfig)
 	}
 
 	// Add autoscaler policy resource only if the feature flag is enabled
 	if fflags.IsFeatureFlagEnabled(fflags.Autoscaling) {
-		resources["ybm_autoscaler_policy"] = resourceAutoscalerPolicyType{}
+		resources = append(resources, newResourceAutoscalerPolicy)
 	}
 
 	// Add the Aeon PG resources only if the feature flag is enabled
 	if fflags.IsFeatureFlagEnabled(fflags.AMP) {
-		resources["ybm_amp_cluster"] = resourceAmpClusterType{}
-		resources["ybm_amp_byoc_environment"] = resourceByocEnvironmentType{}
-		resources["ybm_amp_byoc_storage_pool"] = resourceByocStoragePoolType{}
-		resources["ybm_amp_byoc_cluster"] = resourceByocClusterType{}
-		resources["ybm_amp_branch"] = resourceAmpBranchType{}
-		resources["ybm_amp_endpoint"] = resourceAmpEndpointType{}
+		resources = append(resources,
+			newResourceAmpCluster,
+			newResourceByocEnvironment,
+			newResourceByocStoragePool,
+			newResourceByocCluster,
+			newResourceAmpBranch,
+			newResourceAmpEndpoint,
+		)
 	}
 
-	return resources, nil
+	return resources
 }
 
-func (p *provider) GetDataSources(_ context.Context) (map[string]tfsdk.DataSourceType, diag.Diagnostics) {
-	dataSources := map[string]tfsdk.DataSourceType{
-		"ybm_backup":           dataSourceBackupType{},
-		"ybm_cluster":          dataClusterNameType{},
-		"ybm_vpc":              dataSourceVPCType{},
-		"ybm_allow_list":       dataSourceAllowListType{},
-		"ybm_integration":      dataSourceIntegrationType{},
-		"ybm_db_audit_logging": dataSourceDbAuditLoggingType{},
+func (p *provider) DataSources(_ context.Context) []func() datasource.DataSource {
+	return []func() datasource.DataSource{
+		newDataSourceBackup,
+		newDataClusterName,
+		newDataSourceVPC,
+		newDataSourceAllowList,
+		newDataSourceIntegration,
+		newDataSourceDbAuditLogging,
 	}
+}
 
-	return dataSources, nil
+// configuredProvider returns the provider a resource or data source is configured with. Until the
+// provider itself is configured there is none, and the zero provider reports configured == false.
+func configuredProvider(providerData any) provider {
+	if p, ok := providerData.(*provider); ok {
+		return *p
+	}
+	return provider{}
 }

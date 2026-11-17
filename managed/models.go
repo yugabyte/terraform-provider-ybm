@@ -75,6 +75,15 @@ type AzureCMKSpec struct {
 	KeyName      types.String `tfsdk:"key_name"`
 }
 
+// emptyGCPServiceAccount is a service account whose every field is known and empty.
+func emptyGCPServiceAccount() GCPServiceAccount {
+	empty := types.StringValue("")
+	return GCPServiceAccount{
+		Type: empty, ProjectId: empty, PrivateKey: empty, PrivateKeyId: empty, ClientEmail: empty, ClientId: empty,
+		AuthUri: empty, TokenUri: empty, AuthProviderX509CertUrl: empty, ClientX509CertUrl: empty, UniverseDomain: empty,
+	}
+}
+
 type GCPServiceAccount struct {
 	Type                    types.String `tfsdk:"type"`
 	ProjectId               types.String `tfsdk:"project_id"`
@@ -420,36 +429,36 @@ type AwsS3Spec struct {
 }
 
 func (d DataDogSpec) EncryptedKey() string {
-	return util.ObfuscateString(d.ApiKey.Value)
+	return util.ObfuscateString(d.ApiKey.ValueString())
 }
 
 func (g GrafanaSpec) EncryptedKey() string {
-	return util.ObfuscateStringLenght(g.AccessTokenPolicy.Value, 5)
+	return util.ObfuscateStringLenght(g.AccessTokenPolicy.ValueString(), 5)
 }
 
 func (s SumoLogicSpec) EncryptedKey(key string) string {
 	switch key {
 
 	case "access_key":
-		return util.ObfuscateString(s.AccessKey.Value)
+		return util.ObfuscateString(s.AccessKey.ValueString())
 	case "access_id":
-		return util.ObfuscateString(s.AccessId.Value)
+		return util.ObfuscateString(s.AccessId.ValueString())
 	case "installation_token":
-		return util.ObfuscateString(s.InstallationToken.Value)
+		return util.ObfuscateString(s.InstallationToken.ValueString())
 	}
 	return ""
 }
 
 func (d NewRelicSpec) EncryptedKey() string {
-	return util.ObfuscateString(d.LicenseKey.Value)
+	return util.ObfuscateString(d.LicenseKey.ValueString())
 }
 
 func (a AwsS3Spec) EncryptedKey(key string) string {
 	switch key {
 	case "access_key_id":
-		return util.ObfuscateString(a.AccessKeyId.Value)
+		return util.ObfuscateString(a.AccessKeyId.ValueString())
 	case "secret_access_key":
-		return util.ObfuscateString(a.SecretAccessKey.Value)
+		return util.ObfuscateString(a.SecretAccessKey.ValueString())
 	}
 	return ""
 }

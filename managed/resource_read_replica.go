@@ -9,13 +9,18 @@ import (
 	"errors"
 	"fmt"
 	"strings"
-
 	"time"
 
-	"github.com/hashicorp/terraform-plugin-framework-validators/schemavalidator"
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/path"
+	"github.com/hashicorp/terraform-plugin-framework/resource"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/boolplanmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/int64planmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
@@ -23,138 +28,130 @@ import (
 	openapiclient "github.com/yugabyte/yugabytedb-managed-go-client-internal"
 )
 
-type resourceReadReplicasType struct{}
-
-func (r resourceReadReplicasType) GetSchema(ctx context.Context) (tfsdk.Schema, diag.Diagnostics) {
-	return tfsdk.Schema{
+func (r *resourceReadReplicas) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
+	resp.Schema = schema.Schema{
 		Description: `The resource to create read replicas of a particular cluster. You can create multiple read replicas
 		in different regions using a single resource.`,
-		Attributes: map[string]tfsdk.Attribute{
-			"account_id": {
+		Attributes: map[string]schema.Attribute{
+			"account_id": schema.StringAttribute{
 				Description: "The ID of the account this read replica belongs to.",
-				Type:        types.StringType,
 				Computed:    true,
-				PlanModifiers: []tfsdk.AttributePlanModifier{
-					tfsdk.UseStateForUnknown(),
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseNonNullStateForUnknown(),
 				},
 			},
-			"project_id": {
+			"project_id": schema.StringAttribute{
 				Description: "The ID of the project this read replica belongs to.",
-				Type:        types.StringType,
 				Computed:    true,
-				PlanModifiers: []tfsdk.AttributePlanModifier{
-					tfsdk.UseStateForUnknown(),
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseNonNullStateForUnknown(),
 				},
 			},
-			"read_replicas_info": {
+			"read_replicas_info": schema.ListNestedAttribute{
 				Required:    true,
 				Description: "Information about multiple read replicas.",
-				Attributes: tfsdk.ListNestedAttributes(map[string]tfsdk.Attribute{
-					"cloud_type": {
-						Description: "The cloud provider where the read replica is deployed: AWS, AZURE or GCP. Default GCP.",
-						Type:        types.StringType,
-						Optional:    true,
-						Computed:    true,
-						Validators:  []tfsdk.AttributeValidator{stringvalidator.OneOf("AWS", "GCP", "AZURE")},
-						PlanModifiers: []tfsdk.AttributePlanModifier{
-							tfsdk.UseStateForUnknown(),
-						},
-					},
-					"num_nodes": {
-						Description: "The number of nodes of the read replica.",
-						Type:        types.Int64Type,
-						Required:    true,
-					},
-					"num_replicas": {
-						Description: "The number of replicas of the read replica.",
-						Type:        types.Int64Type,
-						Required:    true,
-					},
-					"region": {
-						Description: "The region of the read replica.",
-						Type:        types.StringType,
-						Required:    true,
-					},
-					"vpc_id": {
-						Description: "The ID of the VPC where the read replica is deployed.",
-						Type:        types.StringType,
-						Optional:    true,
-						Computed:    true,
-						Validators: []tfsdk.AttributeValidator{
-							schemavalidator.ConflictsWith(path.MatchRelative().AtParent().AtName("vpc_name")),
-						},
-						PlanModifiers: []tfsdk.AttributePlanModifier{
-							tfsdk.UseStateForUnknown(),
-						},
-					},
-					"vpc_name": {
-						Description: "The name of the VPC where the read replica is deployed.",
-						Type:        types.StringType,
-						Optional:    true,
-						Computed:    true,
-						Validators: []tfsdk.AttributeValidator{
-							schemavalidator.ExactlyOneOf(path.MatchRelative().AtParent().AtName("vpc_name"),
-								path.MatchRelative().AtParent().AtName("vpc_id"),
-							),
-						},
-						PlanModifiers: []tfsdk.AttributePlanModifier{
-							tfsdk.UseStateForUnknown(),
-						},
-					},
-					"multi_zone": {
-						Description: "Set whether to spread the nodes in this region across zones. Defaults to true.",
-						Optional:    true,
-						Type:        types.BoolType,
-						Computed:    true,
-						PlanModifiers: []tfsdk.AttributePlanModifier{
-							tfsdk.UseStateForUnknown(),
-						},
-					},
-					"node_config": {
-						Required:    true,
-						Description: "The node configuration of the read replica.",
-						Attributes: tfsdk.SingleNestedAttributes(map[string]tfsdk.Attribute{
-							"num_cores": {
-								Type:     types.Int64Type,
-								Required: true,
+				NestedObject: schema.NestedAttributeObject{
+					Attributes: map[string]schema.Attribute{
+						"cloud_type": schema.StringAttribute{
+							Description: "The cloud provider where the read replica is deployed: AWS, AZURE or GCP. Default GCP.",
+							Optional:    true,
+							Computed:    true,
+							Validators:  []validator.String{stringvalidator.OneOf("AWS", "GCP", "AZURE")},
+							PlanModifiers: []planmodifier.String{
+								stringplanmodifier.UseNonNullStateForUnknown(),
 							},
-							"disk_size_gb": {
-								Type:     types.Int64Type,
-								Required: true,
+						},
+						"num_nodes": schema.Int64Attribute{
+							Description: "The number of nodes of the read replica.",
+							Required:    true,
+						},
+						"num_replicas": schema.Int64Attribute{
+							Description: "The number of replicas of the read replica.",
+							Required:    true,
+						},
+						"region": schema.StringAttribute{
+							Description: "The region of the read replica.",
+							Required:    true,
+						},
+						"vpc_id": schema.StringAttribute{
+							Description: "The ID of the VPC where the read replica is deployed.",
+							Optional:    true,
+							Computed:    true,
+							Validators: []validator.String{
+								stringvalidator.ConflictsWith(path.MatchRelative().AtParent().AtName("vpc_name")),
 							},
-							"disk_iops": {
-								Type:     types.Int64Type,
-								Optional: true,
-								Computed: true,
-								PlanModifiers: []tfsdk.AttributePlanModifier{
-									tfsdk.UseStateForUnknown(),
+							PlanModifiers: []planmodifier.String{
+								stringplanmodifier.UseNonNullStateForUnknown(),
+							},
+						},
+						"vpc_name": schema.StringAttribute{
+							Description: "The name of the VPC where the read replica is deployed.",
+							Optional:    true,
+							Computed:    true,
+							Validators: []validator.String{
+								stringvalidator.ExactlyOneOf(path.MatchRelative().AtParent().AtName("vpc_name"),
+									path.MatchRelative().AtParent().AtName("vpc_id"),
+								),
+							},
+							PlanModifiers: []planmodifier.String{
+								stringplanmodifier.UseNonNullStateForUnknown(),
+							},
+						},
+						"multi_zone": schema.BoolAttribute{
+							Description: "Set whether to spread the nodes in this region across zones. Defaults to true.",
+							Optional:    true,
+							Computed:    true,
+							PlanModifiers: []planmodifier.Bool{
+								boolplanmodifier.UseNonNullStateForUnknown(),
+							},
+						},
+						"node_config": schema.SingleNestedAttribute{
+							Required:    true,
+							Description: "The node configuration of the read replica.",
+							Attributes: map[string]schema.Attribute{
+								"num_cores": schema.Int64Attribute{
+									Required: true,
+								},
+								"disk_size_gb": schema.Int64Attribute{
+									Required: true,
+								},
+								"disk_iops": schema.Int64Attribute{
+									Optional: true,
+									Computed: true,
+									PlanModifiers: []planmodifier.Int64{
+										int64planmodifier.UseNonNullStateForUnknown(),
+									},
 								},
 							},
-						}),
-					},
-					"endpoint": {
-						Description: "The endpoint of the read replica. Created automatically when a read replica is created.",
-						Type:        types.StringType,
-						Computed:    true,
-						PlanModifiers: []tfsdk.AttributePlanModifier{
-							tfsdk.UseStateForUnknown(),
+						},
+						"endpoint": schema.StringAttribute{
+							Description: "The endpoint of the read replica. Created automatically when a read replica is created.",
+							Computed:    true,
+							PlanModifiers: []planmodifier.String{
+								stringplanmodifier.UseNonNullStateForUnknown(),
+							},
 						},
 					},
-				}),
+				},
 			},
-			"primary_cluster_id": {
+			"primary_cluster_id": schema.StringAttribute{
 				Description: "The primary cluster ID for the read replica.",
-				Type:        types.StringType,
 				Required:    true,
 			},
 		},
-	}, nil
+	}
 }
 
-func (r resourceReadReplicasType) NewResource(_ context.Context, p tfsdk.Provider) (tfsdk.Resource, diag.Diagnostics) {
-	return resourceReadReplicas{
-		p: *(p.(*provider)),
-	}, nil
+func newResourceReadReplicas() resource.Resource {
+	return &resourceReadReplicas{}
+}
+
+func (r *resourceReadReplicas) Metadata(_ context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
+	resp.TypeName = req.ProviderTypeName + "_read_replicas"
+}
+
+func (r *resourceReadReplicas) Configure(_ context.Context, req resource.ConfigureRequest, _ *resource.ConfigureResponse) {
+	r.p = configuredProvider(req.ProviderData)
 }
 
 type resourceReadReplicas struct {
@@ -169,9 +166,9 @@ func createReadReplicasSpec(ctx context.Context, apiClient *openapiclient.APICli
 
 	for _, readReplica := range readReplicasInfo {
 
-		cloud := readReplica.CloudType.Value
-		region := readReplica.Region.Value
-		numCores := int32(readReplica.NodeConfig.NumCores.Value)
+		cloud := readReplica.CloudType.ValueString()
+		region := readReplica.Region.ValueString()
+		numCores := int32(readReplica.NodeConfig.NumCores.ValueInt64())
 		memoryMb, memoryOK, message := getMemoryFromInstanceType(ctx, apiClient, accountId, cloud, tier, region, numCores)
 		if !memoryOK {
 			return nil, false, message
@@ -179,31 +176,31 @@ func createReadReplicasSpec(ctx context.Context, apiClient *openapiclient.APICli
 		clusterNodeInfo := *openapiclient.NewOptionalClusterNodeInfo(
 			numCores,
 			memoryMb,
-			int32(readReplica.NodeConfig.DiskSizeGb.Value),
+			int32(readReplica.NodeConfig.DiskSizeGb.ValueInt64()),
 		)
-		if !(readReplica.NodeConfig.DiskIops.IsUnknown() || readReplica.NodeConfig.DiskIops.IsNull()) && int32(readReplica.NodeConfig.DiskIops.Value) > 0 {
-			clusterNodeInfo.SetDiskIops(int32(readReplica.NodeConfig.DiskIops.Value))
+		if !(readReplica.NodeConfig.DiskIops.IsUnknown() || readReplica.NodeConfig.DiskIops.IsNull()) && int32(readReplica.NodeConfig.DiskIops.ValueInt64()) > 0 {
+			clusterNodeInfo.SetDiskIops(int32(readReplica.NodeConfig.DiskIops.ValueInt64()))
 		}
 
-		if vpcName := readReplica.VPCName.Value; vpcName != "" {
+		if vpcName := readReplica.VPCName.ValueString(); vpcName != "" {
 			vpcData, err := getVPCByName(context.Background(), accountId, projectId, vpcName, apiClient)
 			if err != nil {
 				return nil, false, err.Error()
 			}
 
-			readReplica.VPCID.Value = vpcData.Info.Id
+			readReplica.VPCID = types.StringValue(vpcData.Info.Id)
 		}
 
 		placementInfo := *openapiclient.NewPlacementInfo(
 			*openapiclient.NewCloudInfo(
 				openapiclient.CloudEnum(cloud),
-				region), int32(readReplica.NumNodes.Value))
-		placementInfo.SetNumReplicas(int32(readReplica.NumReplicas.Value))
-		placementInfo.SetVpcId(readReplica.VPCID.Value)
+				region), int32(readReplica.NumNodes.ValueInt64()))
+		placementInfo.SetNumReplicas(int32(readReplica.NumReplicas.ValueInt64()))
+		placementInfo.SetVpcId(readReplica.VPCID.ValueString())
 
 		multiZone := true
 		if !(readReplica.MultiZone.IsUnknown() || readReplica.MultiZone.IsNull()) {
-			multiZone = readReplica.MultiZone.Value
+			multiZone = readReplica.MultiZone.ValueBool()
 		}
 		placementInfo.SetMultiZone(multiZone)
 
@@ -238,7 +235,7 @@ func getIDsFromReadReplicasState(ctx context.Context, state tfsdk.State, readRep
 }
 
 // Create a new resource
-func (r resourceReadReplicas) Create(ctx context.Context, req tfsdk.CreateResourceRequest, resp *tfsdk.CreateResourceResponse) {
+func (r resourceReadReplicas) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
 
 	if !r.p.configured {
 		resp.Diagnostics.AddError(
@@ -279,7 +276,7 @@ func (r resourceReadReplicas) Create(ctx context.Context, req tfsdk.CreateResour
 		return
 	}
 
-	clusterId := plan.PrimaryClusterID.Value
+	clusterId := plan.PrimaryClusterID.ValueString()
 
 	readReplicasSpec, readReplicasOK, message := createReadReplicasSpec(ctx, apiClient, accountId, projectId, plan)
 	if !readReplicasOK {
@@ -321,7 +318,7 @@ func (r resourceReadReplicas) Create(ctx context.Context, req tfsdk.CreateResour
 
 	regions := []string{}
 	for _, readReplica := range plan.ReadReplicasInfo {
-		regions = append(regions, readReplica.Region.Value)
+		regions = append(regions, readReplica.Region.ValueString())
 	}
 
 	readReplicas, readOK, message := resourceReadReplicasRead(ctx, clusterId, apiClient, regions)
@@ -338,14 +335,14 @@ func (r resourceReadReplicas) Create(ctx context.Context, req tfsdk.CreateResour
 }
 
 // Read read replica information
-func (r resourceReadReplicas) Read(ctx context.Context, req tfsdk.ReadResourceRequest, resp *tfsdk.ReadResourceResponse) {
+func (r resourceReadReplicas) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
 	var state ReadReplicas
 	getIDsFromReadReplicasState(ctx, req.State, &state)
-	clusterId := state.PrimaryClusterID.Value
+	clusterId := state.PrimaryClusterID.ValueString()
 
 	regions := []string{}
 	for _, readReplica := range state.ReadReplicasInfo {
-		regions = append(regions, readReplica.Region.Value)
+		regions = append(regions, readReplica.Region.ValueString())
 	}
 
 	readReplicas, readOK, message := resourceReadReplicasRead(ctx, clusterId, r.p.client, regions)
@@ -382,9 +379,9 @@ func resourceReadReplicasRead(ctx context.Context, clusterId string, apiClient *
 		return readReplicas, false, errMsg
 	}
 
-	readReplicas.AccountID.Value = accountId
-	readReplicas.ProjectID.Value = projectId
-	readReplicas.PrimaryClusterID.Value = clusterId
+	readReplicas.AccountID = types.StringValue(accountId)
+	readReplicas.ProjectID = types.StringValue(projectId)
+	readReplicas.PrimaryClusterID = types.StringValue(clusterId)
 
 	endpointsPtr, getEndpointsOk := listReadReplicasResp.Data.Info.GetEndpointsOk()
 	endpoints := *endpointsPtr
@@ -400,41 +397,44 @@ func resourceReadReplicasRead(ctx context.Context, clusterId string, apiClient *
 
 	for localIndex, readReplicaSpec := range readReplicasSpec {
 
-		readReplicaInfo := ReadReplicaInfo{}
-		readReplicaInfo.CloudType.Value = string(readReplicaSpec.PlacementInfo.CloudInfo.GetCode())
-		readReplicaInfo.NumNodes.Value = int64(readReplicaSpec.PlacementInfo.GetNumNodes())
-		readReplicaInfo.NumReplicas.Value = int64(readReplicaSpec.PlacementInfo.GetNumReplicas())
-		readReplicaInfo.Region.Value = readReplicaSpec.PlacementInfo.CloudInfo.GetRegion()
-		readReplicaInfo.VPCID.Value = readReplicaSpec.PlacementInfo.GetVpcId()
+		readReplicaInfo := ReadReplicaInfo{
+			NodeConfig: NodeConfig{NumCores: types.Int64Value(0), DiskSizeGb: types.Int64Value(0), DiskIops: types.Int64Value(0)},
+			Endpoint:   types.StringValue(""),
+		}
+		readReplicaInfo.CloudType = types.StringValue(string(readReplicaSpec.PlacementInfo.CloudInfo.GetCode()))
+		readReplicaInfo.NumNodes = types.Int64Value(int64(readReplicaSpec.PlacementInfo.GetNumNodes()))
+		readReplicaInfo.NumReplicas = types.Int64Value(int64(readReplicaSpec.PlacementInfo.GetNumReplicas()))
+		readReplicaInfo.Region = types.StringValue(readReplicaSpec.PlacementInfo.CloudInfo.GetRegion())
+		readReplicaInfo.VPCID = types.StringValue(readReplicaSpec.PlacementInfo.GetVpcId())
 		vpcData, err := getVPCByID(context.Background(), accountId, projectId, readReplicaSpec.PlacementInfo.GetVpcId(), apiClient)
 		if err != nil {
 			return readReplicas, false, err.Error()
 		}
-		readReplicaInfo.VPCName.Value = vpcData.Spec.Name
-		readReplicaInfo.MultiZone.Value = readReplicaSpec.PlacementInfo.GetMultiZone()
+		readReplicaInfo.VPCName = types.StringValue(vpcData.Spec.Name)
+		readReplicaInfo.MultiZone = types.BoolValue(readReplicaSpec.PlacementInfo.GetMultiZone())
 
 		// Use RegionNodeInfo (if nil, fall back to to-be-deprecated NodeInfo)
 		regionNodeInfo := readReplicaSpec.RegionNodeInfo.Get()
 		nodeInfo := readReplicaSpec.NodeInfo.Get()
 		if regionNodeInfo != nil {
-			readReplicaInfo.NodeConfig.NumCores.Value = int64((*regionNodeInfo).NumCores)
-			readReplicaInfo.NodeConfig.DiskSizeGb.Value = int64((*regionNodeInfo).DiskSizeGb)
+			readReplicaInfo.NodeConfig.NumCores = types.Int64Value(int64((*regionNodeInfo).NumCores))
+			readReplicaInfo.NodeConfig.DiskSizeGb = types.Int64Value(int64((*regionNodeInfo).DiskSizeGb))
 			if (*regionNodeInfo).DiskIops.Get() != nil {
-				readReplicaInfo.NodeConfig.DiskIops.Value = int64(*(*regionNodeInfo).DiskIops.Get())
+				readReplicaInfo.NodeConfig.DiskIops = types.Int64Value(int64(*(*regionNodeInfo).DiskIops.Get()))
 			}
 		} else if nodeInfo != nil {
-			readReplicaInfo.NodeConfig.NumCores.Value = int64((*nodeInfo).NumCores)
-			readReplicaInfo.NodeConfig.DiskSizeGb.Value = int64((*nodeInfo).DiskSizeGb)
+			readReplicaInfo.NodeConfig.NumCores = types.Int64Value(int64((*nodeInfo).NumCores))
+			readReplicaInfo.NodeConfig.DiskSizeGb = types.Int64Value(int64((*nodeInfo).DiskSizeGb))
 			if (*nodeInfo).DiskIops.Get() != nil {
-				readReplicaInfo.NodeConfig.DiskIops.Value = int64(*(*nodeInfo).DiskIops.Get())
+				readReplicaInfo.NodeConfig.DiskIops = types.Int64Value(int64(*(*nodeInfo).DiskIops.Get()))
 			}
 		}
 
 		if getEndpointsOk {
-			readReplicaInfo.Endpoint.Value = endpoints[localIndex].GetHost()
+			readReplicaInfo.Endpoint = types.StringValue(endpoints[localIndex].GetHost())
 		}
 
-		destIndex := getClusterRegionIndex(readReplicaInfo.Region.Value, regionIndexMap, localIndex)
+		destIndex := getClusterRegionIndex(readReplicaInfo.Region.ValueString(), regionIndexMap, localIndex)
 		readReplicasInfo[destIndex] = readReplicaInfo
 
 	}
@@ -445,13 +445,13 @@ func resourceReadReplicasRead(ctx context.Context, clusterId string, apiClient *
 }
 
 // Update read replicas
-func (r resourceReadReplicas) Update(ctx context.Context, req tfsdk.UpdateResourceRequest, resp *tfsdk.UpdateResourceResponse) {
+func (r resourceReadReplicas) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
 
 	var state ReadReplicas
 	getIDsFromReadReplicasState(ctx, req.State, &state)
-	accountId := state.AccountID.Value
-	projectId := state.ProjectID.Value
-	clusterId := state.PrimaryClusterID.Value
+	accountId := state.AccountID.ValueString()
+	projectId := state.ProjectID.ValueString()
+	clusterId := state.PrimaryClusterID.ValueString()
 
 	var plan ReadReplicas
 	resp.Diagnostics.Append(getReadReplicasPlan(ctx, req.Plan, &plan)...)
@@ -513,7 +513,7 @@ func (r resourceReadReplicas) Update(ctx context.Context, req tfsdk.UpdateResour
 
 	regions := []string{}
 	for _, readReplicaInfo := range plan.ReadReplicasInfo {
-		regions = append(regions, readReplicaInfo.Region.Value)
+		regions = append(regions, readReplicaInfo.Region.ValueString())
 	}
 
 	readReplicas, readOK, message := resourceReadReplicasRead(ctx, clusterId, apiClient, regions)
@@ -530,12 +530,12 @@ func (r resourceReadReplicas) Update(ctx context.Context, req tfsdk.UpdateResour
 }
 
 // Delete read replicas
-func (r resourceReadReplicas) Delete(ctx context.Context, req tfsdk.DeleteResourceRequest, resp *tfsdk.DeleteResourceResponse) {
+func (r resourceReadReplicas) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
 	var state ReadReplicas
 	getIDsFromReadReplicasState(ctx, req.State, &state)
-	accountId := state.AccountID.Value
-	projectId := state.ProjectID.Value
-	clusterId := state.PrimaryClusterID.Value
+	accountId := state.AccountID.ValueString()
+	projectId := state.ProjectID.ValueString()
+	clusterId := state.PrimaryClusterID.ValueString()
 
 	apiClient := r.p.client
 
@@ -570,7 +570,7 @@ func (r resourceReadReplicas) Delete(ctx context.Context, req tfsdk.DeleteResour
 }
 
 // Import a read replica
-func (r resourceReadReplicas) ImportState(ctx context.Context, req tfsdk.ImportResourceStateRequest, resp *tfsdk.ImportResourceStateResponse) {
+func (r resourceReadReplicas) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
 	// Save the import identifier in the primary_cluster_id attribute
-	tfsdk.ResourceImportStatePassthroughID(ctx, path.Root("primary_cluster_id"), req, resp)
+	resource.ImportStatePassthroughID(ctx, path.Root("primary_cluster_id"), req, resp)
 }

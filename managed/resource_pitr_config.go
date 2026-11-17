@@ -11,6 +11,10 @@ import (
 
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/path"
+	"github.com/hashicorp/terraform-plugin-framework/resource"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
@@ -18,85 +22,78 @@ import (
 	openapiclient "github.com/yugabyte/yugabytedb-managed-go-client-internal"
 )
 
-type resourcePitrConfigType struct{}
-
-func (r resourcePitrConfigType) GetSchema(_ context.Context) (tfsdk.Schema, diag.Diagnostics) {
-	return tfsdk.Schema{
+func (r *resourcePitrConfig) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
+	resp.Schema = schema.Schema{
 		Description: `The resource to create a PITR Config for a namespace in YugabyteDB Aeon.`,
-		Attributes: map[string]tfsdk.Attribute{
-			"account_id": {
+		Attributes: map[string]schema.Attribute{
+			"account_id": schema.StringAttribute{
 				Description: "The ID of the account this PITR Config belongs to.",
-				Type:        types.StringType,
 				Computed:    true,
-				PlanModifiers: []tfsdk.AttributePlanModifier{
-					tfsdk.UseStateForUnknown(),
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseNonNullStateForUnknown(),
 				},
 			},
-			"project_id": {
+			"project_id": schema.StringAttribute{
 				Description: "The ID of the project this PITR Config belongs to.",
-				Type:        types.StringType,
 				Computed:    true,
-				PlanModifiers: []tfsdk.AttributePlanModifier{
-					tfsdk.UseStateForUnknown(),
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseNonNullStateForUnknown(),
 				},
 			},
-			"cluster_id": {
+			"cluster_id": schema.StringAttribute{
 				Description: "The ID of the cluster this PITR Config belongs to.",
-				Type:        types.StringType,
 				Required:    true,
 			},
-			"pitr_config_id": {
+			"pitr_config_id": schema.StringAttribute{
 				Description: "The ID of the PITR Config.",
-				Type:        types.StringType,
 				Computed:    true,
 				Optional:    true,
 			},
-			"namespace_id": {
+			"namespace_id": schema.StringAttribute{
 				Description: "The ID of the namespace that this PITR Config is associated to.",
-				Type:        types.StringType,
 				Computed:    true,
-				PlanModifiers: []tfsdk.AttributePlanModifier{
-					tfsdk.UseStateForUnknown(),
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseNonNullStateForUnknown(),
 				},
 			},
-			"namespace_name": {
+			"namespace_name": schema.StringAttribute{
 				Description: "The namespace name for the PITR Config.",
-				Type:        types.StringType,
 				Required:    true,
 			},
-			"namespace_type": {
+			"namespace_type": schema.StringAttribute{
 				Description: "The namespace type.",
-				Type:        types.StringType,
 				Required:    true,
 			},
-			"retention_period_in_days": {
+			"retention_period_in_days": schema.Int64Attribute{
 				Description: "The retention period of the PITR Config.",
-				Type:        types.Int64Type,
 				Required:    true,
 			},
-			"state": {
+			"state": schema.StringAttribute{
 				Description: "The status of the PITR config.",
-				Type:        types.StringType,
 				Computed:    true,
 			},
-			"earliest_recovery_time_millis": {
+			"earliest_recovery_time_millis": schema.Int64Attribute{
 				Description: "The earliest recovery time in milliseconds to which the namespace can be restored.",
-				Type:        types.Int64Type,
 				Computed:    true,
 			},
-			"latest_recovery_time_millis": {
+			"latest_recovery_time_millis": schema.Int64Attribute{
 				Description: "The latest recovery time in milliseconds to which the namespace can be restored.",
-				Type:        types.Int64Type,
 				Computed:    true,
 			},
 		},
-	}, nil
+	}
 }
 
-func (r resourcePitrConfigType) NewResource(_ context.Context, p tfsdk.Provider) (tfsdk.Resource, diag.Diagnostics) {
-	return resourcePitrConfig{
-		p: *(p.(*provider)),
-	}, nil
+func newResourcePitrConfig() resource.Resource {
+	return &resourcePitrConfig{}
+}
+
+func (r *resourcePitrConfig) Metadata(_ context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
+	resp.TypeName = req.ProviderTypeName + "_pitr_config"
+}
+
+func (r *resourcePitrConfig) Configure(_ context.Context, req resource.ConfigureRequest, _ *resource.ConfigureResponse) {
+	r.p = configuredProvider(req.ProviderData)
 }
 
 type resourcePitrConfig struct {
@@ -156,23 +153,23 @@ func resourcePitrConfigRead(accountId string, projectId string, clusterId string
 		return pitrConfig, false, errMsg
 	}
 
-	pitrConfig.AccountId.Value = accountId
-	pitrConfig.ProjectId.Value = projectId
-	pitrConfig.ClusterId.Value = clusterId
-	pitrConfig.PitrConfigId.Value = pitrConfigId
-	pitrConfig.NamespaceId.Value = pitrConfigResp.Data.Spec.DatabaseId
-	pitrConfig.NamespaceName.Value = pitrConfigResp.Data.Info.GetDatabaseName()
-	pitrConfig.NamespaceType.Value = string(pitrConfigResp.Data.Info.GetDatabaseType())
-	pitrConfig.RetentionPeriodInDays.Value = int64(pitrConfigResp.Data.Spec.RetentionPeriod)
-	pitrConfig.State.Value = pitrConfigResp.Data.Info.GetState()
-	pitrConfig.EarliestRecoveryTimeMillis.Value = pitrConfigResp.Data.Info.GetEarliestRecoveryTimeMillis()
-	pitrConfig.LatestRecoveryTimeMillis.Value = pitrConfigResp.Data.Info.GetLatestRecoveryTimeMillis()
+	pitrConfig.AccountId = types.StringValue(accountId)
+	pitrConfig.ProjectId = types.StringValue(projectId)
+	pitrConfig.ClusterId = types.StringValue(clusterId)
+	pitrConfig.PitrConfigId = types.StringValue(pitrConfigId)
+	pitrConfig.NamespaceId = types.StringValue(pitrConfigResp.Data.Spec.DatabaseId)
+	pitrConfig.NamespaceName = types.StringValue(pitrConfigResp.Data.Info.GetDatabaseName())
+	pitrConfig.NamespaceType = types.StringValue(string(pitrConfigResp.Data.Info.GetDatabaseType()))
+	pitrConfig.RetentionPeriodInDays = types.Int64Value(int64(pitrConfigResp.Data.Spec.RetentionPeriod))
+	pitrConfig.State = types.StringValue(pitrConfigResp.Data.Info.GetState())
+	pitrConfig.EarliestRecoveryTimeMillis = types.Int64Value(pitrConfigResp.Data.Info.GetEarliestRecoveryTimeMillis())
+	pitrConfig.LatestRecoveryTimeMillis = types.Int64Value(pitrConfigResp.Data.Info.GetLatestRecoveryTimeMillis())
 
 	return pitrConfig, true, ""
 }
 
 // Create PITR Config
-func (r resourcePitrConfig) Create(ctx context.Context, req tfsdk.CreateResourceRequest, resp *tfsdk.CreateResourceResponse) {
+func (r resourcePitrConfig) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
 
 	if !r.p.configured {
 		resp.Diagnostics.AddError(
@@ -192,7 +189,7 @@ func (r resourcePitrConfig) Create(ctx context.Context, req tfsdk.CreateResource
 		return
 	}
 
-	if (!plan.PitrConfigId.Unknown && !plan.PitrConfigId.Null) || plan.PitrConfigId.Value != "" {
+	if (!plan.PitrConfigId.IsUnknown() && !plan.PitrConfigId.IsNull()) || plan.PitrConfigId.ValueString() != "" {
 		resp.Diagnostics.AddError(
 			"PITR Config ID provided for new PITR Config",
 			"The pitr_config_id was provided even though a new PITR Config is being created. Do not include this field in the provider when creating a PITR Config.",
@@ -214,9 +211,9 @@ func (r resourcePitrConfig) Create(ctx context.Context, req tfsdk.CreateResource
 		return
 	}
 
-	clusterId := plan.ClusterId.Value
-	namespaceName := plan.NamespaceName.Value
-	namespaceType := plan.NamespaceType.Value
+	clusterId := plan.ClusterId.ValueString()
+	namespaceName := plan.NamespaceName.ValueString()
+	namespaceType := plan.NamespaceType.ValueString()
 
 	namespacesResp, response, err := apiClient.ClusterApi.GetClusterNamespaces(ctx, accountId, projectId, clusterId).Execute()
 	if err != nil {
@@ -238,7 +235,7 @@ func (r resourcePitrConfig) Create(ctx context.Context, req tfsdk.CreateResource
 		return
 	}
 
-	retentionPeriod := int32(plan.RetentionPeriodInDays.Value)
+	retentionPeriod := int32(plan.RetentionPeriodInDays.ValueInt64())
 	if retentionPeriod < 2 || retentionPeriod > 14 {
 		resp.Diagnostics.AddError("Unable to create PITR config:", "Retention period must be between 2 and 14 days")
 		return
@@ -302,15 +299,15 @@ func (r resourcePitrConfig) Create(ctx context.Context, req tfsdk.CreateResource
 }
 
 // Read PITR configuration
-func (r resourcePitrConfig) Read(ctx context.Context, req tfsdk.ReadResourceRequest, resp *tfsdk.ReadResourceResponse) {
+func (r resourcePitrConfig) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
 	var state PitrConfig
 	getPitrConfigState(ctx, req.State, &state)
 
 	apiClient := r.p.client
-	accountId := state.AccountId.Value
-	projectId := state.ProjectId.Value
-	clusterId := state.ClusterId.Value
-	pitrConfigId := state.PitrConfigId.Value
+	accountId := state.AccountId.ValueString()
+	projectId := state.ProjectId.ValueString()
+	clusterId := state.ClusterId.ValueString()
+	pitrConfigId := state.PitrConfigId.ValueString()
 
 	pitrconfig, readOK, message := resourcePitrConfigRead(accountId, projectId, clusterId, pitrConfigId, apiClient)
 	if !readOK {
@@ -331,7 +328,7 @@ func (r resourcePitrConfig) Read(ctx context.Context, req tfsdk.ReadResourceRequ
 }
 
 // Update PITR Config
-func (r resourcePitrConfig) Update(ctx context.Context, req tfsdk.UpdateResourceRequest, resp *tfsdk.UpdateResourceResponse) {
+func (r resourcePitrConfig) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
 	var plan PitrConfig
 	var state PitrConfig
 
@@ -346,7 +343,7 @@ func (r resourcePitrConfig) Update(ctx context.Context, req tfsdk.UpdateResource
 	}
 
 	// Verify that only retention period field is being changed
-	if plan.ClusterId.Value != state.ClusterId.Value || plan.NamespaceName.Value != state.NamespaceName.Value || plan.NamespaceType.Value != state.NamespaceType.Value {
+	if plan.ClusterId.ValueString() != state.ClusterId.ValueString() || plan.NamespaceName.ValueString() != state.NamespaceName.ValueString() || plan.NamespaceType.ValueString() != state.NamespaceType.ValueString() {
 		resp.Diagnostics.AddError(
 			"Invalid edit to PITR configuration",
 			"Only the retention period field can be modified in PITR configurations. Other fields cannot be changed.",
@@ -355,12 +352,12 @@ func (r resourcePitrConfig) Update(ctx context.Context, req tfsdk.UpdateResource
 	}
 
 	apiClient := r.p.client
-	accountId := state.AccountId.Value
-	projectId := state.ProjectId.Value
-	clusterId := state.ClusterId.Value
-	pitrConfigId := state.PitrConfigId.Value
+	accountId := state.AccountId.ValueString()
+	projectId := state.ProjectId.ValueString()
+	clusterId := state.ClusterId.ValueString()
+	pitrConfigId := state.PitrConfigId.ValueString()
 
-	retentionPeriod := int32(plan.RetentionPeriodInDays.Value)
+	retentionPeriod := int32(plan.RetentionPeriodInDays.ValueInt64())
 	if retentionPeriod < 2 || retentionPeriod > 14 {
 		resp.Diagnostics.AddError("Unable to update PITR config:", "Retention period must be between 2 and 14 days")
 		return
@@ -424,13 +421,13 @@ func (r resourcePitrConfig) Update(ctx context.Context, req tfsdk.UpdateResource
 }
 
 // Delete PITR configuration
-func (r resourcePitrConfig) Delete(ctx context.Context, req tfsdk.DeleteResourceRequest, resp *tfsdk.DeleteResourceResponse) {
+func (r resourcePitrConfig) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
 	var state PitrConfig
 	getPitrConfigState(ctx, req.State, &state)
-	accountId := state.AccountId.Value
-	projectId := state.ProjectId.Value
-	clusterId := state.ClusterId.Value
-	pitrConfigId := state.PitrConfigId.Value
+	accountId := state.AccountId.ValueString()
+	projectId := state.ProjectId.ValueString()
+	clusterId := state.ClusterId.ValueString()
+	pitrConfigId := state.PitrConfigId.ValueString()
 
 	apiClient := r.p.client
 
@@ -474,7 +471,7 @@ func (r resourcePitrConfig) Delete(ctx context.Context, req tfsdk.DeleteResource
 }
 
 // Import PITR Config
-func (r resourcePitrConfig) ImportState(ctx context.Context, req tfsdk.ImportResourceStateRequest, resp *tfsdk.ImportResourceStateResponse) {
+func (r resourcePitrConfig) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
 	// Save the import identifier in the id attribute
-	tfsdk.ResourceImportStatePassthroughID(ctx, path.Root("id"), req, resp)
+	resource.ImportStatePassthroughID(ctx, path.Root("id"), req, resp)
 }

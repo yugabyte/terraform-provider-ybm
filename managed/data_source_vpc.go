@@ -10,85 +10,82 @@ import (
 	"fmt"
 	"sort"
 
-	"github.com/hashicorp/terraform-plugin-framework/diag"
-	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
+	"github.com/hashicorp/terraform-plugin-framework/datasource"
+	"github.com/hashicorp/terraform-plugin-framework/datasource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	openapiclient "github.com/yugabyte/yugabytedb-managed-go-client-internal"
 )
 
-type dataSourceVPCType struct{}
-
-func (r dataSourceVPCType) GetSchema(_ context.Context) (tfsdk.Schema, diag.Diagnostics) {
-	return tfsdk.Schema{
+func (r *dataVPCType) Schema(_ context.Context, _ datasource.SchemaRequest, resp *datasource.SchemaResponse) {
+	resp.Schema = schema.Schema{
 		Description: `The data source to fetch VPC in YugabyteDB Aeon by VPC name or ID.`,
-		Attributes: map[string]tfsdk.Attribute{
-			"account_id": {
+		Attributes: map[string]schema.Attribute{
+			"account_id": schema.StringAttribute{
 				Description: "The ID of the account this VPC belongs to.",
-				Type:        types.StringType,
 				Computed:    true,
 			},
-			"project_id": {
+			"project_id": schema.StringAttribute{
 				Description: "The ID of the project this VPC belongs to.",
-				Type:        types.StringType,
 				Computed:    true,
 			},
-			"vpc_id": {
+			"vpc_id": schema.StringAttribute{
 				Description: "The ID of the VPC. Created automatically when the VPC is created. Used to get a specific VPC.",
-				Type:        types.StringType,
 				Computed:    true,
 				Optional:    true,
 			},
-			"external_vpc_id": {
+			"external_vpc_id": schema.StringAttribute{
 				Description: "The ID of the cloud provider(AWS/GCP/Azure) VPC where YugabyteDB Aeon resources are created",
-				Type:        types.StringType,
 				Computed:    true,
 			},
-			"name": {
+			"name": schema.StringAttribute{
 				Description: "The description of the VPC.",
-				Type:        types.StringType,
 				Computed:    true,
 				Optional:    true,
 			},
-			"cloud": {
+			"cloud": schema.StringAttribute{
 				Description: "The cloud provider (AWS, AZURE or GCP) where the VPC is to be created.",
-				Type:        types.StringType,
 				Computed:    true,
 			},
-			"global_cidr": {
+			"global_cidr": schema.StringAttribute{
 				Description: "The global CIDR of the VPC (GCP only).",
-				Type:        types.StringType,
 				Computed:    true,
 			},
-			"region_cidr_info": {
+			"region_cidr_info": schema.ListNestedAttribute{
 				Description: "The CIDR information for all the regions for the VPC.",
 				Computed:    true,
-				Attributes: tfsdk.ListNestedAttributes(map[string]tfsdk.Attribute{
-					"region": {
-						Type:     types.StringType,
-						Optional: true,
+				NestedObject: schema.NestedAttributeObject{
+					Attributes: map[string]schema.Attribute{
+						"region": schema.StringAttribute{
+							Optional: true,
+						},
+						"cidr": schema.StringAttribute{
+							Optional: true,
+							Computed: true,
+						},
 					},
-					"cidr": {
-						Type:     types.StringType,
-						Optional: true,
-						Computed: true,
-					},
-				}),
+				},
 			},
 		},
-	}, nil
+	}
 }
 
-func (r dataSourceVPCType) NewDataSource(_ context.Context, p tfsdk.Provider) (tfsdk.DataSource, diag.Diagnostics) {
-	return dataVPCType{
-		p: *(p.(*provider)),
-	}, nil
+func newDataSourceVPC() datasource.DataSource {
+	return &dataVPCType{}
+}
+
+func (r *dataVPCType) Metadata(_ context.Context, req datasource.MetadataRequest, resp *datasource.MetadataResponse) {
+	resp.TypeName = req.ProviderTypeName + "_vpc"
+}
+
+func (r *dataVPCType) Configure(_ context.Context, req datasource.ConfigureRequest, _ *datasource.ConfigureResponse) {
+	r.p = configuredProvider(req.ProviderData)
 }
 
 type dataVPCType struct {
 	p provider
 }
 
-func (r dataVPCType) Read(ctx context.Context, req tfsdk.ReadDataSourceRequest, resp *tfsdk.ReadDataSourceResponse) {
+func (r dataVPCType) Read(ctx context.Context, req datasource.ReadRequest, resp *datasource.ReadResponse) {
 
 	if !r.p.configured {
 		resp.Diagnostics.AddError(
@@ -122,12 +119,12 @@ func (r dataVPCType) Read(ctx context.Context, req tfsdk.ReadDataSourceRequest, 
 	}
 
 	vpcNamePresent := false
-	if (!config.Name.Unknown && !config.Name.Null) || config.Name.Value != "" {
+	if (!config.Name.IsUnknown() && !config.Name.IsNull()) || config.Name.ValueString() != "" {
 		vpcNamePresent = true
 	}
 
 	vpcIDPresent := false
-	if (!config.VPCID.Unknown && !config.VPCID.Null) || config.VPCID.Value != "" {
+	if (!config.VPCID.IsUnknown() && !config.VPCID.IsNull()) || config.VPCID.ValueString() != "" {
 		vpcIDPresent = true
 	}
 
@@ -141,7 +138,7 @@ func (r dataVPCType) Read(ctx context.Context, req tfsdk.ReadDataSourceRequest, 
 		return
 	}
 
-	vpc, error := dataSourceVPCRead(ctx, accountId, projectId, config.Name.Value, config.VPCID.Value, apiClient)
+	vpc, error := dataSourceVPCRead(ctx, accountId, projectId, config.Name.ValueString(), config.VPCID.ValueString(), apiClient)
 
 	if error != nil {
 		resp.Diagnostics.AddError(error.Error(), "")
@@ -200,16 +197,16 @@ func dataSourceVPCRead(ctx context.Context, accountId string, projectId string, 
 		return vpc, err
 	}
 
-	vpc.AccountID.Value = accountId
-	vpc.ProjectID.Value = projectId
-	vpc.VPCID.Value = vpcResp.GetInfo().Id
-	vpc.Name.Value = vpcResp.Spec.GetName()
-	vpc.Cloud.Value = string(vpcResp.Spec.GetCloud())
-	vpc.ExternalVPCID.Value = vpcResp.Info.GetExternalVpcId()
+	vpc.AccountID = types.StringValue(accountId)
+	vpc.ProjectID = types.StringValue(projectId)
+	vpc.VPCID = types.StringValue(vpcResp.GetInfo().Id)
+	vpc.Name = types.StringValue(vpcResp.Spec.GetName())
+	vpc.Cloud = types.StringValue(string(vpcResp.Spec.GetCloud()))
+	vpc.ExternalVPCID = types.StringValue(vpcResp.Info.GetExternalVpcId())
 	if vpcResp.Spec.GetParentCidr() != "" {
-		vpc.GlobalCIDR.Value = vpcResp.Spec.GetParentCidr()
+		vpc.GlobalCIDR = types.StringValue(vpcResp.Spec.GetParentCidr())
 	} else {
-		vpc.GlobalCIDR.Null = true
+		vpc.GlobalCIDR = types.StringNull()
 	}
 
 	if v, ok := vpcResp.Spec.GetRegionSpecsOk(); ok {
@@ -218,12 +215,12 @@ func dataSourceVPCRead(ctx context.Context, accountId string, projectId string, 
 			region := info.GetRegion()
 			cidr := info.GetCidr()
 			regionInfo[index] = VPCRegionInfo{
-				Region: types.String{Value: region},
-				CIDR:   types.String{Value: cidr},
+				Region: types.StringValue(region),
+				CIDR:   types.StringValue(cidr),
 			}
 		}
 		sort.Slice(regionInfo, func(i, j int) bool {
-			return string(regionInfo[i].Region.Value) < string(regionInfo[j].Region.Value)
+			return string(regionInfo[i].Region.ValueString()) < string(regionInfo[j].Region.ValueString())
 		})
 		vpc.RegionCIDRInfo = regionInfo
 	}

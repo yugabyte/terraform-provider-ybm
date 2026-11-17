@@ -11,6 +11,10 @@ import (
 
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/path"
+	"github.com/hashicorp/terraform-plugin-framework/resource"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 
@@ -19,95 +23,87 @@ import (
 	openapiclient "github.com/yugabyte/yugabytedb-managed-go-client-internal"
 )
 
-type resourceVPCPeeringType struct{}
-
-func (r resourceVPCPeeringType) GetSchema(_ context.Context) (tfsdk.Schema, diag.Diagnostics) {
-	return tfsdk.Schema{
+func (r *resourceVPCPeering) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
+	resp.Schema = schema.Schema{
 		Description: `The resource to create a VPC peering in YugabyteDB Aeon.`,
-		Attributes: map[string]tfsdk.Attribute{
-			"account_id": {
+		Attributes: map[string]schema.Attribute{
+			"account_id": schema.StringAttribute{
 				Description: "The ID of the account this VPC peering belongs to.",
-				Type:        types.StringType,
 				Computed:    true,
 			},
-			"project_id": {
+			"project_id": schema.StringAttribute{
 				Description: "The ID of the project this VPC peering belongs to.",
-				Type:        types.StringType,
 				Computed:    true,
 			},
-			"vpc_peering_id": {
+			"vpc_peering_id": schema.StringAttribute{
 				Description: "The ID of the VPC peering.",
-				Type:        types.StringType,
 				Computed:    true,
 			},
-			"name": {
+			"name": schema.StringAttribute{
 				Description:   "The name of the VPC peering.",
-				Type:          types.StringType,
 				Required:      true,
-				PlanModifiers: tfsdk.AttributePlanModifiers{tfsdk.RequiresReplace()},
+				PlanModifiers: []planmodifier.String{stringplanmodifier.RequiresReplace()},
 			},
-			"yugabytedb_vpc_id": {
+			"yugabytedb_vpc_id": schema.StringAttribute{
 				Description:   "The ID of the VPC where the YugabyteDB cluster is deployed.",
-				Type:          types.StringType,
 				Required:      true,
-				PlanModifiers: tfsdk.AttributePlanModifiers{tfsdk.RequiresReplace()},
+				PlanModifiers: []planmodifier.String{stringplanmodifier.RequiresReplace()},
 			},
-			"application_vpc_info": {
+			"application_vpc_info": schema.SingleNestedAttribute{
 				Description: "The details for the VPC where the application is deployed.",
 				Required:    true,
-				Attributes: tfsdk.SingleNestedAttributes(map[string]tfsdk.Attribute{
-					"cloud": {
+				Attributes: map[string]schema.Attribute{
+					"cloud": schema.StringAttribute{
 						Description:   "The cloud provider (AWS, AZURE or GCP) where the application is deployed.",
-						Type:          types.StringType,
 						Required:      true,
-						PlanModifiers: tfsdk.AttributePlanModifiers{tfsdk.RequiresReplace()},
+						PlanModifiers: []planmodifier.String{stringplanmodifier.RequiresReplace()},
 					},
-					"project": {
+					"project": schema.StringAttribute{
 						Description:   "The project ID for GCP.",
-						Type:          types.StringType,
 						Optional:      true,
-						PlanModifiers: tfsdk.AttributePlanModifiers{tfsdk.RequiresReplace()},
+						PlanModifiers: []planmodifier.String{stringplanmodifier.RequiresReplace()},
 					},
-					"account_id": {
+					"account_id": schema.StringAttribute{
 						Description:   "The account ID for AWS.",
-						Type:          types.StringType,
 						Optional:      true,
-						PlanModifiers: tfsdk.AttributePlanModifiers{tfsdk.RequiresReplace()},
+						PlanModifiers: []planmodifier.String{stringplanmodifier.RequiresReplace()},
 					},
-					"region": {
+					"region": schema.StringAttribute{
 						Description:   "The region where the application is deployed.",
-						Type:          types.StringType,
 						Optional:      true,
-						PlanModifiers: tfsdk.AttributePlanModifiers{tfsdk.RequiresReplace()},
+						PlanModifiers: []planmodifier.String{stringplanmodifier.RequiresReplace()},
 					},
-					"vpc_id": {
+					"vpc_id": schema.StringAttribute{
 						Description:   "The ID of the VPC in which the application is deployed.",
-						Type:          types.StringType,
 						Required:      true,
-						PlanModifiers: tfsdk.AttributePlanModifiers{tfsdk.RequiresReplace()},
+						PlanModifiers: []planmodifier.String{stringplanmodifier.RequiresReplace()},
 					},
-					"cidr": {
+					"cidr": schema.StringAttribute{
 						Description:   "The CIDR of the VPC in which the application is deployed.",
-						Type:          types.StringType,
 						Computed:      true,
 						Optional:      true,
-						PlanModifiers: tfsdk.AttributePlanModifiers{tfsdk.RequiresReplace()},
+						PlanModifiers: []planmodifier.String{stringplanmodifier.RequiresReplaceIfConfigured()},
 					},
-				}),
+				},
 			},
-			"vpc_peering_state": {
+			"vpc_peering_state": schema.StringAttribute{
 				Description: "The state of the VPC peering.",
-				Type:        types.StringType,
 				Computed:    true,
 			},
 		},
-	}, nil
+	}
 }
 
-func (r resourceVPCPeeringType) NewResource(_ context.Context, p tfsdk.Provider) (tfsdk.Resource, diag.Diagnostics) {
-	return resourceVPCPeering{
-		p: *(p.(*provider)),
-	}, nil
+func newResourceVPCPeering() resource.Resource {
+	return &resourceVPCPeering{}
+}
+
+func (r *resourceVPCPeering) Metadata(_ context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
+	resp.TypeName = req.ProviderTypeName + "_vpc_peering"
+}
+
+func (r *resourceVPCPeering) Configure(_ context.Context, req resource.ConfigureRequest, _ *resource.ConfigureResponse) {
+	r.p = configuredProvider(req.ProviderData)
 }
 
 type resourceVPCPeering struct {
@@ -130,7 +126,7 @@ func getVPCPeeringPlan(ctx context.Context, plan tfsdk.Plan, vpcPeering *VPCPeer
 }
 
 // Create vpc peering
-func (r resourceVPCPeering) Create(ctx context.Context, req tfsdk.CreateResourceRequest, resp *tfsdk.CreateResourceResponse) {
+func (r resourceVPCPeering) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
 
 	if !r.p.configured {
 		resp.Diagnostics.AddError(
@@ -158,7 +154,7 @@ func (r resourceVPCPeering) Create(ctx context.Context, req tfsdk.CreateResource
 		return
 	}
 
-	if (!plan.VPCPeeringID.Unknown && !plan.VPCPeeringID.Null) || plan.VPCPeeringID.Value != "" {
+	if (!plan.VPCPeeringID.IsUnknown() && !plan.VPCPeeringID.IsNull()) || plan.VPCPeeringID.ValueString() != "" {
 		resp.Diagnostics.AddError(
 			"VPC Peering ID provided for new VPC peering",
 			"The vpc_peering_id was provided even though a new VPC peering is being created. Do not include this field in the provider when creating a new peering.",
@@ -171,10 +167,10 @@ func (r resourceVPCPeering) Create(ctx context.Context, req tfsdk.CreateResource
 		return
 	}
 
-	vpcPeeringName := plan.Name.Value
-	yugabyteDBVPCID := plan.YugabyteDBVPCID.Value
-	applicationCloud := plan.ApplicationVPCInfo.Cloud.Value
-	applicationVPCID := plan.ApplicationVPCInfo.VPCID.Value
+	vpcPeeringName := plan.Name.ValueString()
+	yugabyteDBVPCID := plan.YugabyteDBVPCID.ValueString()
+	applicationCloud := plan.ApplicationVPCInfo.Cloud.ValueString()
+	applicationVPCID := plan.ApplicationVPCInfo.VPCID.ValueString()
 
 	applicationVPCSpec := *openapiclient.NewCustomerVpcSpecWithDefaults()
 	applicationVPCSpec.SetExternalVpcId(applicationVPCID)
@@ -190,23 +186,23 @@ func (r resourceVPCPeering) Create(ctx context.Context, req tfsdk.CreateResource
 			resp.Diagnostics.AddError("No region specified", "You must specify the application VPC region for AWS.")
 			return
 		}
-		applicationRegion := plan.ApplicationVPCInfo.Region.Value
+		applicationRegion := plan.ApplicationVPCInfo.Region.ValueString()
 		applicationVPCSpec.CloudInfo.SetRegion(applicationRegion)
 		if plan.ApplicationVPCInfo.CIDR.IsNull() {
 			resp.Diagnostics.AddError("No CIDR specified", "You must specify the CIDR of the application VPC for AWS.")
 			return
 		}
-		if plan.ApplicationVPCInfo.CIDR.IsNull() || plan.ApplicationVPCInfo.CIDR.Value == "" {
+		if plan.ApplicationVPCInfo.CIDR.IsNull() || plan.ApplicationVPCInfo.CIDR.ValueString() == "" {
 			resp.Diagnostics.AddError("No Application VPC CIDR specified", "The application VPC CIDR must be provided for AWS cloud.")
 			return
 		}
-		applicationVPCCIDR := plan.ApplicationVPCInfo.CIDR.Value
+		applicationVPCCIDR := plan.ApplicationVPCInfo.CIDR.ValueString()
 		applicationVPCSpec.SetCidr(applicationVPCCIDR)
 		if plan.ApplicationVPCInfo.AccountID.IsNull() {
 			resp.Diagnostics.AddError("No Application VPC Account ID specified", "The application VPC Account ID must be provided for AWS cloud.")
 			return
 		}
-		applicationVPCAccountID := plan.ApplicationVPCInfo.AccountID.Value
+		applicationVPCAccountID := plan.ApplicationVPCInfo.AccountID.ValueString()
 		applicationVPCSpec.SetCloudProviderProject(applicationVPCAccountID)
 	} else if applicationCloud == "GCP" {
 		if !plan.ApplicationVPCInfo.AccountID.IsNull() {
@@ -221,10 +217,10 @@ func (r resourceVPCPeering) Create(ctx context.Context, req tfsdk.CreateResource
 			resp.Diagnostics.AddError("No Application VPC Project specified", "The application VPC Project must be provided for GCP cloud.")
 			return
 		}
-		applicationVPCProject := plan.ApplicationVPCInfo.Project.Value
+		applicationVPCProject := plan.ApplicationVPCInfo.Project.ValueString()
 		applicationVPCSpec.SetCloudProviderProject(applicationVPCProject)
-		if !plan.ApplicationVPCInfo.CIDR.IsNull() && plan.ApplicationVPCInfo.CIDR.Value != "" {
-			applicationVPCCIDR := plan.ApplicationVPCInfo.CIDR.Value
+		if !plan.ApplicationVPCInfo.CIDR.IsNull() && plan.ApplicationVPCInfo.CIDR.ValueString() != "" {
+			applicationVPCCIDR := plan.ApplicationVPCInfo.CIDR.ValueString()
 			applicationVPCSpec.SetCidr(applicationVPCCIDR)
 		}
 
@@ -287,37 +283,37 @@ func resourceVPCPeeringRead(accountId string, projectId string, vpcPeeringId str
 		return vpcPeering, false, errMsg
 	}
 
-	vpcPeering.AccountID.Value = accountId
-	vpcPeering.ProjectID.Value = projectId
-	vpcPeering.VPCPeeringID.Value = vpcPeeringId
+	vpcPeering.AccountID = types.StringValue(accountId)
+	vpcPeering.ProjectID = types.StringValue(projectId)
+	vpcPeering.VPCPeeringID = types.StringValue(vpcPeeringId)
 
-	vpcPeering.Name.Value = vpcPeeringResp.Data.Spec.GetName()
-	vpcPeering.YugabyteDBVPCID.Value = vpcPeeringResp.Data.Spec.GetInternalYugabyteVpcId()
-	vpcPeering.VPCPeeringState.Value = string(vpcPeeringResp.Data.Info.GetState())
+	vpcPeering.Name = types.StringValue(vpcPeeringResp.Data.Spec.GetName())
+	vpcPeering.YugabyteDBVPCID = types.StringValue(vpcPeeringResp.Data.Spec.GetInternalYugabyteVpcId())
+	vpcPeering.VPCPeeringState = types.StringValue(string(vpcPeeringResp.Data.Info.GetState()))
 	cloud := string(vpcPeeringResp.Data.Spec.CustomerVpc.CloudInfo.GetCode())
-	vpcPeering.ApplicationVPCInfo.Cloud.Value = cloud
+	vpcPeering.ApplicationVPCInfo.Cloud = types.StringValue(cloud)
 	if cloud == "AWS" {
-		vpcPeering.ApplicationVPCInfo.AccountID.Value = vpcPeeringResp.Data.Spec.CustomerVpc.GetCloudProviderProject()
-		vpcPeering.ApplicationVPCInfo.Project.Null = true
-		vpcPeering.ApplicationVPCInfo.Region.Value = vpcPeeringResp.Data.Spec.CustomerVpc.CloudInfo.GetRegion()
+		vpcPeering.ApplicationVPCInfo.AccountID = types.StringValue(vpcPeeringResp.Data.Spec.CustomerVpc.GetCloudProviderProject())
+		vpcPeering.ApplicationVPCInfo.Project = types.StringNull()
+		vpcPeering.ApplicationVPCInfo.Region = types.StringValue(vpcPeeringResp.Data.Spec.CustomerVpc.CloudInfo.GetRegion())
 	} else {
-		vpcPeering.ApplicationVPCInfo.Project.Value = vpcPeeringResp.Data.Spec.CustomerVpc.GetCloudProviderProject()
-		vpcPeering.ApplicationVPCInfo.AccountID.Null = true
-		vpcPeering.ApplicationVPCInfo.Region.Null = true
+		vpcPeering.ApplicationVPCInfo.Project = types.StringValue(vpcPeeringResp.Data.Spec.CustomerVpc.GetCloudProviderProject())
+		vpcPeering.ApplicationVPCInfo.AccountID = types.StringNull()
+		vpcPeering.ApplicationVPCInfo.Region = types.StringNull()
 	}
 
-	vpcPeering.ApplicationVPCInfo.VPCID.Value = vpcPeeringResp.Data.Spec.CustomerVpc.GetExternalVpcId()
-	vpcPeering.ApplicationVPCInfo.CIDR.Value = vpcPeeringResp.Data.Spec.CustomerVpc.GetCidr()
+	vpcPeering.ApplicationVPCInfo.VPCID = types.StringValue(vpcPeeringResp.Data.Spec.CustomerVpc.GetExternalVpcId())
+	vpcPeering.ApplicationVPCInfo.CIDR = types.StringValue(vpcPeeringResp.Data.Spec.CustomerVpc.GetCidr())
 
 	return vpcPeering, true, ""
 }
 
 // Read vpc peering
-func (r resourceVPCPeering) Read(ctx context.Context, req tfsdk.ReadResourceRequest, resp *tfsdk.ReadResourceResponse) {
+func (r resourceVPCPeering) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
 	var state VPCPeering
 	getIDsFromVPCPeeringState(ctx, req.State, &state)
 
-	vpc, readOK, message := resourceVPCPeeringRead(state.AccountID.Value, state.ProjectID.Value, state.VPCPeeringID.Value, r.p.client)
+	vpc, readOK, message := resourceVPCPeeringRead(state.AccountID.ValueString(), state.ProjectID.ValueString(), state.VPCPeeringID.ValueString(), r.p.client)
 	if !readOK {
 		resp.Diagnostics.AddError("Unable to read the state of the VPC peering", message)
 		return
@@ -331,7 +327,7 @@ func (r resourceVPCPeering) Read(ctx context.Context, req tfsdk.ReadResourceRequ
 }
 
 // Update vpc peering
-func (r resourceVPCPeering) Update(ctx context.Context, req tfsdk.UpdateResourceRequest, resp *tfsdk.UpdateResourceResponse) {
+func (r resourceVPCPeering) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
 
 	resp.Diagnostics.AddError("Unable to update VPC peering.", "Updating a VPC peering is not currently supported. Delete and recreate the provider.")
 	return
@@ -339,12 +335,12 @@ func (r resourceVPCPeering) Update(ctx context.Context, req tfsdk.UpdateResource
 }
 
 // Delete vpc peering
-func (r resourceVPCPeering) Delete(ctx context.Context, req tfsdk.DeleteResourceRequest, resp *tfsdk.DeleteResourceResponse) {
+func (r resourceVPCPeering) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
 	var state VPCPeering
 	getIDsFromVPCPeeringState(ctx, req.State, &state)
-	accountId := state.AccountID.Value
-	projectId := state.ProjectID.Value
-	vpcPeeringId := state.VPCPeeringID.Value
+	accountId := state.AccountID.ValueString()
+	projectId := state.ProjectID.ValueString()
+	vpcPeeringId := state.VPCPeeringID.ValueString()
 
 	apiClient := r.p.client
 
@@ -377,7 +373,7 @@ func (r resourceVPCPeering) Delete(ctx context.Context, req tfsdk.DeleteResource
 }
 
 // Import vpc peering
-func (r resourceVPCPeering) ImportState(ctx context.Context, req tfsdk.ImportResourceStateRequest, resp *tfsdk.ImportResourceStateResponse) {
+func (r resourceVPCPeering) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
 	// Save the import identifier in the id attribute
-	tfsdk.ResourceImportStatePassthroughID(ctx, path.Root("id"), req, resp)
+	resource.ImportStatePassthroughID(ctx, path.Root("id"), req, resp)
 }

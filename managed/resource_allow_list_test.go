@@ -12,8 +12,10 @@ import (
 
 	gomock "github.com/golang/mock/gomock"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
+	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
 	"github.com/hashicorp/terraform-plugin-framework/types"
+	"github.com/hashicorp/terraform-plugin-go/tftypes"
 	mocks "github.com/yugabyte/terraform-provider-ybm/mock_yugabytedb_managed_go_client_internal"
 	openapiclient "github.com/yugabyte/yugabytedb-managed-go-client-internal"
 )
@@ -94,7 +96,7 @@ func TestCreateAllowList(t *testing.T) {
 	accountID := "test-account-id"
 	projectID := "test-project-id"
 	cidrList := []string{"0.0.0.0/0"}
-	cidrListSchema := []types.String{{Value: "0.0.0.0/0"}}
+	cidrListSchema := []types.String{types.StringValue("0.0.0.0/0")}
 	allowListName := "allow-all"
 	allowListDescription := "Allow connections from any IP address"
 	allowListID := "test-allow-list-id"
@@ -111,30 +113,29 @@ func TestCreateAllowList(t *testing.T) {
 	listNetworkAllowListsResponse := getListAllowListResponse("non-exist", projectID, cidrList, allowListDescription, "non-exist")
 	listNetworkAllowListsResponseExist := getListAllowListResponse(allowListID, projectID, cidrList, allowListDescription, allowListName)
 
-	req := tfsdk.CreateResourceRequest{}
-	allowListType := resourceAllowListType{}
-	schema, _ := allowListType.GetSchema(ctx)
+	req := resource.CreateRequest{}
+	schema, _ := resourceSchema(ctx, &resourceAllowList{})
 	req.Plan.Schema = schema
-	resp := &tfsdk.CreateResourceResponse{}
+	resp := &resource.CreateResponse{}
 	resp.State.Schema = schema
 
 	plan := AllowList{
-		AllowListName:        types.String{Value: allowListName},
-		AllowListDescription: types.String{Value: allowListDescription},
+		AllowListName:        types.StringValue(allowListName),
+		AllowListDescription: types.StringValue(allowListDescription),
 		CIDRList:             cidrListSchema,
-		AllowListID:          types.String{Null: true},
+		AllowListID:          types.StringNull(),
 	}
 	req.Plan.Set(ctx, &plan)
 
 	desiredState := tfsdk.State{}
 	desiredState.Schema = schema
 	desiredState.Set(ctx, &AllowList{
-		AccountID:            types.String{Value: accountID},
-		AllowListName:        types.String{Value: allowListName},
-		AllowListDescription: types.String{Value: allowListDescription},
+		AccountID:            types.StringValue(accountID),
+		AllowListName:        types.StringValue(allowListName),
+		AllowListDescription: types.StringValue(allowListDescription),
 		CIDRList:             cidrListSchema,
-		AllowListID:          types.String{Value: allowListID},
-		ProjectID:            types.String{Value: projectID},
+		AllowListID:          types.StringValue(allowListID),
+		ProjectID:            types.StringValue(projectID),
 		ClusterIDs:           []types.String{},
 	})
 
@@ -189,7 +190,7 @@ func TestReadAllowList(t *testing.T) {
 	accountID := "test-account-id"
 	projectID := "test-project-id"
 	cidrList := []string{"0.0.0.0/0"}
-	cidrListSchema := []types.String{{Value: "0.0.0.0/0"}}
+	cidrListSchema := []types.String{types.StringValue("0.0.0.0/0")}
 	allowListName := "allow-all"
 	allowListDescription := "Allows all the IP addresses"
 	allowListID := "test-allow-list-id"
@@ -199,21 +200,20 @@ func TestReadAllowList(t *testing.T) {
 	listNetworkAllowListsRequest := getListAllowListRequest(ctx, cfg, accountID, projectID, mockNetworkApi)
 	listNetworkAllowListsResponseExist := getListAllowListResponse(allowListID, projectID, cidrList, allowListDescription, allowListName)
 
-	req := tfsdk.ReadResourceRequest{}
-	allowListType := resourceAllowListType{}
-	schema, _ := allowListType.GetSchema(ctx)
+	req := resource.ReadRequest{}
+	schema, _ := resourceSchema(ctx, &resourceAllowList{})
 	req.State.Schema = schema
 	inputState := &AllowList{
-		AccountID:            types.String{Value: accountID},
-		AllowListName:        types.String{Value: allowListName},
-		AllowListDescription: types.String{Value: allowListDescription},
+		AccountID:            types.StringValue(accountID),
+		AllowListName:        types.StringValue(allowListName),
+		AllowListDescription: types.StringValue(allowListDescription),
 		CIDRList:             cidrListSchema,
-		AllowListID:          types.String{Value: allowListID},
-		ProjectID:            types.String{Value: projectID},
+		AllowListID:          types.StringValue(allowListID),
+		ProjectID:            types.StringValue(projectID),
 		ClusterIDs:           []types.String{},
 	}
 	req.State.Set(ctx, inputState)
-	resp := &tfsdk.ReadResourceResponse{}
+	resp := &resource.ReadResponse{}
 	resp.State.Schema = schema
 
 	desiredState := tfsdk.State{}
@@ -266,8 +266,8 @@ func TestUpdateAllowList(t *testing.T) {
 	ctx := context.Background()
 	cfg := openapiclient.NewConfiguration()
 	allowList := getMockAllowList(cfg, mockNetworkApi, mockProjectApi, mockAccountApi)
-	req := tfsdk.UpdateResourceRequest{}
-	resp := &tfsdk.UpdateResourceResponse{}
+	req := resource.UpdateRequest{}
+	resp := &resource.UpdateResponse{}
 	diags := diag.Diagnostics{}
 	diags.AddError("Unable to update allow list", "Updating allow lists is not currently supported. Delete and recreate the provider.")
 
@@ -310,19 +310,18 @@ func TestDeleteAllowList(t *testing.T) {
 	allowList := getMockAllowList(cfg, mockNetworkApi, mockProjectApi, mockAccountApi)
 	deleteAllowListRequest := getDeleteAllowListRequest(ctx, cfg, accountID, projectID, allowListID, mockNetworkApi)
 
-	req := tfsdk.DeleteResourceRequest{}
-	allowListType := resourceAllowListType{}
-	schema, _ := allowListType.GetSchema(ctx)
+	req := resource.DeleteRequest{}
+	schema, _ := resourceSchema(ctx, &resourceAllowList{})
 	req.State.Schema = schema
 	inputState := &AllowList{
-		AccountID:   types.String{Value: accountID},
-		AllowListID: types.String{Value: allowListID},
-		ProjectID:   types.String{Value: projectID},
+		AccountID:   types.StringValue(accountID),
+		AllowListID: types.StringValue(allowListID),
+		ProjectID:   types.StringValue(projectID),
 		ClusterIDs:  []types.String{},
 	}
 	req.State.Set(ctx, inputState)
 
-	resp := &tfsdk.DeleteResourceResponse{}
+	resp := &resource.DeleteResponse{}
 	resp.State.Schema = schema
 
 	desiredState := tfsdk.State{}
@@ -365,8 +364,10 @@ func TestImportStateAllowList(t *testing.T) {
 	mockAccountApi := mocks.NewMockAccountApi(mockCtrl)
 	ctx := context.Background()
 	cfg := openapiclient.NewConfiguration()
-	req := tfsdk.ImportResourceStateRequest{}
-	resp := &tfsdk.ImportResourceStateResponse{}
+	req := resource.ImportStateRequest{}
+	// The protocol server hands ImportState a null state of the resource's schema.
+	schema, _ := resourceSchema(ctx, &resourceAllowList{})
+	resp := &resource.ImportStateResponse{State: tfsdk.State{Schema: schema, Raw: tftypes.NewValue(schema.Type().TerraformType(ctx), nil)}}
 	allowList := getMockAllowList(cfg, mockNetworkApi, mockProjectApi, mockAccountApi)
 	allowList.ImportState(ctx, req, resp)
 }

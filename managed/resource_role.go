@@ -9,99 +9,94 @@ import (
 
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/path"
+	"github.com/hashicorp/terraform-plugin-framework/resource"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
 	openapiclient "github.com/yugabyte/yugabytedb-managed-go-client-internal"
 )
 
-type resourceRoleType struct{}
-
-func (r resourceRoleType) GetSchema(_ context.Context) (tfsdk.Schema, diag.Diagnostics) {
-	return tfsdk.Schema{
+func (r *resourceRole) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
+	resp.Schema = schema.Schema{
 		Description: `The resource to create a custom role in YugabyteDB Aeon.`,
-		Attributes: map[string]tfsdk.Attribute{
-			"account_id": {
+		Attributes: map[string]schema.Attribute{
+			"account_id": schema.StringAttribute{
 				Description: "The ID of the account this role belongs to.",
-				Type:        types.StringType,
 				Computed:    true,
 			},
-			"project_id": {
+			"project_id": schema.StringAttribute{
 				Description: "The ID of the project this role belongs to.",
-				Type:        types.StringType,
 				Computed:    true,
 			},
-			"role_id": {
+			"role_id": schema.StringAttribute{
 				Description: "The ID of the role. Created automatically when a role is created. Use this ID to get a specific role.",
-				Type:        types.StringType,
 				Computed:    true,
 				Optional:    true,
 			},
-			"role_name": {
+			"role_name": schema.StringAttribute{
 				Description: "The name of the role.",
-				Type:        types.StringType,
 				Required:    true,
 			},
-			"role_description": {
+			"role_description": schema.StringAttribute{
 				Description: "The description of the role.",
-				Type:        types.StringType,
 				Computed:    true,
 				Optional:    true,
 			},
-			"permission_list": {
+			"permission_list": schema.SetNestedAttribute{
 				Description: "The permission list of the role.",
 				Required:    true,
-				Attributes: tfsdk.SetNestedAttributes(map[string]tfsdk.Attribute{
-					"resource_type": {
-						Type:     types.StringType,
-						Required: true,
-					},
-					"operation_groups": {
-						Type: types.SetType{
-							ElemType: types.StringType,
+				NestedObject: schema.NestedAttributeObject{
+					Attributes: map[string]schema.Attribute{
+						"resource_type": schema.StringAttribute{
+							Required: true,
 						},
-						Required: true,
+						"operation_groups": schema.SetAttribute{
+							ElementType: types.StringType,
+							Required:    true,
+						},
 					},
-				}),
+				},
 			},
-			"effective_permission_list": {
+			"effective_permission_list": schema.SetNestedAttribute{
 				Description: "The effective permission list of the role.",
 				Computed:    true,
-				Attributes: tfsdk.SetNestedAttributes(map[string]tfsdk.Attribute{
-					"resource_type": {
-						Type:     types.StringType,
-						Computed: true,
-					},
-					"operation_groups": {
-						Type: types.SetType{
-							ElemType: types.StringType,
+				NestedObject: schema.NestedAttributeObject{
+					Attributes: map[string]schema.Attribute{
+						"resource_type": schema.StringAttribute{
+							Computed: true,
 						},
-						Computed: true,
+						"operation_groups": schema.SetAttribute{
+							ElementType: types.StringType,
+							Computed:    true,
+						},
 					},
-				}),
+				},
 			},
-			"users": {
+			"users": schema.SetAttribute{
 				Description: "List of the emails of the users the role is assigned to.",
-				Type: types.SetType{
-					ElemType: types.StringType,
-				},
-				Computed: true,
+				ElementType: types.StringType,
+				Computed:    true,
 			},
-			"api_keys": {
+			"api_keys": schema.SetAttribute{
 				Description: "List of the API keys the role is assigned to.",
-				Type: types.SetType{
-					ElemType: types.StringType,
-				},
-				Computed: true,
+				ElementType: types.StringType,
+				Computed:    true,
 			},
 		},
-	}, nil
+	}
 }
 
-func (r resourceRoleType) NewResource(_ context.Context, p tfsdk.Provider) (tfsdk.Resource, diag.Diagnostics) {
-	return resourceRole{
-		p: *(p.(*provider)),
-	}, nil
+func newResourceRole() resource.Resource {
+	return &resourceRole{}
+}
+
+func (r *resourceRole) Metadata(_ context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
+	resp.TypeName = req.ProviderTypeName + "_role"
+}
+
+func (r *resourceRole) Configure(_ context.Context, req resource.ConfigureRequest, _ *resource.ConfigureResponse) {
+	r.p = configuredProvider(req.ProviderData)
 }
 
 type resourceRole struct {
@@ -114,16 +109,16 @@ func createRoleSpec(apiClient *openapiclient.APIClient, plan Role) (roleSpec *op
 	for _, permission := range plan.PermissionList {
 		operationGroups := []openapiclient.ResourceOperationGroup{}
 		for i := range permission.OperationGroups {
-			operationGroups = append(operationGroups, *openapiclient.NewResourceOperationGroup(openapiclient.ResourceOperationGroupEnum(permission.OperationGroups[i].Value)))
+			operationGroups = append(operationGroups, *openapiclient.NewResourceOperationGroup(openapiclient.ResourceOperationGroupEnum(permission.OperationGroups[i].ValueString())))
 		}
-		rolePermissions = append(rolePermissions, *openapiclient.NewResourcePermissionInfo(openapiclient.ResourceTypeEnum(permission.ResourceType.Value), operationGroups))
+		rolePermissions = append(rolePermissions, *openapiclient.NewResourcePermissionInfo(openapiclient.ResourceTypeEnum(permission.ResourceType.ValueString()), operationGroups))
 	}
 
 	roleSpec = openapiclient.NewRoleSpec(
-		plan.RoleName.Value,
+		plan.RoleName.ValueString(),
 		rolePermissions)
-	if plan.RoleDescription.Value != "" {
-		roleSpec.SetDescription(plan.RoleDescription.Value)
+	if plan.RoleDescription.ValueString() != "" {
+		roleSpec.SetDescription(plan.RoleDescription.ValueString())
 	}
 
 	return roleSpec
@@ -141,7 +136,7 @@ func getRolePlan(ctx context.Context, plan tfsdk.Plan, role *Role) diag.Diagnost
 }
 
 // Create role
-func (r resourceRole) Create(ctx context.Context, req tfsdk.CreateResourceRequest, resp *tfsdk.CreateResourceResponse) {
+func (r resourceRole) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
 
 	if !r.p.configured {
 		resp.Diagnostics.AddError(
@@ -161,7 +156,7 @@ func (r resourceRole) Create(ctx context.Context, req tfsdk.CreateResourceReques
 		return
 	}
 
-	if (!plan.RoleID.Unknown && !plan.RoleID.Null) || plan.RoleID.Value != "" {
+	if (!plan.RoleID.IsUnknown() && !plan.RoleID.IsNull()) || plan.RoleID.ValueString() != "" {
 		resp.Diagnostics.AddError(
 			"Role ID provided for new role",
 			"The role_id was provided even though a new role is being created. Do not include this field in the provider when creating a role.",
@@ -223,15 +218,12 @@ func resourceRoleRead(accountId string, projectId string, roleId string, apiClie
 		return role, false, errMsg
 	}
 
-	role.AccountID.Value = accountId
-	role.ProjectID.Value = projectId
-	role.RoleID.Value = roleId
+	role.AccountID = types.StringValue(accountId)
+	role.ProjectID = types.StringValue(projectId)
+	role.RoleID = types.StringValue(roleId)
 
-	role.RoleName.Value = roleResp.Data.Info.GetDisplayName()
-	description := roleResp.Data.Spec.GetDescription()
-	if description != "" {
-		role.RoleDescription.Value = description
-	}
+	role.RoleName = types.StringValue(roleResp.Data.Info.GetDisplayName())
+	role.RoleDescription = types.StringValue(roleResp.Data.Spec.GetDescription())
 
 	respPermissions := roleResp.Data.Spec.Permissions
 	permissionInfo := make([]PermissionInfo, len(respPermissions))
@@ -239,10 +231,10 @@ func resourceRoleRead(accountId string, projectId string, roleId string, apiClie
 		resourceType := permission.ResourceType
 		operationGroups := []types.String{}
 		for _, op := range permission.OperationGroups {
-			operationGroups = append(operationGroups, types.String{Value: string(op.OperationGroup)})
+			operationGroups = append(operationGroups, types.StringValue(string(op.OperationGroup)))
 		}
 		permissionInfo[index] = PermissionInfo{
-			ResourceType:    types.String{Value: string(resourceType)},
+			ResourceType:    types.StringValue(string(resourceType)),
 			OperationGroups: operationGroups,
 		}
 	}
@@ -254,10 +246,10 @@ func resourceRoleRead(accountId string, projectId string, roleId string, apiClie
 		resourceType := permission.ResourceType
 		operationGroups := []types.String{}
 		for _, op := range permission.OperationGroups {
-			operationGroups = append(operationGroups, types.String{Value: string(op.OperationGroup)})
+			operationGroups = append(operationGroups, types.StringValue(string(op.OperationGroup)))
 		}
 		effectivePermissionInfo[index] = PermissionInfo{
-			ResourceType:    types.String{Value: string(resourceType)},
+			ResourceType:    types.StringValue(string(resourceType)),
 			OperationGroups: operationGroups,
 		}
 	}
@@ -265,13 +257,13 @@ func resourceRoleRead(accountId string, projectId string, roleId string, apiClie
 
 	users := []types.String{}
 	for _, elem := range roleResp.Data.Info.Users {
-		users = append(users, types.String{Value: elem.GetEmail()})
+		users = append(users, types.StringValue(elem.GetEmail()))
 	}
 	role.Users = users
 
 	apiKeys := []types.String{}
 	for _, elem := range roleResp.Data.Info.ApiKeys {
-		apiKeys = append(apiKeys, types.String{Value: elem.GetName()})
+		apiKeys = append(apiKeys, types.StringValue(elem.GetName()))
 	}
 	role.ApiKeys = apiKeys
 
@@ -279,7 +271,7 @@ func resourceRoleRead(accountId string, projectId string, roleId string, apiClie
 }
 
 // Read role
-func (r resourceRole) Read(ctx context.Context, req tfsdk.ReadResourceRequest, resp *tfsdk.ReadResourceResponse) {
+func (r resourceRole) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
 	var state Role
 	getIDsFromRoleState(ctx, req.State, &state)
 
@@ -287,15 +279,15 @@ func (r resourceRole) Read(ctx context.Context, req tfsdk.ReadResourceRequest, r
 	for _, permission := range state.PermissionList {
 		operationGroups := []openapiclient.ResourceOperationGroup{}
 		for i := range permission.OperationGroups {
-			operationGroups = append(operationGroups, *openapiclient.NewResourceOperationGroup(openapiclient.ResourceOperationGroupEnum(permission.OperationGroups[i].Value)))
+			operationGroups = append(operationGroups, *openapiclient.NewResourceOperationGroup(openapiclient.ResourceOperationGroupEnum(permission.OperationGroups[i].ValueString())))
 		}
-		rolePermissions = append(rolePermissions, *openapiclient.NewResourcePermissionInfo(openapiclient.ResourceTypeEnum(permission.ResourceType.Value), operationGroups))
+		rolePermissions = append(rolePermissions, *openapiclient.NewResourcePermissionInfo(openapiclient.ResourceTypeEnum(permission.ResourceType.ValueString()), operationGroups))
 	}
 
 	tflog.Debug(ctx, "Role Read: Permission List from state", map[string]interface{}{
 		"Permission List": state.PermissionList})
 
-	role, readOK, message := resourceRoleRead(state.AccountID.Value, state.ProjectID.Value, state.RoleID.Value, r.p.client)
+	role, readOK, message := resourceRoleRead(state.AccountID.ValueString(), state.ProjectID.ValueString(), state.RoleID.ValueString(), r.p.client)
 	if !readOK {
 		resp.Diagnostics.AddError("Unable to read the state of the role ", message)
 		return
@@ -311,7 +303,7 @@ func (r resourceRole) Read(ctx context.Context, req tfsdk.ReadResourceRequest, r
 }
 
 // Update role
-func (r resourceRole) Update(ctx context.Context, req tfsdk.UpdateResourceRequest, resp *tfsdk.UpdateResourceResponse) {
+func (r resourceRole) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
 
 	var plan Role
 	resp.Diagnostics.Append(getRolePlan(ctx, req.Plan, &plan)...)
@@ -323,9 +315,9 @@ func (r resourceRole) Update(ctx context.Context, req tfsdk.UpdateResourceReques
 	apiClient := r.p.client
 	var state Role
 	getIDsFromRoleState(ctx, req.State, &state)
-	accountId := state.AccountID.Value
-	projectId := state.ProjectID.Value
-	roleId := state.RoleID.Value
+	accountId := state.AccountID.ValueString()
+	projectId := state.ProjectID.ValueString()
+	roleId := state.RoleID.ValueString()
 
 	roleSpec := createRoleSpec(apiClient, plan)
 
@@ -354,11 +346,11 @@ func (r resourceRole) Update(ctx context.Context, req tfsdk.UpdateResourceReques
 }
 
 // Delete role
-func (r resourceRole) Delete(ctx context.Context, req tfsdk.DeleteResourceRequest, resp *tfsdk.DeleteResourceResponse) {
+func (r resourceRole) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
 	var state Role
 	getIDsFromRoleState(ctx, req.State, &state)
-	accountId := state.AccountID.Value
-	roleId := state.RoleID.Value
+	accountId := state.AccountID.ValueString()
+	roleId := state.RoleID.ValueString()
 
 	apiClient := r.p.client
 
@@ -373,7 +365,7 @@ func (r resourceRole) Delete(ctx context.Context, req tfsdk.DeleteResourceReques
 }
 
 // Import role
-func (r resourceRole) ImportState(ctx context.Context, req tfsdk.ImportResourceStateRequest, resp *tfsdk.ImportResourceStateResponse) {
+func (r resourceRole) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
 	// Save the import identifier in the id attribute
-	tfsdk.ResourceImportStatePassthroughID(ctx, path.Root("id"), req, resp)
+	resource.ImportStatePassthroughID(ctx, path.Root("id"), req, resp)
 }

@@ -11,42 +11,46 @@ import (
 	"net/http"
 	"net/url"
 
-	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/path"
-	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
+	"github.com/hashicorp/terraform-plugin-framework/resource"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
 	openapiclient "github.com/yugabyte/yugabytedb-managed-go-client-internal"
 )
 
-type resourceAmpClusterType struct{}
-
-func (r resourceAmpClusterType) GetSchema(_ context.Context) (tfsdk.Schema, diag.Diagnostics) {
+func (r *resourceAmpCluster) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
 	attributes := ampClusterAttributes()
-	attributes["region"] = tfsdk.Attribute{
+	attributes["region"] = schema.StringAttribute{
 		Description:   "The region to create the cluster in, for example us-east-1. Changing it forces a new cluster.",
-		Type:          types.StringType,
 		Required:      true,
-		PlanModifiers: []tfsdk.AttributePlanModifier{tfsdk.RequiresReplace()},
+		PlanModifiers: []planmodifier.String{stringplanmodifier.RequiresReplace()},
 	}
-	attributes["environment_id"] = tfsdk.Attribute{
+	attributes["environment_id"] = schema.StringAttribute{
 		Description:   "The ID of the environment hosting the cluster.",
-		Type:          types.StringType,
 		Computed:      true,
-		PlanModifiers: []tfsdk.AttributePlanModifier{tfsdk.UseStateForUnknown()},
+		PlanModifiers: []planmodifier.String{stringplanmodifier.UseNonNullStateForUnknown()},
 	}
-	return tfsdk.Schema{
+	resp.Schema = schema.Schema{
 		Description: `The resource to create a shared PostgreSQL cluster in YugabyteDB Aeon. ` +
 			`The cluster is created in the account's storage pool with its main branch. ` +
 			`Connect to it through a ybm_amp_endpoint on main with role read_write, and add branches with ybm_amp_branch.`,
 		Attributes: attributes,
-	}, nil
+	}
 }
 
-func (r resourceAmpClusterType) NewResource(_ context.Context, p tfsdk.Provider) (tfsdk.Resource, diag.Diagnostics) {
-	return resourceAmpCluster{
-		p: *(p.(*provider)),
-	}, nil
+func newResourceAmpCluster() resource.Resource {
+	return &resourceAmpCluster{}
+}
+
+func (r *resourceAmpCluster) Metadata(_ context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
+	resp.TypeName = req.ProviderTypeName + "_amp_cluster"
+}
+
+func (r *resourceAmpCluster) Configure(_ context.Context, req resource.ConfigureRequest, _ *resource.ConfigureResponse) {
+	r.p = configuredProvider(req.ProviderData)
 }
 
 type resourceAmpCluster struct {
@@ -54,18 +58,18 @@ type resourceAmpCluster struct {
 }
 
 func ampClusterConfigFromPlan(plan AmpCluster, prior *AmpCluster) ampClusterConfig {
-	priorPg := types.Map{Null: true}
+	priorPg := types.MapNull(types.StringType)
 	if prior != nil {
 		priorPg = prior.BranchPgSettings
 	}
 	return newAmpClusterConfig(plan.PgVersion, plan.Engine, plan.Extensions, plan.BranchPgSettings, plan.BranchExtensions, priorPg)
 }
 
-func (r resourceAmpCluster) ModifyPlan(ctx context.Context, req tfsdk.ModifyResourcePlanRequest, resp *tfsdk.ModifyResourcePlanResponse) {
+func (r resourceAmpCluster) ModifyPlan(ctx context.Context, req resource.ModifyPlanRequest, resp *resource.ModifyPlanResponse) {
 	modifyAmpClusterPlan(ctx, req, resp)
 }
 
-func (r resourceAmpCluster) Create(ctx context.Context, req tfsdk.CreateResourceRequest, resp *tfsdk.CreateResourceResponse) {
+func (r resourceAmpCluster) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
 	if !r.p.configured {
 		resp.Diagnostics.AddError(
 			"Provider not configured",
@@ -85,8 +89,8 @@ func (r resourceAmpCluster) Create(ctx context.Context, req tfsdk.CreateResource
 		return
 	}
 	scope := newAmpScope(r.p.client, accountId, "", "")
-	clusterName := plan.ClusterName.Value
-	created, createErr := createAmpCluster(ctx, scope, plan.Region.Value, clusterName, ampClusterConfigFromPlan(plan, nil))
+	clusterName := plan.ClusterName.ValueString()
+	created, createErr := createAmpCluster(ctx, scope, plan.Region.ValueString(), clusterName, ampClusterConfigFromPlan(plan, nil))
 	if !created {
 		resp.Diagnostics.AddError("Unable to create cluster "+clusterName, createErr.Error())
 		return
@@ -138,9 +142,9 @@ func resourceAmpClusterRead(ctx context.Context, scope ampScope, clusterName str
 		return cluster, true, err
 	}
 	cluster = AmpCluster{
-		AccountID:        types.String{Value: scope.accountId},
-		ClusterName:      types.String{Value: clusterName},
-		Region:           types.String{Value: env.Region},
+		AccountID:        types.StringValue(scope.accountId),
+		ClusterName:      types.StringValue(clusterName),
+		Region:           types.StringValue(env.Region),
 		PgVersion:        tfInt64(status.Config.PgVersion),
 		Engine:           tfString(status.Config.Engine),
 		Extensions:       stringsToTf(status.Config.Extensions, prior.Extensions),
@@ -154,13 +158,13 @@ func resourceAmpClusterRead(ctx context.Context, scope ampScope, clusterName str
 	return cluster, true, nil
 }
 
-func (r resourceAmpCluster) Read(ctx context.Context, req tfsdk.ReadResourceRequest, resp *tfsdk.ReadResourceResponse) {
+func (r resourceAmpCluster) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
 	var state AmpCluster
 	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
-	accountId := state.AccountID.Value
+	accountId := state.AccountID.ValueString()
 	if accountId == "" {
 		var ok bool
 		var message string
@@ -171,30 +175,30 @@ func (r resourceAmpCluster) Read(ctx context.Context, req tfsdk.ReadResourceRequ
 		}
 	}
 
-	cluster, found, err := resourceAmpClusterRead(ctx, newAmpScope(r.p.client, accountId, "", ""), state.ClusterName.Value, state)
+	cluster, found, err := resourceAmpClusterRead(ctx, newAmpScope(r.p.client, accountId, "", ""), state.ClusterName.ValueString(), state)
 	if err != nil {
-		resp.Diagnostics.AddError("Unable to read the state of cluster "+state.ClusterName.Value, err.Error())
+		resp.Diagnostics.AddError("Unable to read the state of cluster "+state.ClusterName.ValueString(), err.Error())
 		return
 	}
 	if !found {
-		tflog.Warn(ctx, "Cluster "+state.ClusterName.Value+" no longer exists; removing it from state")
+		tflog.Warn(ctx, "Cluster "+state.ClusterName.ValueString()+" no longer exists; removing it from state")
 		resp.State.RemoveResource(ctx)
 		return
 	}
 	resp.Diagnostics.Append(resp.State.Set(ctx, &cluster)...)
 }
 
-func (r resourceAmpCluster) Update(ctx context.Context, req tfsdk.UpdateResourceRequest, resp *tfsdk.UpdateResourceResponse) {
+func (r resourceAmpCluster) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
 	var plan, state AmpCluster
 	resp.Diagnostics.Append(req.Plan.Get(ctx, &plan)...)
 	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
-	scope := newAmpScope(r.p.client, state.AccountID.Value, "", "")
-	clusterName := state.ClusterName.Value
+	scope := newAmpScope(r.p.client, state.AccountID.ValueString(), "", "")
+	clusterName := state.ClusterName.ValueString()
 
-	if err := updateAmpCluster(ctx, scope, state.Region.Value, clusterName, ampClusterConfigFromPlan(plan, &state)); err != nil {
+	if err := updateAmpCluster(ctx, scope, state.Region.ValueString(), clusterName, ampClusterConfigFromPlan(plan, &state)); err != nil {
 		resp.Diagnostics.AddError("Unable to update cluster "+clusterName, err.Error())
 		return
 	}
@@ -211,15 +215,15 @@ func (r resourceAmpCluster) Update(ctx context.Context, req tfsdk.UpdateResource
 	resp.Diagnostics.Append(resp.State.Set(ctx, &cluster)...)
 }
 
-func (r resourceAmpCluster) Delete(ctx context.Context, req tfsdk.DeleteResourceRequest, resp *tfsdk.DeleteResourceResponse) {
+func (r resourceAmpCluster) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
 	var state AmpCluster
 	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
-	scope := newAmpScope(r.p.client, state.AccountID.Value, "", "")
-	clusterName := state.ClusterName.Value
-	if err := deleteAmpCluster(ctx, scope, state.Region.Value, clusterName, boolValue(state.ForceDestroy)); err != nil {
+	scope := newAmpScope(r.p.client, state.AccountID.ValueString(), "", "")
+	clusterName := state.ClusterName.ValueString()
+	if err := deleteAmpCluster(ctx, scope, state.Region.ValueString(), clusterName, boolValue(state.ForceDestroy)); err != nil {
 		resp.Diagnostics.AddError("Unable to delete cluster "+clusterName, err.Error())
 		return
 	}
@@ -227,6 +231,6 @@ func (r resourceAmpCluster) Delete(ctx context.Context, req tfsdk.DeleteResource
 }
 
 // ImportState imports a cluster by its name.
-func (r resourceAmpCluster) ImportState(ctx context.Context, req tfsdk.ImportResourceStateRequest, resp *tfsdk.ImportResourceStateResponse) {
-	tfsdk.ResourceImportStatePassthroughID(ctx, path.Root("cluster_name"), req, resp)
+func (r resourceAmpCluster) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
+	resource.ImportStatePassthroughID(ctx, path.Root("cluster_name"), req, resp)
 }

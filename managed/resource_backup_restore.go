@@ -13,6 +13,13 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/path"
+	"github.com/hashicorp/terraform-plugin-framework/resource"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/boolplanmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/listplanmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
@@ -20,124 +27,118 @@ import (
 	openapiclient "github.com/yugabyte/yugabytedb-managed-go-client-internal"
 )
 
-type resourceBackupRestoreType struct{}
-
-func (r resourceBackupRestoreType) GetSchema(_ context.Context) (tfsdk.Schema, diag.Diagnostics) {
-	return tfsdk.Schema{
+func (r *resourceBackupRestore) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
+	resp.Schema = schema.Schema{
 		Description: `Restore a backup to a cluster. All attributes are immutable; changing any attribute triggers destroy and create (a new restore). Use ysql_databases and ycql_keyspaces for selective restore; omit to restore all databases/keyspaces.`,
-		Attributes: map[string]tfsdk.Attribute{
-			"account_id": {
+		Attributes: map[string]schema.Attribute{
+			"account_id": schema.StringAttribute{
 				Description: "The ID of the account.",
-				Type:        types.StringType,
 				Computed:    true,
 			},
-			"project_id": {
+			"project_id": schema.StringAttribute{
 				Description: "The ID of the project.",
-				Type:        types.StringType,
 				Computed:    true,
 			},
-			"restore_id": {
+			"restore_id": schema.StringAttribute{
 				Description: "The restore operation ID.",
-				Type:        types.StringType,
 				Computed:    true,
 			},
-			"backup_id": {
+			"backup_id": schema.StringAttribute{
 				Description: "The ID of the backup to restore.",
-				Type:        types.StringType,
 				Required:    true,
-				PlanModifiers: []tfsdk.AttributePlanModifier{
-					tfsdk.RequiresReplace(),
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.RequiresReplace(),
 				},
 			},
-			"target_cluster_id": {
+			"target_cluster_id": schema.StringAttribute{
 				Description: "The ID of the cluster to restore the backup onto.",
-				Type:        types.StringType,
 				Required:    true,
-				PlanModifiers: []tfsdk.AttributePlanModifier{
-					tfsdk.RequiresReplace(),
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.RequiresReplace(),
 				},
 			},
-			"use_roles": {
+			"use_roles": schema.BoolAttribute{
 				Description: "Restore global YSQL roles. Defaults to false.",
-				Type:        types.BoolType,
 				Optional:    true,
 				Computed:    true,
-				PlanModifiers: []tfsdk.AttributePlanModifier{
-					tfsdk.RequiresReplace(),
+				PlanModifiers: []planmodifier.Bool{
+					boolplanmodifier.RequiresReplaceIfConfigured(),
 				},
 			},
-			"ysql_databases": {
+			"ysql_databases": schema.ListAttribute{
 				Description: "List of YSQL databases to restore. If empty or omitted, all YSQL databases are restored.",
-				Type: types.ListType{
-					ElemType: types.StringType,
-				},
-				Optional:   true,
-				Validators: listOfNonEmptyStringValidators(),
-				PlanModifiers: []tfsdk.AttributePlanModifier{
-					tfsdk.RequiresReplace(),
+				ElementType: types.StringType,
+				Optional:    true,
+				Validators:  listOfNonEmptyStringValidators(),
+				PlanModifiers: []planmodifier.List{
+					listplanmodifier.RequiresReplace(),
 				},
 			},
-			"ycql_keyspaces": {
+			"ycql_keyspaces": schema.ListAttribute{
 				Description: "List of YCQL keyspaces to restore. If empty or omitted, all YCQL keyspaces are restored.",
-				Type: types.ListType{
-					ElemType: types.StringType,
-				},
-				Optional:   true,
-				Validators: listOfNonEmptyStringValidators(),
-				PlanModifiers: []tfsdk.AttributePlanModifier{
-					tfsdk.RequiresReplace(),
+				ElementType: types.StringType,
+				Optional:    true,
+				Validators:  listOfNonEmptyStringValidators(),
+				PlanModifiers: []planmodifier.List{
+					listplanmodifier.RequiresReplace(),
 				},
 			},
-			"ysql_databases_rename": {
+			"ysql_databases_rename": schema.ListNestedAttribute{
 				Description: "List of YSQL database renames (backup_database -> restore_database).",
 				Optional:    true,
-				Attributes: tfsdk.ListNestedAttributes(map[string]tfsdk.Attribute{
-					"backup_database": {
-						Description: "YSQL database name in the backup.",
-						Type:        types.StringType,
-						Required:    true,
-						Validators:  nonEmptyStringValidators(),
+				NestedObject: schema.NestedAttributeObject{
+					Attributes: map[string]schema.Attribute{
+						"backup_database": schema.StringAttribute{
+							Description: "YSQL database name in the backup.",
+							Required:    true,
+							Validators:  nonEmptyStringValidators(),
+						},
+						"restore_database": schema.StringAttribute{
+							Description: "YSQL database name to use on the restored cluster.",
+							Required:    true,
+							Validators:  nonEmptyStringValidators(),
+						},
 					},
-					"restore_database": {
-						Description: "YSQL database name to use on the restored cluster.",
-						Type:        types.StringType,
-						Required:    true,
-						Validators:  nonEmptyStringValidators(),
-					},
-				}),
-				PlanModifiers: []tfsdk.AttributePlanModifier{
-					tfsdk.RequiresReplace(),
+				},
+				PlanModifiers: []planmodifier.List{
+					listplanmodifier.RequiresReplace(),
 				},
 			},
-			"ycql_keyspaces_rename": {
+			"ycql_keyspaces_rename": schema.ListNestedAttribute{
 				Description: "List of YCQL keyspace renames (backup_database -> restore_database).",
 				Optional:    true,
-				Attributes: tfsdk.ListNestedAttributes(map[string]tfsdk.Attribute{
-					"backup_database": {
-						Description: "YCQL keyspace name in the backup.",
-						Type:        types.StringType,
-						Required:    true,
-						Validators:  nonEmptyStringValidators(),
+				NestedObject: schema.NestedAttributeObject{
+					Attributes: map[string]schema.Attribute{
+						"backup_database": schema.StringAttribute{
+							Description: "YCQL keyspace name in the backup.",
+							Required:    true,
+							Validators:  nonEmptyStringValidators(),
+						},
+						"restore_database": schema.StringAttribute{
+							Description: "YCQL keyspace name to use on the restored cluster.",
+							Required:    true,
+							Validators:  nonEmptyStringValidators(),
+						},
 					},
-					"restore_database": {
-						Description: "YCQL keyspace name to use on the restored cluster.",
-						Type:        types.StringType,
-						Required:    true,
-						Validators:  nonEmptyStringValidators(),
-					},
-				}),
-				PlanModifiers: []tfsdk.AttributePlanModifier{
-					tfsdk.RequiresReplace(),
+				},
+				PlanModifiers: []planmodifier.List{
+					listplanmodifier.RequiresReplace(),
 				},
 			},
 		},
-	}, nil
+	}
 }
 
-func (r resourceBackupRestoreType) NewResource(_ context.Context, p tfsdk.Provider) (tfsdk.Resource, diag.Diagnostics) {
-	return resourceBackupRestore{
-		p: *(p.(*provider)),
-	}, nil
+func newResourceBackupRestore() resource.Resource {
+	return &resourceBackupRestore{}
+}
+
+func (r *resourceBackupRestore) Metadata(_ context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
+	resp.TypeName = req.ProviderTypeName + "_backup_restore"
+}
+
+func (r *resourceBackupRestore) Configure(_ context.Context, req resource.ConfigureRequest, _ *resource.ConfigureResponse) {
+	r.p = configuredProvider(req.ProviderData)
 }
 
 type resourceBackupRestore struct {
@@ -158,9 +159,9 @@ func getBackupRestorePlan(ctx context.Context, plan tfsdk.Plan, br *BackupRestor
 
 func buildRestoreSpec(plan *BackupRestore) *openapiclient.RestoreSpec {
 	restoreSpec := openapiclient.NewRestoreSpec()
-	restoreSpec.SetBackupId(plan.BackupID.Value)
-	restoreSpec.SetClusterId(plan.TargetClusterID.Value)
-	restoreSpec.SetUseRoles(plan.UseRoles.Value)
+	restoreSpec.SetBackupId(plan.BackupID.ValueString())
+	restoreSpec.SetClusterId(plan.TargetClusterID.ValueString())
+	restoreSpec.SetUseRoles(plan.UseRoles.ValueBool())
 
 	hasYSQL := len(plan.YSQLDatabases) > 0
 	hasYCQL := len(plan.YCQLKeyspaces) > 0
@@ -169,8 +170,8 @@ func buildRestoreSpec(plan *BackupRestore) *openapiclient.RestoreSpec {
 		if hasYSQL {
 			ysql := make([]string, 0, len(plan.YSQLDatabases))
 			for _, s := range plan.YSQLDatabases {
-				if !s.Null && !s.Unknown {
-					ysql = append(ysql, s.Value)
+				if !s.IsNull() && !s.IsUnknown() {
+					ysql = append(ysql, s.ValueString())
 				}
 			}
 			sel.SetYsqlKeyspaces(ysql)
@@ -178,8 +179,8 @@ func buildRestoreSpec(plan *BackupRestore) *openapiclient.RestoreSpec {
 		if hasYCQL {
 			ycql := make([]string, 0, len(plan.YCQLKeyspaces))
 			for _, s := range plan.YCQLKeyspaces {
-				if !s.Null && !s.Unknown {
-					ycql = append(ycql, s.Value)
+				if !s.IsNull() && !s.IsUnknown() {
+					ycql = append(ycql, s.ValueString())
 				}
 			}
 			sel.SetYcqlKeyspaces(ycql)
@@ -194,14 +195,14 @@ func buildRestoreSpec(plan *BackupRestore) *openapiclient.RestoreSpec {
 		if hasYSQLRename {
 			ysqlList := make([]openapiclient.KeyspaceRenameSpec, 0, len(plan.YSQLDatabasesRename))
 			for _, b := range plan.YSQLDatabasesRename {
-				ysqlList = append(ysqlList, *openapiclient.NewKeyspaceRenameSpec(b.BackupDatabase.Value, b.RestoreDatabase.Value))
+				ysqlList = append(ysqlList, *openapiclient.NewKeyspaceRenameSpec(b.BackupDatabase.ValueString(), b.RestoreDatabase.ValueString()))
 			}
 			ksUpdate.SetYsql(ysqlList)
 		}
 		if hasYCQLRename {
 			ycqlList := make([]openapiclient.KeyspaceRenameSpec, 0, len(plan.YCQLKeyspacesRename))
 			for _, b := range plan.YCQLKeyspacesRename {
-				ycqlList = append(ycqlList, *openapiclient.NewKeyspaceRenameSpec(b.BackupDatabase.Value, b.RestoreDatabase.Value))
+				ycqlList = append(ycqlList, *openapiclient.NewKeyspaceRenameSpec(b.BackupDatabase.ValueString(), b.RestoreDatabase.ValueString()))
 			}
 			ksUpdate.SetYcql(ycqlList)
 		}
@@ -211,7 +212,7 @@ func buildRestoreSpec(plan *BackupRestore) *openapiclient.RestoreSpec {
 	return restoreSpec
 }
 
-func (r resourceBackupRestore) Create(ctx context.Context, req tfsdk.CreateResourceRequest, resp *tfsdk.CreateResourceResponse) {
+func (r resourceBackupRestore) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
 	if !r.p.configured {
 		resp.Diagnostics.AddError(
 			"Provider not configured",
@@ -240,14 +241,14 @@ func (r resourceBackupRestore) Create(ctx context.Context, req tfsdk.CreateResou
 	}
 
 	// Default use_roles to false if not set
-	if plan.UseRoles.Null || plan.UseRoles.Unknown {
-		plan.UseRoles = types.Bool{Value: false}
+	if plan.UseRoles.IsNull() || plan.UseRoles.IsUnknown() {
+		plan.UseRoles = types.BoolValue(false)
 	}
 
 	restoreSpec := buildRestoreSpec(&plan)
 	tflog.Debug(ctx, "Restoring backup to cluster", map[string]interface{}{
-		"backup_id":         plan.BackupID.Value,
-		"target_cluster_id": plan.TargetClusterID.Value,
+		"backup_id":         plan.BackupID.ValueString(),
+		"target_cluster_id": plan.TargetClusterID.ValueString(),
 	})
 
 	restoreResp, response, err := apiClient.BackupApi.RestoreBackup(ctx, accountId, projectId).RestoreSpec(*restoreSpec).Execute()
@@ -278,9 +279,9 @@ func (r resourceBackupRestore) Create(ctx context.Context, req tfsdk.CreateResou
 		return
 	}
 
-	plan.AccountID = types.String{Value: accountId}
-	plan.ProjectID = types.String{Value: projectId}
-	plan.RestoreID = types.String{Value: restoreId}
+	plan.AccountID = types.StringValue(accountId)
+	plan.ProjectID = types.StringValue(projectId)
+	plan.RestoreID = types.StringValue(restoreId)
 
 	diags := resp.State.Set(ctx, &plan)
 	resp.Diagnostics.Append(diags...)
@@ -300,7 +301,7 @@ func getIDsFromBackupRestoreState(ctx context.Context, state tfsdk.State, br *Ba
 	state.GetAttribute(ctx, path.Root("restore_id"), &br.RestoreID)
 }
 
-func (r resourceBackupRestore) Read(ctx context.Context, req tfsdk.ReadResourceRequest, resp *tfsdk.ReadResourceResponse) {
+func (r resourceBackupRestore) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
 	var state BackupRestore
 	getIDsFromBackupRestoreState(ctx, req.State, &state)
 	req.State.GetAttribute(ctx, path.Root("backup_id"), &state.BackupID)
@@ -311,7 +312,7 @@ func (r resourceBackupRestore) Read(ctx context.Context, req tfsdk.ReadResourceR
 	req.State.GetAttribute(ctx, path.Root("ysql_databases_rename"), &state.YSQLDatabasesRename)
 	req.State.GetAttribute(ctx, path.Root("ycql_keyspaces_rename"), &state.YCQLKeyspacesRename)
 
-	restoreState, readOK, _ := getRestoreStateByID(ctx, state.AccountID.Value, state.ProjectID.Value, state.RestoreID.Value, r.p.client)
+	restoreState, readOK, _ := getRestoreStateByID(ctx, state.AccountID.ValueString(), state.ProjectID.ValueString(), state.RestoreID.ValueString(), r.p.client)
 	if !readOK {
 		// Restore may have been deleted or not found; remove from state
 		resp.State.RemoveResource(ctx)
@@ -323,35 +324,35 @@ func (r resourceBackupRestore) Read(ctx context.Context, req tfsdk.ReadResourceR
 		return
 	}
 
-	state.AccountID = types.String{Value: state.AccountID.Value}
-	state.ProjectID = types.String{Value: state.ProjectID.Value}
-	state.RestoreID = types.String{Value: state.RestoreID.Value}
+	state.AccountID = types.StringValue(state.AccountID.ValueString())
+	state.ProjectID = types.StringValue(state.ProjectID.ValueString())
+	state.RestoreID = types.StringValue(state.RestoreID.ValueString())
 	diags := resp.State.Set(ctx, &state)
 	resp.Diagnostics.Append(diags...)
 }
 
-func (r resourceBackupRestore) Update(ctx context.Context, req tfsdk.UpdateResourceRequest, resp *tfsdk.UpdateResourceResponse) {
+func (r resourceBackupRestore) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
 	resp.Diagnostics.AddError(
 		"Update not supported",
 		"Updating ybm_backup_restore is not supported. Change any attribute to trigger replace (destroy + create).",
 	)
 }
 
-func (r resourceBackupRestore) Delete(ctx context.Context, req tfsdk.DeleteResourceRequest, resp *tfsdk.DeleteResourceResponse) {
+func (r resourceBackupRestore) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
 	// Delete only removes the resource from Terraform state; it does not call an API to "undo" the restore.
 	resp.State.RemoveResource(ctx)
 }
 
 // listOfNonEmptyStringValidators rejects empty string elements in list(string) attributes.
-func listOfNonEmptyStringValidators() []tfsdk.AttributeValidator {
-	return []tfsdk.AttributeValidator{
-		listvalidator.ValuesAre(stringvalidator.LengthAtLeast(1)),
+func listOfNonEmptyStringValidators() []validator.List {
+	return []validator.List{
+		listvalidator.ValueStringsAre(stringvalidator.LengthAtLeast(1)),
 	}
 }
 
 // nonEmptyStringValidators rejects "" for string attributes (e.g. rename names).
-func nonEmptyStringValidators() []tfsdk.AttributeValidator {
-	return []tfsdk.AttributeValidator{
+func nonEmptyStringValidators() []validator.String {
+	return []validator.String{
 		stringvalidator.LengthAtLeast(1),
 	}
 }
