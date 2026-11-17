@@ -30,6 +30,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-log/tflog"
 	"github.com/sethvargo/go-retry"
 	"github.com/yugabyte/terraform-provider-ybm/managed/fflags"
+	planmodifier "github.com/yugabyte/terraform-provider-ybm/managed/plan_modifier"
 	"github.com/yugabyte/terraform-provider-ybm/managed/util"
 	openapiclient "github.com/yugabyte/yugabytedb-managed-go-client-internal"
 )
@@ -735,13 +736,14 @@ func (r resourceClusterType) GetSchema(_ context.Context) (tfsdk.Schema, diag.Di
 			Validators:  []tfsdk.AttributeValidator{stringvalidator.OneOf("FREE", "PAID")},
 		},
 		"fault_tolerance": {
-			Description: "The fault tolerance of the cluster. NONE, NODE, ZONE or REGION.",
+			Description: "The fault tolerance of the cluster. NONE, NODE, ZONE or REGION. Changing the fault tolerance of an existing cluster from NONE to any other value forces the cluster to be destroyed and recreated, because YugabyteDB Aeon does not support this change in place.",
 			Type:        types.StringType,
 			Optional:    true,
 			Computed:    true,
 			Validators:  []tfsdk.AttributeValidator{stringvalidator.OneOf("NONE", "NODE", "ZONE", "REGION")},
 			PlanModifiers: []tfsdk.AttributePlanModifier{
 				tfsdk.UseStateForUnknown(),
+				planmodifier.FaultToleranceRequiresReplace(),
 			},
 		},
 		"num_faults_to_tolerate": {

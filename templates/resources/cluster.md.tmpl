@@ -80,6 +80,12 @@ To resume managing `num_nodes` with Terraform, set `ignore_num_nodes_changes = f
 
 ~> **Note:** When resizing a region to a node count outside the currently active autoscaling policy range, first update and apply the `ybm_autoscaler_policy` `min`/`max`. Then update `cluster_region_info[].num_nodes` and apply again. The cluster resize must be within the active policy range.
 
+### Changing fault tolerance
+
+YugabyteDB Aeon does not support changing the fault tolerance of an existing cluster from `NONE` to `NODE`, `ZONE` or `REGION`. When `fault_tolerance` changes from `NONE` to another value, Terraform plans to destroy the cluster and create a new one (`-/+` in the plan, with `# forces replacement` on `fault_tolerance`) instead of updating it in place.
+
+!> **Warning:** Replacing a cluster deletes it and all of its data. Back up the data you need before applying such a plan, and consider adding `lifecycle { prevent_destroy = true }` to production clusters so that Terraform refuses any plan that would destroy them.
+
 {{ .SchemaMarkdown | trimspace }}
 
 {{- if .HasImport }}
