@@ -176,3 +176,28 @@ func TestModifyPlanNullRegionListIsSkipped(t *testing.T) {
 		t.Fatalf("unexpected diagnostics for a null cluster_region_info: %v", resp.Diagnostics)
 	}
 }
+
+// On an update the ignore_num_nodes_changes check compares config with state, so an unknown
+// config list must be skipped there too rather than decoded.
+func TestModifyPlanUnknownRegionListOnUpdateIsSkipped(t *testing.T) {
+	ctx := context.Background()
+	schema, diags := resourceSchema(ctx, &resourceCluster{})
+	if diags.HasError() {
+		t.Fatalf("GetSchema: %v", diags)
+	}
+	schemaType := schema.Type().TerraformType(ctx)
+	regionType := schemaType.(tftypes.Object).AttributeTypes["cluster_region_info"].(tftypes.List).ElementType
+
+	unknown := clusterValue(t, schemaType, tftypes.NewValue(tftypes.List{ElementType: regionType}, tftypes.UnknownValue))
+	known := clusterValue(t, schemaType, clusterRegionInfoValue(t, regionType, tftypes.NewValue(tftypes.Bool, true)))
+	req := resource.ModifyPlanRequest{
+		Config: tfsdk.Config{Schema: schema, Raw: unknown},
+		Plan:   tfsdk.Plan{Schema: schema, Raw: unknown},
+		State:  tfsdk.State{Schema: schema, Raw: known},
+	}
+	resp := resource.ModifyPlanResponse{Plan: req.Plan}
+	resourceCluster{}.ModifyPlan(ctx, req, &resp)
+	if resp.Diagnostics.HasError() {
+		t.Fatalf("unexpected diagnostics for an unknown cluster_region_info on update: %v", resp.Diagnostics)
+	}
+}

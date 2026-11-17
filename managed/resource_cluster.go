@@ -916,9 +916,16 @@ func (r resourceCluster) ModifyPlan(ctx context.Context, req resource.ModifyPlan
 
 	// Only decode the attributes we need. Full Cluster Get() fails on null nested
 	// attributes (credentials, cmk_spec, backup_replication_spec, etc.).
+	// A wholly unknown list (dynamically typed vars) can't be decoded into []RegionInfo, and an
+	// unknown or null one has no per-region ignore setting to compare.
+	var configList types.List
+	resp.Diagnostics.Append(req.Config.GetAttribute(ctx, path.Root("cluster_region_info"), &configList)...)
+	if resp.Diagnostics.HasError() || configList.IsNull() || configList.IsUnknown() {
+		return
+	}
 	var configRegions []RegionInfo
 	var stateRegions []RegionInfo
-	resp.Diagnostics.Append(req.Config.GetAttribute(ctx, path.Root("cluster_region_info"), &configRegions)...)
+	resp.Diagnostics.Append(configList.ElementsAs(ctx, &configRegions, false)...)
 	resp.Diagnostics.Append(req.State.GetAttribute(ctx, path.Root("cluster_region_info"), &stateRegions)...)
 	if resp.Diagnostics.HasError() {
 		return
