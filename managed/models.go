@@ -723,3 +723,24 @@ type AmpEndpoint struct {
 	Database              types.String    `tfsdk:"database"`
 	TlsCaCertificate      types.String    `tfsdk:"tls_ca_certificate"`
 }
+
+// zeroRegionInfo is a RegionInfo whose fields are known zero values, as an unset RegionInfo was
+// before terraform-plugin-framework v1 made unset values null.
+func zeroRegionInfo() RegionInfo {
+	return RegionInfo{
+		Region:                     types.StringValue(""),
+		NumNodes:                   types.Int64Value(0),
+		IgnoreNumNodesChanges:      types.BoolValue(false),
+		NumCores:                   types.Int64Value(0),
+		NumZones:                   types.Int64Value(0),
+		DiskSizeGb:                 types.Int64Value(0),
+		DiskIops:                   types.Int64Value(0),
+		VPCID:                      types.StringValue(""),
+		VPCName:                    types.StringValue(""),
+		PublicAccess:               types.BoolValue(false),
+		IsPreferred:                types.BoolValue(false),
+		IsDefault:                  types.BoolValue(false),
+		BackupReplicationGCPTarget: types.StringValue(""),
+		BackupRegion:               types.BoolValue(false),
+	}
+}

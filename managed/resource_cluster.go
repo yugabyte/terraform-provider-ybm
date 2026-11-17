@@ -2611,6 +2611,10 @@ func resourceClusterRead(ctx context.Context, clusterId string, backUpSchedules 
 
 	respClusterRegionInfo := clusterResp.Data.Spec.ClusterRegionInfo
 	clusterRegionInfo := make([]RegionInfo, len(respClusterRegionInfo))
+	// A slot no region maps to keeps v0.10's known zero values rather than v1's nulls.
+	for i := range clusterRegionInfo {
+		clusterRegionInfo[i] = zeroRegionInfo()
+	}
 	for localIndex, info := range respClusterRegionInfo {
 		region := info.PlacementInfo.CloudInfo.GetRegion()
 		destIndex := getClusterRegionIndex(region, regionIndexMap, localIndex)
