@@ -1,12 +1,12 @@
 ---
 page_title: "ybm_amp_byoc_cluster Resource - YugabyteDB Aeon"
 description: |-
-  The resource to create a PostgreSQL cluster in a storage pool of a BYOC environment registered with ybm_amp_byoc_environment. The cluster is created with one read-write endpoint on its main branch once the environment's agent picks it up. Add branches and endpoints with ybm_amp_branch and ybm_amp_endpoint.
+  The resource to create a PostgreSQL cluster in a storage pool of a BYOC environment registered with ybm_amp_byoc_environment. The cluster is created with its main branch once the environment's agent picks it up. Connect to it through a ybm_amp_endpoint on main with role read_write, and add branches with ybm_amp_branch.
 ---
 
 # ybm_amp_byoc_cluster (Resource)
 
-The resource to create a PostgreSQL cluster in a storage pool of a BYOC environment registered with ybm_amp_byoc_environment. The cluster is created with one read-write endpoint on its main branch once the environment's agent picks it up. Add branches and endpoints with ybm_amp_branch and ybm_amp_endpoint.
+The resource to create a PostgreSQL cluster in a storage pool of a BYOC environment registered with ybm_amp_byoc_environment. The cluster is created with its main branch once the environment's agent picks it up. Connect to it through a ybm_amp_endpoint on main with role read_write, and add branches with ybm_amp_branch.
 
 ~> **Note:** This resource is behind a feature flag. Set the environment variable `YBM_FF_AMP=true` to use it.
 
