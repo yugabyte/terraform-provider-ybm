@@ -23,7 +23,7 @@ type resourceByocStoragePoolType struct{}
 func (r resourceByocStoragePoolType) GetSchema(_ context.Context) (tfsdk.Schema, diag.Diagnostics) {
 	return tfsdk.Schema{
 		Description: `The resource to create a storage pool in a BYOC environment: a group of clusters, for example for a team or business unit. ` +
-			`Create ybm_aeon_pg_byoc_cluster resources in it with storage_pool. Storage pools cannot be deleted, so destroying this resource ` +
+			`Create ybm_amp_byoc_cluster resources in it with storage_pool. Storage pools cannot be deleted, so destroying this resource ` +
 			`only removes it from Terraform state; import the pool to manage it again.`,
 		Attributes: map[string]tfsdk.Attribute{
 			"account_id": {

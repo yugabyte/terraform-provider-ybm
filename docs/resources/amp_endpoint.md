@@ -1,14 +1,14 @@
 ---
-page_title: "ybm_aeon_pg_endpoint Resource - YugabyteDB Aeon"
+page_title: "ybm_amp_endpoint Resource - YugabyteDB Aeon"
 description: |-
-  The resource to create an endpoint of a PostgreSQL cluster: compute that serves one branch, such as the cluster's read-write endpoint on main, a read-only replica, or the read-write endpoint of a ybm_aeon_pg_branch. Works for shared clusters (ybm_aeon_pg_cluster) and, with environment_id, BYOC clusters (ybm_aeon_pg_byoc_cluster).
+  The resource to create an endpoint of a PostgreSQL cluster: compute that serves one branch, such as the cluster's read-write endpoint on main, a read-only replica, or the read-write endpoint of a ybm_amp_branch. Works for shared clusters (ybm_amp_cluster) and, with environment_id, BYOC clusters (ybm_amp_byoc_cluster).
 ---
 
-# ybm_aeon_pg_endpoint (Resource)
+# ybm_amp_endpoint (Resource)
 
-The resource to create an endpoint of a PostgreSQL cluster: compute that serves one branch, such as the cluster's read-write endpoint on main, a read-only replica, or the read-write endpoint of a ybm_aeon_pg_branch. Works for shared clusters (ybm_aeon_pg_cluster) and, with environment_id, BYOC clusters (ybm_aeon_pg_byoc_cluster).
+The resource to create an endpoint of a PostgreSQL cluster: compute that serves one branch, such as the cluster's read-write endpoint on main, a read-only replica, or the read-write endpoint of a ybm_amp_branch. Works for shared clusters (ybm_amp_cluster) and, with environment_id, BYOC clusters (ybm_amp_byoc_cluster).
 
-~> **Note:** This resource is behind a feature flag. Set the environment variable `YBM_FF_AEON_PG=true` to use it.
+~> **Note:** This resource is behind a feature flag. Set the environment variable `YBM_FF_AMP=true` to use it.
 
 
 Set `environment_id` and `storage_pool` for a cluster in a BYOC environment; leave both unset for a shared cluster. Set `cluster_id` to the cluster resource's `cluster_id` so that replacing the cluster replaces the endpoint too.
@@ -25,9 +25,9 @@ Connect as `username` to `database` at `host`:`port`.
 
 ```terraform
 # The read-write endpoint on main, which sets the cluster's password
-resource "ybm_aeon_pg_endpoint" "primary" {
-  cluster_name  = ybm_aeon_pg_cluster.example.cluster_name
-  cluster_id    = ybm_aeon_pg_cluster.example.cluster_id
+resource "ybm_amp_endpoint" "primary" {
+  cluster_name  = ybm_amp_cluster.example.cluster_name
+  cluster_id    = ybm_amp_cluster.example.cluster_id
   endpoint_name = "primary"
   role          = "read_write"
 
@@ -37,19 +37,19 @@ resource "ybm_aeon_pg_endpoint" "primary" {
 }
 
 # A read-only replica of main
-resource "ybm_aeon_pg_endpoint" "replica" {
-  cluster_name  = ybm_aeon_pg_cluster.example.cluster_name
-  cluster_id    = ybm_aeon_pg_cluster.example.cluster_id
+resource "ybm_amp_endpoint" "replica" {
+  cluster_name  = ybm_amp_cluster.example.cluster_name
+  cluster_id    = ybm_amp_cluster.example.cluster_id
   endpoint_name = "replica"
   cpu           = "2"
   memory        = "16Gi"
 }
 
 # The read-write endpoint of a branch, which uses the cluster's password
-resource "ybm_aeon_pg_endpoint" "dev" {
-  cluster_name      = ybm_aeon_pg_cluster.example.cluster_name
-  cluster_id        = ybm_aeon_pg_cluster.example.cluster_id
-  branch_name       = ybm_aeon_pg_branch.dev.branch_name
+resource "ybm_amp_endpoint" "dev" {
+  cluster_name      = ybm_amp_cluster.example.cluster_name
+  cluster_id        = ybm_amp_cluster.example.cluster_id
+  branch_name       = ybm_amp_branch.dev.branch_name
   endpoint_name     = "rw"
   role              = "read_write"
   connectivity_mode = "nlb_internal"
@@ -78,7 +78,7 @@ resource "ybm_aeon_pg_endpoint" "dev" {
 - `connectivity_mode` (String) How the endpoint is exposed: cluster_ip, ingress_internal, ingress_external, nlb_internal, nlb_external. Defaults to the service's default. Changing it forces a replacement.
 - `cpu` (String) The CPU of the endpoint as a Kubernetes quantity, such as 2 or 500m. Defaults to the service's default. Can be changed in place to resize the endpoint.
 - `credentials` (Attributes) The credentials of a read_write endpoint. Only the cluster's first read_write endpoint, normally the one on main, takes a password: it sets the cluster's password, which branches and their endpoints inherit. A read_only endpoint takes none. (see [below for nested schema](#nestedatt--credentials))
-- `environment_id` (String) The ID of the BYOC environment the cluster is in. Leave it unset for a shared cluster (ybm_aeon_pg_cluster). Changing it forces a replacement.
+- `environment_id` (String) The ID of the BYOC environment the cluster is in. Leave it unset for a shared cluster (ybm_amp_cluster). Changing it forces a replacement.
 - `memory` (String) The memory of the endpoint as a Kubernetes quantity, such as 16Gi. Must be at least 8Gi per vCPU. Defaults to the service's default for the cpu. When it is unset, changing cpu resizes memory to 8Gi per vCPU. Can be changed in place.
 - `pg_settings` (Map of String) PostgreSQL settings of the endpoint, such as work_mem. A key set here overrides the same key in its branch's settings. Can be changed in place. Leave it unset to leave the settings as they are, such as those a fork inherits from its parent; set it to {} to clear them. Removing a key resets the setting: an endpoint setting falls back to its branch's value, and a branch setting to the PostgreSQL default.
 - `role` (String) read_write or read_only. Defaults to read_only. A branch can have at most one read_write endpoint. Changing it forces a new endpoint.
@@ -112,8 +112,8 @@ Import is supported using the following syntax:
 
 ```shell
 # An endpoint of a shared cluster is imported by <cluster_name>/<branch_name>/<endpoint_name>
-terraform import ybm_aeon_pg_endpoint.replica orders/main/replica
+terraform import ybm_amp_endpoint.replica orders/main/replica
 
 # An endpoint of a BYOC cluster is imported by <environment_id>/<storage_pool>/<cluster_name>/<branch_name>/<endpoint_name>
-terraform import ybm_aeon_pg_endpoint.byoc_replica acme-prod/payments/orders/main/replica
+terraform import ybm_amp_endpoint.byoc_replica acme-prod/payments/orders/main/replica
 ```

@@ -1,14 +1,14 @@
 ---
-page_title: "ybm_byoc_environment Resource - YugabyteDB Aeon"
+page_title: "ybm_amp_byoc_environment Resource - YugabyteDB Aeon"
 description: |-
   The resource to register a BYOC (bring your own cloud) environment for PostgreSQL clusters. Registering returns an API key for the environment's agent; install the agent in your Kubernetes cluster with install_hint, and the environment becomes READY once the agent enrolls. The key is only returned by the apply that registers the environment: importing cannot recover it, and replacing or destroying the environment revokes it. An environment's name stays claimed after it is destroyed, so it cannot be registered again.
 ---
 
-# ybm_byoc_environment (Resource)
+# ybm_amp_byoc_environment (Resource)
 
 The resource to register a BYOC (bring your own cloud) environment for PostgreSQL clusters. Registering returns an API key for the environment's agent; install the agent in your Kubernetes cluster with install_hint, and the environment becomes READY once the agent enrolls. The key is only returned by the apply that registers the environment: importing cannot recover it, and replacing or destroying the environment revokes it. An environment's name stays claimed after it is destroyed, so it cannot be registered again.
 
-~> **Note:** This resource is behind a feature flag. Set the environment variable `YBM_FF_AEON_PG=true` to use it.
+~> **Note:** This resource is behind a feature flag. Set the environment variable `YBM_FF_AMP=true` to use it.
 
 
 Creating the environment registers it and returns `agent_api_key` and `install_hint`. The environment stays `PENDING` until its agent is installed and enrolls with the key; `region`, `cloud_provider` and `k8s_version` are what the agent reports then. `placement` is passed to the agent by the install command, so set it before installing.
@@ -22,7 +22,7 @@ The environment's ID is derived from `name`: lowercased, with spaces, underscore
 ## Example Usage
 
 ```terraform
-resource "ybm_byoc_environment" "example" {
+resource "ybm_amp_byoc_environment" "example" {
   name = "acme-prod"
 
   # Optional: where the environment runs, passed to the agent by the install command
@@ -46,7 +46,7 @@ resource "kubernetes_secret" "agent_api_key" {
     namespace = kubernetes_namespace.agent.metadata[0].name
   }
   data = {
-    "api-key" = ybm_byoc_environment.example.agent_api_key
+    "api-key" = ybm_amp_byoc_environment.example.agent_api_key
   }
 }
 
@@ -69,11 +69,11 @@ resource "helm_release" "agent" {
   }
   set {
     name  = "agent.envName"
-    value = ybm_byoc_environment.example.environment_id
+    value = ybm_amp_byoc_environment.example.environment_id
   }
   set {
     name  = "agent.placement"
-    value = ybm_byoc_environment.example.placement
+    value = ybm_amp_byoc_environment.example.placement
   }
   set {
     name  = "agent.apiKeySecret.name"
@@ -81,8 +81,8 @@ resource "helm_release" "agent" {
   }
 }
 
-resource "ybm_byoc_storage_pool" "payments" {
-  environment_id = ybm_byoc_environment.example.environment_id
+resource "ybm_amp_byoc_storage_pool" "payments" {
+  environment_id = ybm_amp_byoc_environment.example.environment_id
   name           = "payments"
 
   # A failed install fails here at once rather than after the wait for the agent
@@ -90,7 +90,7 @@ resource "ybm_byoc_storage_pool" "payments" {
 }
 
 output "agent_install_hint" {
-  value = ybm_byoc_environment.example.install_hint
+  value = ybm_amp_byoc_environment.example.install_hint
 }
 ```
 
@@ -123,5 +123,5 @@ Import is supported using the following syntax:
 ```shell
 # An environment is imported by its ID, which is its name lowercased with spaces,
 # underscores and slashes replaced by hyphens. Its agent_api_key cannot be imported.
-terraform import ybm_byoc_environment.example acme-prod
+terraform import ybm_amp_byoc_environment.example acme-prod
 ```

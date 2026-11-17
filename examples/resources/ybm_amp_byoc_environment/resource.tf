@@ -1,4 +1,4 @@
-resource "ybm_byoc_environment" "example" {
+resource "ybm_amp_byoc_environment" "example" {
   name = "acme-prod"
 
   # Optional: where the environment runs, passed to the agent by the install command
@@ -22,7 +22,7 @@ resource "kubernetes_secret" "agent_api_key" {
     namespace = kubernetes_namespace.agent.metadata[0].name
   }
   data = {
-    "api-key" = ybm_byoc_environment.example.agent_api_key
+    "api-key" = ybm_amp_byoc_environment.example.agent_api_key
   }
 }
 
@@ -45,11 +45,11 @@ resource "helm_release" "agent" {
   }
   set {
     name  = "agent.envName"
-    value = ybm_byoc_environment.example.environment_id
+    value = ybm_amp_byoc_environment.example.environment_id
   }
   set {
     name  = "agent.placement"
-    value = ybm_byoc_environment.example.placement
+    value = ybm_amp_byoc_environment.example.placement
   }
   set {
     name  = "agent.apiKeySecret.name"
@@ -57,8 +57,8 @@ resource "helm_release" "agent" {
   }
 }
 
-resource "ybm_byoc_storage_pool" "payments" {
-  environment_id = ybm_byoc_environment.example.environment_id
+resource "ybm_amp_byoc_storage_pool" "payments" {
+  environment_id = ybm_amp_byoc_environment.example.environment_id
   name           = "payments"
 
   # A failed install fails here at once rather than after the wait for the agent
@@ -66,5 +66,5 @@ resource "ybm_byoc_storage_pool" "payments" {
 }
 
 output "agent_install_hint" {
-  value = ybm_byoc_environment.example.install_hint
+  value = ybm_amp_byoc_environment.example.install_hint
 }

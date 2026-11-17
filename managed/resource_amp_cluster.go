@@ -38,7 +38,7 @@ func (r resourceAmpClusterType) GetSchema(_ context.Context) (tfsdk.Schema, diag
 	return tfsdk.Schema{
 		Description: `The resource to create a shared PostgreSQL cluster in YugabyteDB Aeon. ` +
 			`The cluster is created in the account's storage pool with its main branch. ` +
-			`Connect to it through a ybm_aeon_pg_endpoint on main with role read_write, and add branches with ybm_aeon_pg_branch.`,
+			`Connect to it through a ybm_amp_endpoint on main with role read_write, and add branches with ybm_amp_branch.`,
 		Attributes: attributes,
 	}, nil
 }

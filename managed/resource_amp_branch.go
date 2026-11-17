@@ -31,7 +31,7 @@ func ampParentAttributes() map[string]tfsdk.Attribute {
 			PlanModifiers: []tfsdk.AttributePlanModifier{tfsdk.UseStateForUnknown()},
 		},
 		"environment_id": {
-			Description:   "The ID of the BYOC environment the cluster is in. Leave it unset for a shared cluster (ybm_aeon_pg_cluster). Changing it forces a replacement.",
+			Description:   "The ID of the BYOC environment the cluster is in. Leave it unset for a shared cluster (ybm_amp_cluster). Changing it forces a replacement.",
 			Type:          types.StringType,
 			Optional:      true,
 			PlanModifiers: []tfsdk.AttributePlanModifier{tfsdk.RequiresReplace()},
@@ -167,8 +167,8 @@ func (r resourceAmpBranchType) GetSchema(_ context.Context) (tfsdk.Schema, diag.
 	}
 	return tfsdk.Schema{
 		Description: `The resource to create a branch of a PostgreSQL cluster: a copy-on-write fork of another branch ` +
-			`with its own settings. Works for shared clusters (ybm_aeon_pg_cluster) and, with environment_id, BYOC clusters (ybm_aeon_pg_byoc_cluster). ` +
-			`Connect to a branch through a ybm_aeon_pg_endpoint on it.`,
+			`with its own settings. Works for shared clusters (ybm_amp_cluster) and, with environment_id, BYOC clusters (ybm_amp_byoc_cluster). ` +
+			`Connect to a branch through a ybm_amp_endpoint on it.`,
 		Attributes: attributes,
 	}, nil
 }

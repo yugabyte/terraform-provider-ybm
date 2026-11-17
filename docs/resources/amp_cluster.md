@@ -1,29 +1,29 @@
 ---
-page_title: "ybm_aeon_pg_cluster Resource - YugabyteDB Aeon"
+page_title: "ybm_amp_cluster Resource - YugabyteDB Aeon"
 description: |-
-  The resource to create a shared PostgreSQL cluster in YugabyteDB Aeon. The cluster is created in the account's storage pool with its main branch. Connect to it through a ybm_aeon_pg_endpoint on main with role read_write, and add branches with ybm_aeon_pg_branch.
+  The resource to create a shared PostgreSQL cluster in YugabyteDB Aeon. The cluster is created in the account's storage pool with its main branch. Connect to it through a ybm_amp_endpoint on main with role read_write, and add branches with ybm_amp_branch.
 ---
 
-# ybm_aeon_pg_cluster (Resource)
+# ybm_amp_cluster (Resource)
 
-The resource to create a shared PostgreSQL cluster in YugabyteDB Aeon. The cluster is created in the account's storage pool with its main branch. Connect to it through a ybm_aeon_pg_endpoint on main with role read_write, and add branches with ybm_aeon_pg_branch.
+The resource to create a shared PostgreSQL cluster in YugabyteDB Aeon. The cluster is created in the account's storage pool with its main branch. Connect to it through a ybm_amp_endpoint on main with role read_write, and add branches with ybm_amp_branch.
 
-~> **Note:** This resource is behind a feature flag. Set the environment variable `YBM_FF_AEON_PG=true` to use it.
+~> **Note:** This resource is behind a feature flag. Set the environment variable `YBM_FF_AMP=true` to use it.
 
 
 The cluster is created in the account's storage pool in `region`. Changing `cluster_name`, `region`, `pg_version`, `engine` or `extensions` replaces the cluster, which deletes its data.
 
-The cluster resource manages the cluster and its `main` branch. Connect through a `ybm_aeon_pg_endpoint` on `main` with `role = "read_write"`, which also sets the cluster's password; add read-only replicas and branches with `ybm_aeon_pg_endpoint` and `ybm_aeon_pg_branch`. Set their `cluster_id` to this resource's `cluster_id` so that replacing the cluster replaces them too.
+The cluster resource manages the cluster and its `main` branch. Connect through a `ybm_amp_endpoint` on `main` with `role = "read_write"`, which also sets the cluster's password; add read-only replicas and branches with `ybm_amp_endpoint` and `ybm_amp_branch`. Set their `cluster_id` to this resource's `cluster_id` so that replacing the cluster replaces them too.
 
 `branch_pg_settings` and `branch_extensions` change the `main` branch in place; they apply to every endpoint on `main`. Leave `branch_pg_settings` unset to leave the settings as they are, or set it to `{}` to clear them; removing a key resets the setting to the PostgreSQL default. Extensions can be added to `branch_extensions` but not removed, and the plan fails if one is. Unset `pg_version` and `engine` take the service's defaults.
 
-Deleting the cluster also deletes its endpoints and branches, so deleting a cluster that still has endpoints or branches other than `main` fails. A normal `terraform destroy` deletes the `ybm_aeon_pg_endpoint` and `ybm_aeon_pg_branch` resources first, so it works. To delete them along with the cluster, set `force_destroy = true` and apply it first.
+Deleting the cluster also deletes its endpoints and branches, so deleting a cluster that still has endpoints or branches other than `main` fails. A normal `terraform destroy` deletes the `ybm_amp_endpoint` and `ybm_amp_branch` resources first, so it works. To delete them along with the cluster, set `force_destroy = true` and apply it first.
 
 ## Example Usage
 
 ```terraform
 # A shared PostgreSQL cluster in the account's storage pool
-resource "ybm_aeon_pg_cluster" "example" {
+resource "ybm_amp_cluster" "example" {
   cluster_name = "orders"
   region       = "us-east-1"
 
@@ -39,9 +39,9 @@ resource "ybm_aeon_pg_cluster" "example" {
 }
 
 # The read-write endpoint on main, which sets the cluster's password
-resource "ybm_aeon_pg_endpoint" "primary" {
-  cluster_name  = ybm_aeon_pg_cluster.example.cluster_name
-  cluster_id    = ybm_aeon_pg_cluster.example.cluster_id
+resource "ybm_amp_endpoint" "primary" {
+  cluster_name  = ybm_amp_cluster.example.cluster_name
+  cluster_id    = ybm_amp_cluster.example.cluster_id
   endpoint_name = "primary"
   role          = "read_write"
 
@@ -57,7 +57,7 @@ resource "ybm_aeon_pg_endpoint" "primary" {
 }
 
 output "connection" {
-  value = "postgresql://${ybm_aeon_pg_endpoint.primary.username}@${ybm_aeon_pg_endpoint.primary.host}:${ybm_aeon_pg_endpoint.primary.port}/${ybm_aeon_pg_endpoint.primary.database}"
+  value = "postgresql://${ybm_amp_endpoint.primary.username}@${ybm_amp_endpoint.primary.host}:${ybm_amp_endpoint.primary.port}/${ybm_amp_endpoint.primary.database}"
 }
 ```
 
@@ -91,5 +91,5 @@ Import is supported using the following syntax:
 
 ```shell
 # A shared cluster is imported by its name
-terraform import ybm_aeon_pg_cluster.example orders
+terraform import ybm_amp_cluster.example orders
 ```

@@ -1,5 +1,5 @@
 # A shared PostgreSQL cluster in the account's storage pool
-resource "ybm_aeon_pg_cluster" "example" {
+resource "ybm_amp_cluster" "example" {
   cluster_name = "orders"
   region       = "us-east-1"
 
@@ -15,9 +15,9 @@ resource "ybm_aeon_pg_cluster" "example" {
 }
 
 # The read-write endpoint on main, which sets the cluster's password
-resource "ybm_aeon_pg_endpoint" "primary" {
-  cluster_name  = ybm_aeon_pg_cluster.example.cluster_name
-  cluster_id    = ybm_aeon_pg_cluster.example.cluster_id
+resource "ybm_amp_endpoint" "primary" {
+  cluster_name  = ybm_amp_cluster.example.cluster_name
+  cluster_id    = ybm_amp_cluster.example.cluster_id
   endpoint_name = "primary"
   role          = "read_write"
 
@@ -33,5 +33,5 @@ resource "ybm_aeon_pg_endpoint" "primary" {
 }
 
 output "connection" {
-  value = "postgresql://${ybm_aeon_pg_endpoint.primary.username}@${ybm_aeon_pg_endpoint.primary.host}:${ybm_aeon_pg_endpoint.primary.port}/${ybm_aeon_pg_endpoint.primary.database}"
+  value = "postgresql://${ybm_amp_endpoint.primary.username}@${ybm_amp_endpoint.primary.host}:${ybm_amp_endpoint.primary.port}/${ybm_amp_endpoint.primary.database}"
 }

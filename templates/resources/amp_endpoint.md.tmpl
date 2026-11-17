@@ -8,7 +8,7 @@ description: |-
 
 {{ .Description | trimspace }}
 
-~> **Note:** This resource is behind a feature flag. Set the environment variable `YBM_FF_AEON_PG=true` to use it.
+~> **Note:** This resource is behind a feature flag. Set the environment variable `YBM_FF_AMP=true` to use it.
 
 
 Set `environment_id` and `storage_pool` for a cluster in a BYOC environment; leave both unset for a shared cluster. Set `cluster_id` to the cluster resource's `cluster_id` so that replacing the cluster replaces the endpoint too.
@@ -23,7 +23,7 @@ Connect as `username` to `database` at `host`:`port`.
 
 ## Example Usage
 
-{{ tffile "examples/resources/ybm_aeon_pg_endpoint/resource.tf" }}
+{{ tffile "examples/resources/ybm_amp_endpoint/resource.tf" }}
 
 {{ .SchemaMarkdown | trimspace }}
 {{- if .HasImport }}
@@ -32,6 +32,6 @@ Connect as `username` to `database` at `host`:`port`.
 
 Import is supported using the following syntax:
 
-{{ codefile "shell" "examples/resources/ybm_aeon_pg_endpoint/import.sh" }}
+{{ codefile "shell" "examples/resources/ybm_amp_endpoint/import.sh" }}
 
 {{- end }}

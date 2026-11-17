@@ -294,7 +294,7 @@ type tfHarness struct {
 
 func newTfHarness(t *testing.T) *tfHarness {
 	t.Helper()
-	t.Setenv("YBM_FF_AEON_PG", "true")
+	t.Setenv("YBM_FF_AMP", "true")
 	ampPollInterval = time.Millisecond
 	t.Cleanup(func() { ampPollInterval = 10 * time.Second })
 
