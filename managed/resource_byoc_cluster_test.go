@@ -115,7 +115,7 @@ func TestByocScopeCreateRequiresTheStoragePool(t *testing.T) {
 	fake.addByocEnv("env", "READY")
 	scope := newAmpScope(newTestYcpClient(t, fake.ServeHTTP), testAccountID, "env", "payments")
 	err := scope.apply(context.Background(), "", ampIntentCreate, []ampPatchItem{{Kind: ampKindCluster, Name: "payments/a", Spec: map[string]int{}}})
-	if !isYcpNotFound(err) || !strings.Contains(err.Error(), "ybm_byoc_storage_pool") {
+	if !isYcpNotFound(err) || !strings.Contains(err.Error(), "ybm_amp_byoc_storage_pool") {
 		t.Fatalf("err = %v", err)
 	}
 }

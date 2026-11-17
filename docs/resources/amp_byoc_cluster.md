@@ -1,32 +1,32 @@
 ---
-page_title: "ybm_aeon_pg_byoc_cluster Resource - YugabyteDB Aeon"
+page_title: "ybm_amp_byoc_cluster Resource - YugabyteDB Aeon"
 description: |-
-  The resource to create a PostgreSQL cluster in a storage pool of a BYOC environment registered with ybm_byoc_environment. The cluster is created with one read-write endpoint on its main branch once the environment's agent picks it up. Add branches and endpoints with ybm_aeon_pg_branch and ybm_aeon_pg_endpoint.
+  The resource to create a PostgreSQL cluster in a storage pool of a BYOC environment registered with ybm_amp_byoc_environment. The cluster is created with one read-write endpoint on its main branch once the environment's agent picks it up. Add branches and endpoints with ybm_amp_branch and ybm_amp_endpoint.
 ---
 
-# ybm_aeon_pg_byoc_cluster (Resource)
+# ybm_amp_byoc_cluster (Resource)
 
-The resource to create a PostgreSQL cluster in a storage pool of a BYOC environment registered with ybm_byoc_environment. The cluster is created with one read-write endpoint on its main branch once the environment's agent picks it up. Add branches and endpoints with ybm_aeon_pg_branch and ybm_aeon_pg_endpoint.
+The resource to create a PostgreSQL cluster in a storage pool of a BYOC environment registered with ybm_amp_byoc_environment. The cluster is created with one read-write endpoint on its main branch once the environment's agent picks it up. Add branches and endpoints with ybm_amp_branch and ybm_amp_endpoint.
 
-~> **Note:** This resource is behind a feature flag. Set the environment variable `YBM_FF_AEON_PG=true` to use it.
+~> **Note:** This resource is behind a feature flag. Set the environment variable `YBM_FF_AMP=true` to use it.
 
 
-The cluster is created in a storage pool of the environment, which you create with `ybm_byoc_storage_pool`. Creating or updating a cluster waits for the environment's agent to enroll, up to 60 minutes, so the environment, the agent's install (for example with `helm_release`, as in the `ybm_byoc_environment` example) and the cluster can all be in one apply. It fails at once if the environment is `SUSPENDED`, `DRAINING` or `DEREGISTERED`. Changing `environment_id`, `storage_pool`, `cluster_name`, `pg_version`, `engine` or `extensions` replaces the cluster, which deletes its data.
+The cluster is created in a storage pool of the environment, which you create with `ybm_amp_byoc_storage_pool`. Creating or updating a cluster waits for the environment's agent to enroll, up to 60 minutes, so the environment, the agent's install (for example with `helm_release`, as in the `ybm_amp_byoc_environment` example) and the cluster can all be in one apply. It fails at once if the environment is `SUSPENDED`, `DRAINING` or `DEREGISTERED`. Changing `environment_id`, `storage_pool`, `cluster_name`, `pg_version`, `engine` or `extensions` replaces the cluster, which deletes its data.
 
-The cluster resource manages the cluster and its `main` branch. Connect through a `ybm_aeon_pg_endpoint` on `main` with `role = "read_write"`, which also sets the cluster's password; add read-only replicas and branches with `ybm_aeon_pg_endpoint` and `ybm_aeon_pg_branch`. Set their `cluster_id` to this resource's `cluster_id` so that replacing the cluster replaces them too.
+The cluster resource manages the cluster and its `main` branch. Connect through a `ybm_amp_endpoint` on `main` with `role = "read_write"`, which also sets the cluster's password; add read-only replicas and branches with `ybm_amp_endpoint` and `ybm_amp_branch`. Set their `cluster_id` to this resource's `cluster_id` so that replacing the cluster replaces them too.
 
 `branch_pg_settings` and `branch_extensions` change the `main` branch in place; they apply to every endpoint on `main`. Leave `branch_pg_settings` unset to leave the settings as they are, or set it to `{}` to clear them; removing a key resets the setting to the PostgreSQL default. Extensions can be added to `branch_extensions` but not removed, and the plan fails if one is. Unset `pg_version` and `engine` take the service's defaults.
 
-Deleting the cluster also deletes its endpoints and branches, so deleting a cluster that still has endpoints or branches other than `main` fails. A normal `terraform destroy` deletes the `ybm_aeon_pg_endpoint` and `ybm_aeon_pg_branch` resources first, so it works. To delete them along with the cluster, set `force_destroy = true` and apply it first.
+Deleting the cluster also deletes its endpoints and branches, so deleting a cluster that still has endpoints or branches other than `main` fails. A normal `terraform destroy` deletes the `ybm_amp_endpoint` and `ybm_amp_branch` resources first, so it works. To delete them along with the cluster, set `force_destroy = true` and apply it first.
 
 ~> **Note:** An environment's desired state is written as a whole. The provider serializes its own writes, but two applies against the same environment, or a console edit during an apply, can overwrite each other's changes. Run one apply at a time per environment.
 
 ## Example Usage
 
 ```terraform
-resource "ybm_aeon_pg_byoc_cluster" "example" {
-  environment_id = ybm_byoc_environment.example.environment_id
-  storage_pool   = ybm_byoc_storage_pool.payments.name
+resource "ybm_amp_byoc_cluster" "example" {
+  environment_id = ybm_amp_byoc_environment.example.environment_id
+  storage_pool   = ybm_amp_byoc_storage_pool.payments.name
   cluster_name   = "orders"
 
   # Optional
@@ -37,11 +37,11 @@ resource "ybm_aeon_pg_byoc_cluster" "example" {
 }
 
 # The read-write endpoint on main, which sets the cluster's password
-resource "ybm_aeon_pg_endpoint" "byoc_primary" {
-  environment_id = ybm_aeon_pg_byoc_cluster.example.environment_id
-  storage_pool   = ybm_aeon_pg_byoc_cluster.example.storage_pool
-  cluster_name   = ybm_aeon_pg_byoc_cluster.example.cluster_name
-  cluster_id     = ybm_aeon_pg_byoc_cluster.example.cluster_id
+resource "ybm_amp_endpoint" "byoc_primary" {
+  environment_id = ybm_amp_byoc_cluster.example.environment_id
+  storage_pool   = ybm_amp_byoc_cluster.example.storage_pool
+  cluster_name   = ybm_amp_byoc_cluster.example.cluster_name
+  cluster_id     = ybm_amp_byoc_cluster.example.cluster_id
   endpoint_name  = "primary"
   role           = "read_write"
 
@@ -61,7 +61,7 @@ resource "ybm_aeon_pg_endpoint" "byoc_primary" {
 
 - `cluster_name` (String) The name of the cluster. Must be unique within its storage pool. Changing it forces a new cluster.
 - `environment_id` (String) The ID of the BYOC environment to create the cluster in. Changing it forces a new cluster.
-- `storage_pool` (String) The name of the storage pool to create the cluster in, such as a ybm_byoc_storage_pool's name. Changing it forces a new cluster.
+- `storage_pool` (String) The name of the storage pool to create the cluster in, such as a ybm_amp_byoc_storage_pool's name. Changing it forces a new cluster.
 
 ### Optional
 
@@ -84,5 +84,5 @@ Import is supported using the following syntax:
 
 ```shell
 # A BYOC cluster is imported by <environment_id>/<storage_pool>/<cluster_name>
-terraform import ybm_aeon_pg_byoc_cluster.example acme-prod/payments/orders
+terraform import ybm_amp_byoc_cluster.example acme-prod/payments/orders
 ```

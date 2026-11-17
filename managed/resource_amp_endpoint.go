@@ -52,8 +52,8 @@ func (r resourceAmpEndpointType) GetSchema(_ context.Context) (tfsdk.Schema, dia
 	}
 	return tfsdk.Schema{
 		Description: `The resource to create an endpoint of a PostgreSQL cluster: compute that serves one branch, ` +
-			`such as the cluster's read-write endpoint on main, a read-only replica, or the read-write endpoint of a ybm_aeon_pg_branch. ` +
-			`Works for shared clusters (ybm_aeon_pg_cluster) and, with environment_id, BYOC clusters (ybm_aeon_pg_byoc_cluster).`,
+			`such as the cluster's read-write endpoint on main, a read-only replica, or the read-write endpoint of a ybm_amp_branch. ` +
+			`Works for shared clusters (ybm_amp_cluster) and, with environment_id, BYOC clusters (ybm_amp_byoc_cluster).`,
 		Attributes: attributes,
 	}, nil
 }

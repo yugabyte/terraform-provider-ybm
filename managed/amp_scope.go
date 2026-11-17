@@ -84,7 +84,7 @@ func (s ampScope) apply(ctx context.Context, region string, intent string, items
 		if intent == ampIntentCreate {
 			if _, ok := findAmpDesired(desired, ampKindStoragePool, s.pool()); !ok {
 				return nil, &ycpError{StatusCode: http.StatusNotFound, Message: fmt.Sprintf(
-					"storage pool %s does not exist in environment %s; create it with ybm_byoc_storage_pool", s.pool(), s.environmentId)}
+					"storage pool %s does not exist in environment %s; create it with ybm_amp_byoc_storage_pool", s.pool(), s.environmentId)}
 			}
 		}
 		return applyAmpIntent(desired, intent, items)

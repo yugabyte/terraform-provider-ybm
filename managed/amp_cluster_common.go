@@ -117,7 +117,7 @@ func ampCredentialsAttribute(description string) tfsdk.Attribute {
 	}
 }
 
-// ampEndpointAttributes are the attributes of the ybm_aeon_pg_endpoint resource's compute and
+// ampEndpointAttributes are the attributes of the ybm_amp_endpoint resource's compute and
 // connection details.
 func ampEndpointAttributes() map[string]tfsdk.Attribute {
 	return map[string]tfsdk.Attribute{
@@ -194,7 +194,7 @@ func ampEndpointAttributes() map[string]tfsdk.Attribute {
 }
 
 // ampClusterAttributes are the attributes shared by the shared and BYOC cluster resources: a
-// cluster and its main branch. Endpoints, including the read-write one, are ybm_aeon_pg_endpoint
+// cluster and its main branch. Endpoints, including the read-write one, are ybm_amp_endpoint
 // resources.
 func ampClusterAttributes() map[string]tfsdk.Attribute {
 	return map[string]tfsdk.Attribute{

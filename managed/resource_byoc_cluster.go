@@ -52,11 +52,11 @@ func (r resourceByocClusterType) GetSchema(_ context.Context) (tfsdk.Schema, dia
 		PlanModifiers: []tfsdk.AttributePlanModifier{tfsdk.RequiresReplace()},
 	}
 	attributes["storage_pool"] = ampStoragePoolAttribute(
-		"The name of the storage pool to create the cluster in, such as a ybm_byoc_storage_pool's name. Changing it forces a new cluster.", true)
+		"The name of the storage pool to create the cluster in, such as a ybm_amp_byoc_storage_pool's name. Changing it forces a new cluster.", true)
 	return tfsdk.Schema{
-		Description: `The resource to create a PostgreSQL cluster in a storage pool of a BYOC environment registered with ybm_byoc_environment. ` +
+		Description: `The resource to create a PostgreSQL cluster in a storage pool of a BYOC environment registered with ybm_amp_byoc_environment. ` +
 			`The cluster is created with one read-write endpoint on its main branch once the environment's agent picks it up. ` +
-			`Add branches and endpoints with ybm_aeon_pg_branch and ybm_aeon_pg_endpoint.`,
+			`Add branches and endpoints with ybm_amp_branch and ybm_amp_endpoint.`,
 		Attributes: attributes,
 	}, nil
 }

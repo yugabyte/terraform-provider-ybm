@@ -8,7 +8,7 @@ description: |-
 
 {{ .Description | trimspace }}
 
-~> **Note:** This resource is behind a feature flag. Set the environment variable `YBM_FF_AEON_PG=true` to use it.
+~> **Note:** This resource is behind a feature flag. Set the environment variable `YBM_FF_AMP=true` to use it.
 
 
 Creating the environment registers it and returns `agent_api_key` and `install_hint`. The environment stays `PENDING` until its agent is installed and enrolls with the key; `region`, `cloud_provider` and `k8s_version` are what the agent reports then. `placement` is passed to the agent by the install command, so set it before installing.
@@ -21,7 +21,7 @@ The environment's ID is derived from `name`: lowercased, with spaces, underscore
 
 ## Example Usage
 
-{{ tffile "examples/resources/ybm_byoc_environment/resource.tf" }}
+{{ tffile "examples/resources/ybm_amp_byoc_environment/resource.tf" }}
 
 {{ .SchemaMarkdown | trimspace }}
 {{- if .HasImport }}
@@ -30,6 +30,6 @@ The environment's ID is derived from `name`: lowercased, with spaces, underscore
 
 Import is supported using the following syntax:
 
-{{ codefile "shell" "examples/resources/ybm_byoc_environment/import.sh" }}
+{{ codefile "shell" "examples/resources/ybm_amp_byoc_environment/import.sh" }}
 
 {{- end }}

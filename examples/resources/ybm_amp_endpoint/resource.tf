@@ -1,7 +1,7 @@
 # The read-write endpoint on main, which sets the cluster's password
-resource "ybm_aeon_pg_endpoint" "primary" {
-  cluster_name  = ybm_aeon_pg_cluster.example.cluster_name
-  cluster_id    = ybm_aeon_pg_cluster.example.cluster_id
+resource "ybm_amp_endpoint" "primary" {
+  cluster_name  = ybm_amp_cluster.example.cluster_name
+  cluster_id    = ybm_amp_cluster.example.cluster_id
   endpoint_name = "primary"
   role          = "read_write"
 
@@ -11,19 +11,19 @@ resource "ybm_aeon_pg_endpoint" "primary" {
 }
 
 # A read-only replica of main
-resource "ybm_aeon_pg_endpoint" "replica" {
-  cluster_name  = ybm_aeon_pg_cluster.example.cluster_name
-  cluster_id    = ybm_aeon_pg_cluster.example.cluster_id
+resource "ybm_amp_endpoint" "replica" {
+  cluster_name  = ybm_amp_cluster.example.cluster_name
+  cluster_id    = ybm_amp_cluster.example.cluster_id
   endpoint_name = "replica"
   cpu           = "2"
   memory        = "16Gi"
 }
 
 # The read-write endpoint of a branch, which uses the cluster's password
-resource "ybm_aeon_pg_endpoint" "dev" {
-  cluster_name      = ybm_aeon_pg_cluster.example.cluster_name
-  cluster_id        = ybm_aeon_pg_cluster.example.cluster_id
-  branch_name       = ybm_aeon_pg_branch.dev.branch_name
+resource "ybm_amp_endpoint" "dev" {
+  cluster_name      = ybm_amp_cluster.example.cluster_name
+  cluster_id        = ybm_amp_cluster.example.cluster_id
+  branch_name       = ybm_amp_branch.dev.branch_name
   endpoint_name     = "rw"
   role              = "read_write"
   connectivity_mode = "nlb_internal"
