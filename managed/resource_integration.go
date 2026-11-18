@@ -10,366 +10,327 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/hashicorp/terraform-plugin-framework-validators/schemavalidator"
+	"github.com/hashicorp/terraform-plugin-framework-validators/objectvalidator"
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/path"
+	"github.com/hashicorp/terraform-plugin-framework/resource"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
-	planmodifier "github.com/yugabyte/terraform-provider-ybm/managed/plan_modifier"
+	ybmplanmodifier "github.com/yugabyte/terraform-provider-ybm/managed/plan_modifier"
 	openapiclient "github.com/yugabyte/yugabytedb-managed-go-client-internal"
 )
 
-type resourceIntegrationType struct{}
-
-func (r resourceIntegrationType) GetSchema(_ context.Context) (tfsdk.Schema, diag.Diagnostics) {
-	return tfsdk.Schema{
+func (r *resourceIntegration) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
+	resp.Schema = schema.Schema{
 		Description: "Use this resource to create export configurations. Export configurations define parameters for connecting to third party tools, such as Datadog, for exporting cluster metrics and logs.\n" +
 			"To use an export configuration, assign it to a cluster using the following resources:\n" +
 			"-Export metrics using resource `ybm_associate_metrics_exporter_cluster`\n" +
 			"-Export query logs using resource `ybm_db_query_logging`\n" +
 			"-Export audit logs using resource `ybm_db_audit_logging`",
 		Attributes: r.getSchemaAttributes(),
-	}, nil
+	}
 }
 
-func (r resourceIntegrationType) getTypeValidator() tfsdk.AttributeValidator {
+func (r resourceIntegration) getTypeValidator() validator.String {
 	validTypes := []string{"DATADOG", "GRAFANA", "SUMOLOGIC", "GOOGLECLOUD", "PROMETHEUS", "VICTORIAMETRICS", "NEWRELIC", "AWS_S3", "TSUGA", "MIMIR"}
 	return stringvalidator.OneOf(validTypes...)
 }
 
-func (r resourceIntegrationType) getSchemaAttributes() map[string]tfsdk.Attribute {
-	attributes := map[string]tfsdk.Attribute{
-		"account_id": {
+func (r resourceIntegration) getSchemaAttributes() map[string]schema.Attribute {
+	attributes := map[string]schema.Attribute{
+		"account_id": schema.StringAttribute{
 			Description: "The ID of the account this integration belongs to.",
-			Type:        types.StringType,
 			Computed:    true,
 		},
-		"project_id": {
+		"project_id": schema.StringAttribute{
 			Description: "The ID of the project this integration belongs to.",
-			Type:        types.StringType,
 			Computed:    true,
 		},
-		"config_id": {
+		"config_id": schema.StringAttribute{
 			Description: "The ID of the integration.",
-			Type:        types.StringType,
 			Computed:    true,
 		},
-		"config_name": {
+		"config_name": schema.StringAttribute{
 			Description: "The name of the integration",
-			Type:        types.StringType,
 			Required:    true,
-			PlanModifiers: []tfsdk.AttributePlanModifier{
-				planmodifier.ImmutableFieldModifier{},
+			PlanModifiers: []planmodifier.String{
+				ybmplanmodifier.ImmutableFieldModifier{},
 			},
 		},
-		"type": {
+		"type": schema.StringAttribute{
 			Description: "Defines different exporter destination types.",
-			Type:        types.StringType,
 			Required:    true,
-			Validators:  []tfsdk.AttributeValidator{r.getTypeValidator()},
-			PlanModifiers: []tfsdk.AttributePlanModifier{
-				planmodifier.ImmutableFieldModifier{},
+			Validators:  []validator.String{r.getTypeValidator()},
+			PlanModifiers: []planmodifier.String{
+				ybmplanmodifier.ImmutableFieldModifier{},
 			},
 		},
-		"is_valid": {
+		"is_valid": schema.BoolAttribute{
 			Description: "Signifies whether the integration configuration is valid or not",
-			Type:        types.BoolType,
 			Computed:    true,
 		},
-		"datadog_spec": {
+		"datadog_spec": schema.SingleNestedAttribute{
 			Description: "The specifications of a Datadog integration.",
 			Optional:    true,
-			PlanModifiers: []tfsdk.AttributePlanModifier{
-				planmodifier.ImmutableFieldModifier{},
+			PlanModifiers: []planmodifier.Object{
+				ybmplanmodifier.ImmutableFieldModifier{},
 			},
 			Validators: onlyContainsPath("datadog_spec"),
-			Attributes: tfsdk.SingleNestedAttributes(map[string]tfsdk.Attribute{
-				"api_key": {
+			Attributes: map[string]schema.Attribute{
+				"api_key": schema.StringAttribute{
 					Description: "Datadog Api Key",
-					Type:        types.StringType,
 					Required:    true,
 					Sensitive:   true,
 				},
-				"site": {
+				"site": schema.StringAttribute{
 					Description: "Datadog site.",
-					Type:        types.StringType,
 					Required:    true,
-				}}),
+				}},
 		},
-		"prometheus_spec": {
+		"prometheus_spec": schema.SingleNestedAttribute{
 			Description: "The specifications of a Prometheus integration.",
 			Optional:    true,
-			PlanModifiers: []tfsdk.AttributePlanModifier{
-				planmodifier.ImmutableFieldModifier{},
+			PlanModifiers: []planmodifier.Object{
+				ybmplanmodifier.ImmutableFieldModifier{},
 			},
 			Validators: onlyContainsPath("prometheus_spec"),
-			Attributes: tfsdk.SingleNestedAttributes(map[string]tfsdk.Attribute{
-				"endpoint": {
+			Attributes: map[string]schema.Attribute{
+				"endpoint": schema.StringAttribute{
 					Description: "Prometheus OTLP endpoint URL e.g. http://my-prometheus-endpoint/api/v1/otlp",
-					Type:        types.StringType,
 					Required:    true,
 				},
-			}),
+			},
 		},
-		"victoriametrics_spec": {
+		"victoriametrics_spec": schema.SingleNestedAttribute{
 			Description: "The specifications of a VictoriaMetrics integration.",
 			Optional:    true,
-			PlanModifiers: []tfsdk.AttributePlanModifier{
-				planmodifier.ImmutableFieldModifier{},
+			PlanModifiers: []planmodifier.Object{
+				ybmplanmodifier.ImmutableFieldModifier{},
 			},
 			Validators: onlyContainsPath("victoriametrics_spec"),
-			Attributes: tfsdk.SingleNestedAttributes(map[string]tfsdk.Attribute{
-				"endpoint": {
+			Attributes: map[string]schema.Attribute{
+				"endpoint": schema.StringAttribute{
 					Description: "VictoriaMetrics OTLP endpoint URL e.g. http://my-victoria-metrics-endpoint/opentelemetry",
-					Type:        types.StringType,
 					Required:    true,
 				},
-			}),
+			},
 		},
-		"grafana_spec": {
+		"grafana_spec": schema.SingleNestedAttribute{
 			Description: "The specifications of a Grafana integration.",
 			Optional:    true,
-			PlanModifiers: []tfsdk.AttributePlanModifier{
-				planmodifier.ImmutableFieldModifier{},
+			PlanModifiers: []planmodifier.Object{
+				ybmplanmodifier.ImmutableFieldModifier{},
 			},
 			Validators: onlyContainsPath("grafana_spec"),
-			Attributes: tfsdk.SingleNestedAttributes(map[string]tfsdk.Attribute{
-				"access_policy_token": {
+			Attributes: map[string]schema.Attribute{
+				"access_policy_token": schema.StringAttribute{
 					Description: "Grafana Access Policy Token",
-					Type:        types.StringType,
 					Required:    true,
 					Sensitive:   true,
 				},
-				"zone": {
+				"zone": schema.StringAttribute{
 					Description: "Grafana Zone.",
-					Type:        types.StringType,
 					Required:    true,
 				},
-				"instance_id": {
+				"instance_id": schema.StringAttribute{
 					Description: "Grafana InstanceID.",
-					Type:        types.StringType,
 					Required:    true,
 				},
-				"org_slug": {
+				"org_slug": schema.StringAttribute{
 					Description: "Grafana OrgSlug.",
-					Type:        types.StringType,
 					Required:    true,
 				},
-			}),
+			},
 		},
-		"sumologic_spec": {
+		"sumologic_spec": schema.SingleNestedAttribute{
 			Description: "The specifications of a Sumo Logic integration.",
 			Optional:    true,
-			PlanModifiers: []tfsdk.AttributePlanModifier{
-				planmodifier.ImmutableFieldModifier{},
+			PlanModifiers: []planmodifier.Object{
+				ybmplanmodifier.ImmutableFieldModifier{},
 			},
 			Validators: onlyContainsPath("sumologic_spec"),
-			Attributes: tfsdk.SingleNestedAttributes(map[string]tfsdk.Attribute{
-				"access_id": {
+			Attributes: map[string]schema.Attribute{
+				"access_id": schema.StringAttribute{
 					Description: "Sumo Logic Access Key ID",
-					Type:        types.StringType,
 					Required:    true,
 					Sensitive:   true,
 				},
-				"access_key": {
+				"access_key": schema.StringAttribute{
 					Description: "Sumo Logic Access Key",
-					Type:        types.StringType,
 					Required:    true,
 					Sensitive:   true,
-				}, "installation_token": {
+				}, "installation_token": schema.StringAttribute{
 					Description: "A Sumo Logic installation token to export telemetry to Grafana with",
-					Type:        types.StringType,
 					Required:    true,
 					Sensitive:   true,
 				},
-			}),
+			},
 		},
-		"googlecloud_spec": {
+		"googlecloud_spec": schema.SingleNestedAttribute{
 			Description: "The specifications of a Google Cloud integration.",
 			Optional:    true,
-			PlanModifiers: []tfsdk.AttributePlanModifier{
-				planmodifier.ImmutableFieldModifier{},
+			PlanModifiers: []planmodifier.Object{
+				ybmplanmodifier.ImmutableFieldModifier{},
 			},
 			Validators: onlyContainsPath("googlecloud_spec"),
-			Attributes: tfsdk.SingleNestedAttributes(map[string]tfsdk.Attribute{
-				"type": {
+			Attributes: map[string]schema.Attribute{
+				"type": schema.StringAttribute{
 					Description: "Service Account Type",
-					Type:        types.StringType,
 					Required:    true,
 				},
-				"project_id": {
+				"project_id": schema.StringAttribute{
 					Description: "GCP Project ID",
-					Type:        types.StringType,
 					Required:    true,
 				},
-				"private_key": {
+				"private_key": schema.StringAttribute{
 					Description: "Private Key",
-					Type:        types.StringType,
 					Required:    true,
 					Sensitive:   true,
 				},
-				"private_key_id": {
+				"private_key_id": schema.StringAttribute{
 					Description: "Private Key ID",
-					Type:        types.StringType,
 					Required:    true,
 				},
-				"client_email": {
+				"client_email": schema.StringAttribute{
 					Description: "Client Email",
-					Type:        types.StringType,
 					Required:    true,
 				},
-				"client_id": {
+				"client_id": schema.StringAttribute{
 					Description: "Client ID",
-					Type:        types.StringType,
 					Required:    true,
 				},
-				"auth_uri": {
+				"auth_uri": schema.StringAttribute{
 					Description: "Auth URI",
-					Type:        types.StringType,
 					Required:    true,
 				},
-				"token_uri": {
+				"token_uri": schema.StringAttribute{
 					Description: "Token URI",
-					Type:        types.StringType,
 					Required:    true,
 				},
-				"auth_provider_x509_cert_url": {
+				"auth_provider_x509_cert_url": schema.StringAttribute{
 					Description: "Auth Provider X509 Cert URL",
-					Type:        types.StringType,
 					Required:    true,
 				},
-				"client_x509_cert_url": {
+				"client_x509_cert_url": schema.StringAttribute{
 					Description: "Client X509 Cert URL",
-					Type:        types.StringType,
 					Required:    true,
 				},
-				"universe_domain": {
+				"universe_domain": schema.StringAttribute{
 					Description: "Google Universe Domain",
-					Type:        types.StringType,
 					Optional:    true,
 				},
-			}),
+			},
 		},
-		"newrelic_spec": {
+		"newrelic_spec": schema.SingleNestedAttribute{
 			Description: "The specifications of a New Relic integration.",
 			Optional:    true,
-			PlanModifiers: []tfsdk.AttributePlanModifier{
-				planmodifier.ImmutableFieldModifier{},
+			PlanModifiers: []planmodifier.Object{
+				ybmplanmodifier.ImmutableFieldModifier{},
 			},
 			Validators: onlyContainsPath("newrelic_spec"),
-			Attributes: tfsdk.SingleNestedAttributes(map[string]tfsdk.Attribute{
-				"endpoint": {
+			Attributes: map[string]schema.Attribute{
+				"endpoint": schema.StringAttribute{
 					Description: "New Relic Endpoint URL",
-					Type:        types.StringType,
 					Required:    true,
 				},
-				"license_key": {
+				"license_key": schema.StringAttribute{
 					Description: "New Relic License Key",
-					Type:        types.StringType,
 					Required:    true,
 					Sensitive:   true,
 				},
-			}),
+			},
 		},
-		"aws_s3_spec": {
+		"aws_s3_spec": schema.SingleNestedAttribute{
 			Description: "The specifications of an AWS S3 integration for exporting database query and audit logs. You can use the same integration with ybm_db_query_logging and ybm_db_audit_logging resources.",
 			Optional:    true,
-			PlanModifiers: []tfsdk.AttributePlanModifier{
-				planmodifier.ImmutableFieldModifier{},
+			PlanModifiers: []planmodifier.Object{
+				ybmplanmodifier.ImmutableFieldModifier{},
 			},
 			Validators: onlyContainsPath("aws_s3_spec"),
-			Attributes: tfsdk.SingleNestedAttributes(map[string]tfsdk.Attribute{
-				"bucket_name": {
+			Attributes: map[string]schema.Attribute{
+				"bucket_name": schema.StringAttribute{
 					Description: "The S3 bucket name to export logs to",
-					Type:        types.StringType,
 					Required:    true,
 				},
-				"region": {
+				"region": schema.StringAttribute{
 					Description: "AWS region where the S3 bucket is located",
-					Type:        types.StringType,
 					Required:    true,
 				},
-				"access_key_id": {
+				"access_key_id": schema.StringAttribute{
 					Description: "AWS Access Key ID for S3 access",
-					Type:        types.StringType,
 					Required:    true,
 					Sensitive:   true,
 				},
-				"secret_access_key": {
+				"secret_access_key": schema.StringAttribute{
 					Description: "AWS Secret Access Key for S3 access. Use the Access Key ID and Secret Access Key of an IAM user with s3:PutObject permission for the S3 bucket. For more information, refer to [Managing access keys for IAM users](https://docs.aws.amazon.com/IAM/latest/UserGuide/id_credentials_access-keys.html) in the AWS documentation.",
-					Type:        types.StringType,
 					Required:    true,
 					Sensitive:   true,
 				},
-				"path_prefix": {
+				"path_prefix": schema.StringAttribute{
 					Description: "S3 path prefix for organizing objects (Use '/' for root directory). Exported objects use the `{path_prefix}/{cluster-id}/{node-name}/{partition}/` structure, for example `yugabyte-logs/cluster-123/node-1/2024/01/07/14/`.",
-					Type:        types.StringType,
 					Required:    true,
-					Validators: []tfsdk.AttributeValidator{
+					Validators: []validator.String{
 						stringvalidator.RegexMatches(
 							regexp.MustCompile(`^(\/|([a-zA-Z0-9._-]+\/)+)$`),
 							"Path prefix should match the regex pattern ^(\\/|([a-zA-Z0-9._-]+\\/)+)$",
 						),
 					},
 				},
-				"file_prefix": {
+				"file_prefix": schema.StringAttribute{
 					Description: "Prefix for exported file names",
-					Type:        types.StringType,
 					Optional:    true,
 					Computed:    true,
 				},
-				"partition_strategy": {
+				"partition_strategy": schema.StringAttribute{
 					Description: "Time-based partitioning: 'minute' or 'hour' (default: hour)",
-					Type:        types.StringType,
 					Optional:    true,
 					Computed:    true,
-					Validators:  []tfsdk.AttributeValidator{stringvalidator.OneOf("minute", "hour")},
+					Validators:  []validator.String{stringvalidator.OneOf("minute", "hour")},
 				},
-			}),
+			},
 		},
-		"tsuga_spec": {
+		"tsuga_spec": schema.SingleNestedAttribute{
 			Description: "The specifications of a Tsuga integration. A Tsuga integration can be used to export metrics, database query logs and database audit logs.",
 			Optional:    true,
-			PlanModifiers: []tfsdk.AttributePlanModifier{
-				planmodifier.ImmutableFieldModifier{},
+			PlanModifiers: []planmodifier.Object{
+				ybmplanmodifier.ImmutableFieldModifier{},
 			},
 			Validators: onlyContainsPath("tsuga_spec"),
-			Attributes: tfsdk.SingleNestedAttributes(map[string]tfsdk.Attribute{
-				"endpoint": {
+			Attributes: map[string]schema.Attribute{
+				"endpoint": schema.StringAttribute{
 					Description: "Tsuga OTLP endpoint URL e.g. https://intake.my-org.tsuga.com/api/v1/otlp. Do not include the /v1/metrics suffix, it is appended automatically.",
-					Type:        types.StringType,
 					Required:    true,
 				},
-				"api_token": {
+				"api_token": schema.StringAttribute{
 					Description: "Tsuga bearer token used to export telemetry to Tsuga.",
-					Type:        types.StringType,
 					Required:    true,
 					Sensitive:   true,
-					Validators:  []tfsdk.AttributeValidator{stringvalidator.LengthBetween(6, 600)},
+					Validators:  []validator.String{stringvalidator.LengthBetween(6, 600)},
 				},
-			}),
+			},
 		},
-		"mimir_spec": {
+		"mimir_spec": schema.SingleNestedAttribute{
 			Description: "The specifications of a Mimir integration. A Mimir integration can be used to export metrics only.",
 			Optional:    true,
-			PlanModifiers: []tfsdk.AttributePlanModifier{
-				planmodifier.ImmutableFieldModifier{},
+			PlanModifiers: []planmodifier.Object{
+				ybmplanmodifier.ImmutableFieldModifier{},
 			},
 			Validators: onlyContainsPath("mimir_spec"),
-			Attributes: tfsdk.SingleNestedAttributes(map[string]tfsdk.Attribute{
-				"endpoint": {
+			Attributes: map[string]schema.Attribute{
+				"endpoint": schema.StringAttribute{
 					Description: "Mimir OTLP endpoint URL e.g. https://mimir.my-company.com/otlp. Do not include the /v1/metrics suffix, it is appended automatically.",
-					Type:        types.StringType,
 					Required:    true,
 				},
-				"api_token": {
+				"api_token": schema.StringAttribute{
 					Description: "The full Authorization header value used to export metrics to Mimir. Must start with \"Bearer \" or \"Basic \".",
-					Type:        types.StringType,
 					Required:    true,
 					Sensitive:   true,
-					Validators: []tfsdk.AttributeValidator{
+					Validators: []validator.String{
 						stringvalidator.LengthBetween(6, 600),
 						stringvalidator.RegexMatches(
 							regexp.MustCompile(`^(Bearer|Basic) `),
@@ -377,36 +338,41 @@ func (r resourceIntegrationType) getSchemaAttributes() map[string]tfsdk.Attribut
 						),
 					},
 				},
-				"org_id": {
+				"org_id": schema.StringAttribute{
 					Description: "Mimir tenant organization ID, sent as the X-Scope-OrgID header.",
-					Type:        types.StringType,
 					Optional:    true,
 				},
-			}),
+			},
 		},
 	}
 
 	return attributes
 }
 
-func onlyContainsPath(requiredPath string) []tfsdk.AttributeValidator {
+func onlyContainsPath(requiredPath string) []validator.Object {
 	allPaths := []string{"datadog_spec", "grafana_spec", "sumologic_spec", "googlecloud_spec", "prometheus_spec", "victoriametrics_spec", "newrelic_spec", "aws_s3_spec", "tsuga_spec", "mimir_spec"}
 
-	var validators []tfsdk.AttributeValidator
+	var validators []validator.Object
 
 	for _, specPath := range allPaths {
 		if specPath != requiredPath {
-			validators = append(validators, schemavalidator.ConflictsWith(path.MatchRoot(specPath)))
+			validators = append(validators, objectvalidator.ConflictsWith(path.MatchRoot(specPath)))
 		}
 	}
 
 	return validators
 }
 
-func (r resourceIntegrationType) NewResource(_ context.Context, p tfsdk.Provider) (tfsdk.Resource, diag.Diagnostics) {
-	return resourceIntegration{
-		p: *(p.(*provider)),
-	}, nil
+func newResourceIntegration() resource.Resource {
+	return &resourceIntegration{}
+}
+
+func (r *resourceIntegration) Metadata(_ context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
+	resp.TypeName = req.ProviderTypeName + "_integration"
+}
+
+func (r *resourceIntegration) Configure(_ context.Context, req resource.ConfigureRequest, _ *resource.ConfigureResponse) {
+	r.p = configuredProvider(req.ProviderData)
 }
 
 type resourceIntegration struct {
@@ -436,7 +402,7 @@ func getIDsFromIntegrationState(ctx context.Context, state tfsdk.State, tp *Tele
 	state.GetAttribute(ctx, path.Root("project_id"), &tp.ProjectID)
 	state.GetAttribute(ctx, path.Root("config_id"), &tp.ConfigID)
 	state.GetAttribute(ctx, path.Root("type"), &tp.Type)
-	switch tp.Type.Value {
+	switch tp.Type.ValueString() {
 	case string(openapiclient.TELEMETRYPROVIDERTYPEENUM_DATADOG):
 		state.GetAttribute(ctx, path.Root("datadog_spec"), &tp.DataDogSpec)
 	case string(openapiclient.TELEMETRYPROVIDERTYPEENUM_PROMETHEUS):
@@ -460,7 +426,7 @@ func getIDsFromIntegrationState(ctx context.Context, state tfsdk.State, tp *Tele
 	}
 }
 
-func (r resourceIntegration) Create(ctx context.Context, req tfsdk.CreateResourceRequest, resp *tfsdk.CreateResourceResponse) {
+func (r resourceIntegration) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
 
 	if !r.p.configured {
 		resp.Diagnostics.AddError(
@@ -477,7 +443,7 @@ func (r resourceIntegration) Create(ctx context.Context, req tfsdk.CreateResourc
 		return
 	}
 
-	sinkType := plan.Type.Value
+	sinkType := plan.Type.ValueString()
 	telemetrySinkTypeEnum, err := openapiclient.NewTelemetryProviderTypeEnumFromValue(strings.ToUpper(sinkType))
 	if err != nil {
 		resp.Diagnostics.AddError(GetApiErrorDetails(err), "")
@@ -498,7 +464,7 @@ func (r resourceIntegration) Create(ctx context.Context, req tfsdk.CreateResourc
 		return
 	}
 
-	configName := plan.ConfigName.Value
+	configName := plan.ConfigName.ValueString()
 
 	telemetryProviderSpec := openapiclient.NewTelemetryProviderSpec(configName, *telemetrySinkTypeEnum)
 
@@ -511,7 +477,7 @@ func (r resourceIntegration) Create(ctx context.Context, req tfsdk.CreateResourc
 			)
 			return
 		}
-		telemetryProviderSpec.SetDatadogSpec(*openapiclient.NewDatadogTelemetryProviderSpec(plan.DataDogSpec.ApiKey.Value, plan.DataDogSpec.Site.Value))
+		telemetryProviderSpec.SetDatadogSpec(*openapiclient.NewDatadogTelemetryProviderSpec(plan.DataDogSpec.ApiKey.ValueString(), plan.DataDogSpec.Site.ValueString()))
 	case openapiclient.TELEMETRYPROVIDERTYPEENUM_PROMETHEUS:
 		if plan.PrometheusSpec == nil {
 			resp.Diagnostics.AddError(
@@ -520,7 +486,7 @@ func (r resourceIntegration) Create(ctx context.Context, req tfsdk.CreateResourc
 			)
 			return
 		}
-		telemetryProviderSpec.SetPrometheusSpec(*openapiclient.NewPrometheusTelemetryProviderSpec(plan.PrometheusSpec.Endpoint.Value))
+		telemetryProviderSpec.SetPrometheusSpec(*openapiclient.NewPrometheusTelemetryProviderSpec(plan.PrometheusSpec.Endpoint.ValueString()))
 	case openapiclient.TELEMETRYPROVIDERTYPEENUM_VICTORIAMETRICS:
 		if plan.VictoriaMetricsSpec == nil {
 			resp.Diagnostics.AddError(
@@ -529,7 +495,7 @@ func (r resourceIntegration) Create(ctx context.Context, req tfsdk.CreateResourc
 			)
 			return
 		}
-		telemetryProviderSpec.SetVictoriametricsSpec(*openapiclient.NewVictoriaMetricsTelemetryProviderSpec(plan.VictoriaMetricsSpec.Endpoint.Value))
+		telemetryProviderSpec.SetVictoriametricsSpec(*openapiclient.NewVictoriaMetricsTelemetryProviderSpec(plan.VictoriaMetricsSpec.Endpoint.ValueString()))
 	case openapiclient.TELEMETRYPROVIDERTYPEENUM_GRAFANA:
 		if plan.GrafanaSpec == nil {
 			resp.Diagnostics.AddError(
@@ -538,7 +504,7 @@ func (r resourceIntegration) Create(ctx context.Context, req tfsdk.CreateResourc
 			)
 			return
 		}
-		telemetryProviderSpec.SetGrafanaSpec(*openapiclient.NewGrafanaTelemetryProviderSpec(plan.GrafanaSpec.AccessTokenPolicy.Value, plan.GrafanaSpec.Zone.Value, plan.GrafanaSpec.InstanceId.Value, plan.GrafanaSpec.OrgSlug.Value))
+		telemetryProviderSpec.SetGrafanaSpec(*openapiclient.NewGrafanaTelemetryProviderSpec(plan.GrafanaSpec.AccessTokenPolicy.ValueString(), plan.GrafanaSpec.Zone.ValueString(), plan.GrafanaSpec.InstanceId.ValueString(), plan.GrafanaSpec.OrgSlug.ValueString()))
 
 	case openapiclient.TELEMETRYPROVIDERTYPEENUM_SUMOLOGIC:
 		if plan.SumoLogicSpec == nil {
@@ -548,7 +514,7 @@ func (r resourceIntegration) Create(ctx context.Context, req tfsdk.CreateResourc
 			)
 			return
 		}
-		telemetryProviderSpec.SetSumologicSpec(*openapiclient.NewSumologicTelemetryProviderSpec(plan.SumoLogicSpec.InstallationToken.Value, plan.SumoLogicSpec.AccessId.Value, plan.SumoLogicSpec.AccessKey.Value))
+		telemetryProviderSpec.SetSumologicSpec(*openapiclient.NewSumologicTelemetryProviderSpec(plan.SumoLogicSpec.InstallationToken.ValueString(), plan.SumoLogicSpec.AccessId.ValueString(), plan.SumoLogicSpec.AccessKey.ValueString()))
 
 	case openapiclient.TELEMETRYPROVIDERTYPEENUM_GOOGLECLOUD:
 		if plan.GoogleCloudSpec == nil {
@@ -559,9 +525,9 @@ func (r resourceIntegration) Create(ctx context.Context, req tfsdk.CreateResourc
 			return
 		}
 		gcpServiceAccountPlan := plan.GoogleCloudSpec
-		googleCloudSpec := *openapiclient.NewGCPServiceAccount(gcpServiceAccountPlan.Type.Value, gcpServiceAccountPlan.ProjectId.Value, gcpServiceAccountPlan.PrivateKey.Value, gcpServiceAccountPlan.PrivateKeyId.Value, gcpServiceAccountPlan.ClientEmail.Value, gcpServiceAccountPlan.ClientId.Value, gcpServiceAccountPlan.AuthUri.Value, gcpServiceAccountPlan.TokenUri.Value, gcpServiceAccountPlan.AuthProviderX509CertUrl.Value, gcpServiceAccountPlan.ClientX509CertUrl.Value)
-		if !gcpServiceAccountPlan.UniverseDomain.Null && !gcpServiceAccountPlan.UniverseDomain.Unknown && gcpServiceAccountPlan.UniverseDomain.Value != "" {
-			googleCloudSpec.SetUniverseDomain(gcpServiceAccountPlan.UniverseDomain.Value)
+		googleCloudSpec := *openapiclient.NewGCPServiceAccount(gcpServiceAccountPlan.Type.ValueString(), gcpServiceAccountPlan.ProjectId.ValueString(), gcpServiceAccountPlan.PrivateKey.ValueString(), gcpServiceAccountPlan.PrivateKeyId.ValueString(), gcpServiceAccountPlan.ClientEmail.ValueString(), gcpServiceAccountPlan.ClientId.ValueString(), gcpServiceAccountPlan.AuthUri.ValueString(), gcpServiceAccountPlan.TokenUri.ValueString(), gcpServiceAccountPlan.AuthProviderX509CertUrl.ValueString(), gcpServiceAccountPlan.ClientX509CertUrl.ValueString())
+		if !gcpServiceAccountPlan.UniverseDomain.IsNull() && !gcpServiceAccountPlan.UniverseDomain.IsUnknown() && gcpServiceAccountPlan.UniverseDomain.ValueString() != "" {
+			googleCloudSpec.SetUniverseDomain(gcpServiceAccountPlan.UniverseDomain.ValueString())
 		}
 		telemetryProviderSpec.SetGooglecloudSpec(googleCloudSpec)
 	case openapiclient.TELEMETRYPROVIDERTYPEENUM_NEWRELIC:
@@ -572,7 +538,7 @@ func (r resourceIntegration) Create(ctx context.Context, req tfsdk.CreateResourc
 			)
 			return
 		}
-		telemetryProviderSpec.SetNewrelicSpec(*openapiclient.NewNewrelicTelemetryProviderSpec(plan.NewRelicSpec.LicenseKey.Value, plan.NewRelicSpec.Endpoint.Value))
+		telemetryProviderSpec.SetNewrelicSpec(*openapiclient.NewNewrelicTelemetryProviderSpec(plan.NewRelicSpec.LicenseKey.ValueString(), plan.NewRelicSpec.Endpoint.ValueString()))
 	case openapiclient.TELEMETRYPROVIDERTYPEENUM_AWS_S3:
 		if plan.AwsS3Spec == nil {
 			resp.Diagnostics.AddError(
@@ -582,14 +548,14 @@ func (r resourceIntegration) Create(ctx context.Context, req tfsdk.CreateResourc
 			return
 		}
 		awsS3SpecPlan := plan.AwsS3Spec
-		s3TelemetrySpec := *openapiclient.NewS3TelemetryProviderSpec(awsS3SpecPlan.BucketName.Value, awsS3SpecPlan.Region.Value, awsS3SpecPlan.AccessKeyId.Value, awsS3SpecPlan.SecretAccessKey.Value, awsS3SpecPlan.PathPrefix.Value)
+		s3TelemetrySpec := *openapiclient.NewS3TelemetryProviderSpec(awsS3SpecPlan.BucketName.ValueString(), awsS3SpecPlan.Region.ValueString(), awsS3SpecPlan.AccessKeyId.ValueString(), awsS3SpecPlan.SecretAccessKey.ValueString(), awsS3SpecPlan.PathPrefix.ValueString())
 
 		// Set optional fields if provided
-		if !awsS3SpecPlan.FilePrefix.Null && !awsS3SpecPlan.FilePrefix.Unknown && awsS3SpecPlan.FilePrefix.Value != "" {
-			s3TelemetrySpec.SetFilePrefix(awsS3SpecPlan.FilePrefix.Value)
+		if !awsS3SpecPlan.FilePrefix.IsNull() && !awsS3SpecPlan.FilePrefix.IsUnknown() && awsS3SpecPlan.FilePrefix.ValueString() != "" {
+			s3TelemetrySpec.SetFilePrefix(awsS3SpecPlan.FilePrefix.ValueString())
 		}
-		if !awsS3SpecPlan.PartitionStrategy.Null && !awsS3SpecPlan.PartitionStrategy.Unknown && awsS3SpecPlan.PartitionStrategy.Value != "" {
-			s3TelemetrySpec.SetPartitionStrategy(awsS3SpecPlan.PartitionStrategy.Value)
+		if !awsS3SpecPlan.PartitionStrategy.IsNull() && !awsS3SpecPlan.PartitionStrategy.IsUnknown() && awsS3SpecPlan.PartitionStrategy.ValueString() != "" {
+			s3TelemetrySpec.SetPartitionStrategy(awsS3SpecPlan.PartitionStrategy.ValueString())
 		}
 		telemetryProviderSpec.SetAwsS3Spec(s3TelemetrySpec)
 	case openapiclient.TELEMETRYPROVIDERTYPEENUM_TSUGA:
@@ -600,7 +566,7 @@ func (r resourceIntegration) Create(ctx context.Context, req tfsdk.CreateResourc
 			)
 			return
 		}
-		telemetryProviderSpec.SetTsugaSpec(*openapiclient.NewTsugaTelemetryProviderSpec(plan.TsugaSpec.ApiToken.Value, plan.TsugaSpec.Endpoint.Value))
+		telemetryProviderSpec.SetTsugaSpec(*openapiclient.NewTsugaTelemetryProviderSpec(plan.TsugaSpec.ApiToken.ValueString(), plan.TsugaSpec.Endpoint.ValueString()))
 	case openapiclient.TELEMETRYPROVIDERTYPEENUM_MIMIR:
 		if plan.MimirSpec == nil {
 			resp.Diagnostics.AddError(
@@ -609,9 +575,9 @@ func (r resourceIntegration) Create(ctx context.Context, req tfsdk.CreateResourc
 			)
 			return
 		}
-		mimirSpec := *openapiclient.NewMimirTelemetryProviderSpec(plan.MimirSpec.ApiToken.Value, plan.MimirSpec.Endpoint.Value)
-		if !plan.MimirSpec.OrgId.Null && !plan.MimirSpec.OrgId.Unknown && plan.MimirSpec.OrgId.Value != "" {
-			mimirSpec.SetOrgId(plan.MimirSpec.OrgId.Value)
+		mimirSpec := *openapiclient.NewMimirTelemetryProviderSpec(plan.MimirSpec.ApiToken.ValueString(), plan.MimirSpec.Endpoint.ValueString())
+		if !plan.MimirSpec.OrgId.IsNull() && !plan.MimirSpec.OrgId.IsUnknown() && plan.MimirSpec.OrgId.ValueString() != "" {
+			mimirSpec.SetOrgId(plan.MimirSpec.OrgId.ValueString())
 		}
 		telemetryProviderSpec.SetMimirSpec(mimirSpec)
 	default:
@@ -642,11 +608,11 @@ func (r resourceIntegration) Create(ctx context.Context, req tfsdk.CreateResourc
 	}
 }
 
-func (r resourceIntegration) Read(ctx context.Context, req tfsdk.ReadResourceRequest, resp *tfsdk.ReadResourceResponse) {
+func (r resourceIntegration) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
 	var state TelemetryProvider
 
 	getIDsFromIntegrationState(ctx, req.State, &state)
-	configID := state.ConfigID.Value
+	configID := state.ConfigID.ValueString()
 
 	apiClient := r.p.client
 
@@ -675,7 +641,7 @@ func (r resourceIntegration) Read(ctx context.Context, req tfsdk.ReadResourceReq
 	}
 }
 
-func (r resourceIntegration) Update(ctx context.Context, req tfsdk.UpdateResourceRequest, resp *tfsdk.UpdateResourceResponse) {
+func (r resourceIntegration) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
 	resp.Diagnostics.AddError(
 		"Unsupported Operation",
 		"This resource does not support updates. Please destroy and recreate the resource if changes are needed.",
@@ -693,36 +659,36 @@ func resourceTelemetryProviderRead(accountId string, projectId string, configID 
 	configSpec := configData.GetSpec()
 	configInfo := configData.GetInfo()
 
-	tp.AccountID.Value = accountId
-	tp.ProjectID.Value = projectId
-	tp.ConfigName.Value = configSpec.Name
-	tp.ConfigID.Value = configInfo.Id
-	tp.Type.Value = string(configSpec.Type)
-	tp.IsValid.Value = *configInfo.IsValid.Get()
+	tp.AccountID = types.StringValue(accountId)
+	tp.ProjectID = types.StringValue(projectId)
+	tp.ConfigName = types.StringValue(configSpec.Name)
+	tp.ConfigID = types.StringValue(configInfo.Id)
+	tp.Type = types.StringValue(string(configSpec.Type))
+	tp.IsValid = types.BoolValue(*configInfo.IsValid.Get())
 
 	// API returns masked credentials. We use the credential details provided by the user in the plan or the existing state
 	switch configData.GetSpec().Type {
 	case openapiclient.TELEMETRYPROVIDERTYPEENUM_DATADOG:
 		tp.DataDogSpec = &DataDogSpec{
 			ApiKey: userProvidedTpDetails.DataDogSpec.ApiKey,
-			Site:   types.String{Value: configSpec.DatadogSpec.Get().Site},
+			Site:   types.StringValue(configSpec.DatadogSpec.Get().Site),
 		}
 	case openapiclient.TELEMETRYPROVIDERTYPEENUM_PROMETHEUS:
 		tp.PrometheusSpec = &PrometheusSpec{
-			Endpoint: types.String{Value: userProvidedTpDetails.PrometheusSpec.Endpoint.Value},
+			Endpoint: types.StringValue(userProvidedTpDetails.PrometheusSpec.Endpoint.ValueString()),
 		}
 
 	case openapiclient.TELEMETRYPROVIDERTYPEENUM_VICTORIAMETRICS:
 		tp.VictoriaMetricsSpec = &VictoriaMetricsSpec{
-			Endpoint: types.String{Value: configSpec.VictoriametricsSpec.Get().Endpoint},
+			Endpoint: types.StringValue(configSpec.VictoriametricsSpec.Get().Endpoint),
 		}
 	case openapiclient.TELEMETRYPROVIDERTYPEENUM_GRAFANA:
 		grafanaSpec := configSpec.GetGrafanaSpec()
 		tp.GrafanaSpec = &GrafanaSpec{
 			AccessTokenPolicy: userProvidedTpDetails.GrafanaSpec.AccessTokenPolicy,
-			Zone:              types.String{Value: grafanaSpec.Zone},
-			InstanceId:        types.String{Value: grafanaSpec.InstanceId},
-			OrgSlug:           types.String{Value: grafanaSpec.OrgSlug},
+			Zone:              types.StringValue(grafanaSpec.Zone),
+			InstanceId:        types.StringValue(grafanaSpec.InstanceId),
+			OrgSlug:           types.StringValue(grafanaSpec.OrgSlug),
 		}
 	case openapiclient.TELEMETRYPROVIDERTYPEENUM_SUMOLOGIC:
 		tp.SumoLogicSpec = &SumoLogicSpec{
@@ -733,41 +699,34 @@ func resourceTelemetryProviderRead(accountId string, projectId string, configID 
 	case openapiclient.TELEMETRYPROVIDERTYPEENUM_GOOGLECLOUD:
 		googlecloudSpec := configSpec.GetGooglecloudSpec()
 		tp.GoogleCloudSpec = &GCPServiceAccount{
-			Type:                    types.String{Value: googlecloudSpec.Type},
-			ProjectId:               types.String{Value: googlecloudSpec.ProjectId},
-			PrivateKeyId:            types.String{Value: googlecloudSpec.PrivateKeyId},
+			Type:                    types.StringValue(googlecloudSpec.Type),
+			ProjectId:               types.StringValue(googlecloudSpec.ProjectId),
+			PrivateKeyId:            types.StringValue(googlecloudSpec.PrivateKeyId),
 			PrivateKey:              userProvidedTpDetails.GoogleCloudSpec.PrivateKey,
-			ClientEmail:             types.String{Value: googlecloudSpec.ClientEmail},
-			ClientId:                types.String{Value: googlecloudSpec.ClientId},
-			AuthUri:                 types.String{Value: googlecloudSpec.AuthUri},
-			TokenUri:                types.String{Value: googlecloudSpec.TokenUri},
-			AuthProviderX509CertUrl: types.String{Value: googlecloudSpec.AuthProviderX509CertUrl},
-			ClientX509CertUrl:       types.String{Value: googlecloudSpec.ClientX509CertUrl},
-		}
-		if googlecloudSpec.HasUniverseDomain() {
-			tp.GoogleCloudSpec.UniverseDomain = types.String{Value: *googlecloudSpec.UniverseDomain}
+			ClientEmail:             types.StringValue(googlecloudSpec.ClientEmail),
+			ClientId:                types.StringValue(googlecloudSpec.ClientId),
+			AuthUri:                 types.StringValue(googlecloudSpec.AuthUri),
+			TokenUri:                types.StringValue(googlecloudSpec.TokenUri),
+			AuthProviderX509CertUrl: types.StringValue(googlecloudSpec.AuthProviderX509CertUrl),
+			ClientX509CertUrl:       types.StringValue(googlecloudSpec.ClientX509CertUrl),
+			UniverseDomain:          types.StringValue(googlecloudSpec.GetUniverseDomain()),
 		}
 	case openapiclient.TELEMETRYPROVIDERTYPEENUM_NEWRELIC:
 		tp.NewRelicSpec = &NewRelicSpec{
-			Endpoint:   types.String{Value: configSpec.NewrelicSpec.Get().Endpoint},
+			Endpoint:   types.StringValue(configSpec.NewrelicSpec.Get().Endpoint),
 			LicenseKey: userProvidedTpDetails.NewRelicSpec.LicenseKey,
 		}
 	case openapiclient.TELEMETRYPROVIDERTYPEENUM_AWS_S3:
 		s3Spec := configSpec.GetAwsS3Spec()
 		tp.AwsS3Spec = &AwsS3Spec{
-			BucketName:      types.String{Value: s3Spec.BucketName},
-			Region:          types.String{Value: s3Spec.Region},
+			BucketName:      types.StringValue(s3Spec.BucketName),
+			Region:          types.StringValue(s3Spec.Region),
 			AccessKeyId:     userProvidedTpDetails.AwsS3Spec.AccessKeyId,     // Use user-provided value (API returns masked)
 			SecretAccessKey: userProvidedTpDetails.AwsS3Spec.SecretAccessKey, // Use user-provided value (API returns masked)
-			PathPrefix:      types.String{Value: s3Spec.GetPathPrefix()},
-		}
-
-		// Set optional fields from API response if they exist
-		if s3Spec.HasFilePrefix() {
-			tp.AwsS3Spec.FilePrefix = types.String{Value: s3Spec.GetFilePrefix()}
-		}
-		if s3Spec.HasPartitionStrategy() {
-			tp.AwsS3Spec.PartitionStrategy = types.String{Value: s3Spec.GetPartitionStrategy()}
+			PathPrefix:      types.StringValue(s3Spec.GetPathPrefix()),
+			// Optional fields; "" when the API response does not have them.
+			FilePrefix:        types.StringValue(s3Spec.GetFilePrefix()),
+			PartitionStrategy: types.StringValue(s3Spec.GetPartitionStrategy()),
 		}
 	case openapiclient.TELEMETRYPROVIDERTYPEENUM_TSUGA:
 		// The API masks api_token and normalizes the endpoint (e.g. strips trailing slashes),
@@ -780,8 +739,8 @@ func resourceTelemetryProviderRead(accountId string, projectId string, configID 
 		} else {
 			tsugaSpec := configSpec.GetTsugaSpec()
 			tp.TsugaSpec = &TsugaSpec{
-				Endpoint: types.String{Value: tsugaSpec.Endpoint},
-				ApiToken: types.String{Value: tsugaSpec.ApiToken},
+				Endpoint: types.StringValue(tsugaSpec.Endpoint),
+				ApiToken: types.StringValue(tsugaSpec.ApiToken),
 			}
 		}
 	case openapiclient.TELEMETRYPROVIDERTYPEENUM_MIMIR:
@@ -795,12 +754,12 @@ func resourceTelemetryProviderRead(accountId string, projectId string, configID 
 		} else {
 			mimirSpec := configSpec.GetMimirSpec()
 			tp.MimirSpec = &MimirSpec{
-				Endpoint: types.String{Value: mimirSpec.Endpoint},
-				ApiToken: types.String{Value: mimirSpec.ApiToken},
-				OrgId:    types.String{Null: true},
+				Endpoint: types.StringValue(mimirSpec.Endpoint),
+				ApiToken: types.StringValue(mimirSpec.ApiToken),
+				OrgId:    types.StringNull(),
 			}
 			if mimirSpec.GetOrgId() != "" {
-				tp.MimirSpec.OrgId = types.String{Value: mimirSpec.GetOrgId()}
+				tp.MimirSpec.OrgId = types.StringValue(mimirSpec.GetOrgId())
 			}
 		}
 	}
@@ -808,13 +767,13 @@ func resourceTelemetryProviderRead(accountId string, projectId string, configID 
 	return tp, true, ""
 }
 
-func (r resourceIntegration) Delete(ctx context.Context, req tfsdk.DeleteResourceRequest, resp *tfsdk.DeleteResourceResponse) {
+func (r resourceIntegration) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
 	apiClient := r.p.client
 	var state TelemetryProvider
 	getIDsFromIntegrationState(ctx, req.State, &state)
-	accountId := state.AccountID.Value
-	projectId := state.ProjectID.Value
-	configId := state.ConfigID.Value
+	accountId := state.AccountID.ValueString()
+	projectId := state.ProjectID.ValueString()
+	configId := state.ConfigID.ValueString()
 
 	_, err := apiClient.TelemetryProviderApi.DeleteTelemetryProvider(ctx, accountId, projectId, configId).Execute()
 	if err != nil {
@@ -842,7 +801,7 @@ func GetTelemetryProviderById(accountId string, projectId string, configID strin
 }
 
 // Import API Key
-func (r resourceIntegration) ImportState(ctx context.Context, req tfsdk.ImportResourceStateRequest, resp *tfsdk.ImportResourceStateResponse) {
+func (r resourceIntegration) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
 	// Save the import identifier in the id attribute
-	tfsdk.ResourceImportStatePassthroughID(ctx, path.Root("id"), req, resp)
+	resource.ImportStatePassthroughID(ctx, path.Root("id"), req, resp)
 }

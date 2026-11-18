@@ -107,9 +107,9 @@ func TestAmpDefaultMemory(t *testing.T) {
 }
 
 func TestAmpEndpointSpecLeavesUnsetValuesToTheService(t *testing.T) {
-	nullMap := types.Map{ElemType: types.StringType, Null: true}
-	plan := AmpEndpoint{Credentials: &AmpCredentials{Password: types.String{Value: "S3cretPassw0rd"}}, Cpu: types.String{Unknown: true},
-		Memory: types.String{Unknown: true}, ConnectivityMode: types.String{Unknown: true}, PgSettings: nullMap}
+	nullMap := types.MapNull(types.StringType)
+	plan := AmpEndpoint{Credentials: &AmpCredentials{Password: types.StringValue("S3cretPassw0rd")}, Cpu: types.StringUnknown(),
+		Memory: types.StringUnknown(), ConnectivityMode: types.StringUnknown(), PgSettings: nullMap}
 	c, err := newAmpEndpointConfig(ampRoleReadWrite, plan, nil)
 	if err != nil {
 		t.Fatal(err)
@@ -121,8 +121,8 @@ func TestAmpEndpointSpecLeavesUnsetValuesToTheService(t *testing.T) {
 
 	// On an update, a new cpu brings memory with it, and unmanaged collections are left out.
 	prior := plan
-	prior.Cpu, prior.Memory = types.String{Value: "2"}, types.String{Value: "16Gi"}
-	plan.Cpu, plan.ConnectivityMode = types.String{Value: "4"}, types.String{Value: "cluster_ip"}
+	prior.Cpu, prior.Memory = types.StringValue("2"), types.StringValue("16Gi")
+	plan.Cpu, plan.ConnectivityMode = types.StringValue("4"), types.StringValue("cluster_ip")
 	c, err = newAmpEndpointConfig(ampRoleReadWrite, plan, &prior)
 	if err != nil {
 		t.Fatal(err)
@@ -133,8 +133,8 @@ func TestAmpEndpointSpecLeavesUnsetValuesToTheService(t *testing.T) {
 
 	// Removing managed collections from the configuration clears them, with the mode connectivity
 	// already has.
-	prior.AllowedCidrs = []types.String{{Value: "10.0.0.0/8"}}
-	prior.PgSettings = types.Map{ElemType: types.StringType, Elems: map[string]attr.Value{"work_mem": types.String{Value: "64MB"}}}
+	prior.AllowedCidrs = []types.String{types.StringValue("10.0.0.0/8")}
+	prior.PgSettings = types.MapValueMust(types.StringType, map[string]attr.Value{"work_mem": types.StringValue("64MB")})
 	c, _ = newAmpEndpointConfig(ampRoleReadWrite, plan, &prior)
 	if b, _ := json.Marshal(c.spec(false)); !strings.Contains(string(b), `"connectivity":{"mode":"cluster_ip","allowed_cidrs":[]},"pg_settings":{}`) {
 		t.Errorf("update spec = %s", b)
@@ -142,15 +142,15 @@ func TestAmpEndpointSpecLeavesUnsetValuesToTheService(t *testing.T) {
 }
 
 func TestAmpClusterConfigLeavesUnsetValuesToTheService(t *testing.T) {
-	nullMap := types.Map{ElemType: types.StringType, Null: true}
-	c := newAmpClusterConfig(types.Int64{Unknown: true}, types.String{Unknown: true}, nil, nullMap, nil, nullMap)
+	nullMap := types.MapNull(types.StringType)
+	c := newAmpClusterConfig(types.Int64Unknown(), types.StringUnknown(), nil, nullMap, nil, nullMap)
 	if b, _ := json.Marshal(c.clusterSpec()); string(b) != `{}` {
 		t.Errorf("cluster spec = %s", b)
 	}
 	if b, _ := json.Marshal(c.mainBranchSpec(true)); string(b) != `{}` {
 		t.Errorf("main branch spec = %s", b)
 	}
-	c = newAmpClusterConfig(types.Int64{Value: 17}, types.String{Value: "postgres"}, nil, nullMap, []types.String{{Value: "vector"}}, nullMap)
+	c = newAmpClusterConfig(types.Int64Value(17), types.StringValue("postgres"), nil, nullMap, []types.String{types.StringValue("vector")}, nullMap)
 	if b, _ := json.Marshal(c.mainBranchSpec(false)); string(b) != `{}` {
 		t.Errorf("a new main branch got extensions: %s", b)
 	}
@@ -247,13 +247,13 @@ func TestReadAmpEndpoint(t *testing.T) {
 }
 
 func TestCollectionsReadBackOnlyWhenManaged(t *testing.T) {
-	nullMap := types.Map{ElemType: types.StringType, Null: true}
-	emptyMap := types.Map{ElemType: types.StringType, Elems: map[string]attr.Value{}}
-	if got := mapToTf(nil, emptyMap); got.Null || len(got.Elems) != 0 {
+	nullMap := types.MapNull(types.StringType)
+	emptyMap := types.MapValueMust(types.StringType, map[string]attr.Value{})
+	if got := mapToTf(nil, emptyMap); got.IsNull() || len(got.Elements()) != 0 {
 		t.Errorf("an empty map read back as %v", got)
 	}
 	// Settings Terraform does not manage, such as those a fork inherits, stay out of state.
-	if got := mapToTf(map[string]string{"a": "b"}, nullMap); !got.Null {
+	if got := mapToTf(map[string]string{"a": "b"}, nullMap); !got.IsNull() {
 		t.Errorf("an unmanaged map read back as %v", got)
 	}
 	if got := stringsToTf(nil, []types.String{}); got == nil || len(got) != 0 {

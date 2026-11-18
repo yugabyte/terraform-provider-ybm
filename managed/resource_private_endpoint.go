@@ -13,6 +13,8 @@ import (
 
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/path"
+	"github.com/hashicorp/terraform-plugin-framework/resource"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
@@ -21,79 +23,70 @@ import (
 	openapiclient "github.com/yugabyte/yugabytedb-managed-go-client-internal"
 )
 
-type resourcePrivateEndpointType struct{}
-
-func (r resourcePrivateEndpointType) GetSchema(_ context.Context) (tfsdk.Schema, diag.Diagnostics) {
-	return tfsdk.Schema{
+func (r *resourcePrivateEndpoint) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
+	resp.Schema = schema.Schema{
 		Description: `The resource to create an endpoint in YugabyteDB Aeon.`,
-		Attributes: map[string]tfsdk.Attribute{
-			"account_id": {
+		Attributes: map[string]schema.Attribute{
+			"account_id": schema.StringAttribute{
 				Description: "The ID of the account this private service endpoint belongs to.",
-				Type:        types.StringType,
 				Computed:    true,
 			},
-			"project_id": {
+			"project_id": schema.StringAttribute{
 				Description: "The ID of the project this private service endpoint belongs to.",
-				Type:        types.StringType,
 				Computed:    true,
 			},
-			"cluster_id": {
+			"cluster_id": schema.StringAttribute{
 				Description: "The ID of the cluster.",
-				Type:        types.StringType,
 				Required:    true,
 			},
-			"endpoint_id": {
+			"endpoint_id": schema.StringAttribute{
 				Description: "The ID of the endpoint. Created automatically when the private endpoint is created. Used to get a specific Endpoint.",
-				Type:        types.StringType,
 				Computed:    true,
 				Optional:    true,
 			},
-			"region": {
+			"region": schema.StringAttribute{
 				Description: "Region where the service endpoint should be created",
-				Type:        types.StringType,
 				Required:    true,
 			},
-			"security_principals": {
+			"security_principals": schema.SetAttribute{
 				Description: "List of security principals that have access to this endpoint. Required for private service endpoints. ",
-				Type: types.SetType{
-					ElemType: types.StringType,
-				},
-				Required: true,
+				ElementType: types.StringType,
+				Required:    true,
 			},
-			"state": {
+			"state": schema.StringAttribute{
 				Description: "State of the private service endpoint",
-				Type:        types.StringType,
 				Computed:    true,
 			},
-			"host": {
+			"host": schema.StringAttribute{
 				Description: "Endpoint to connect to the cluster",
-				Type:        types.StringType,
 				Computed:    true,
 			},
-			"availability_zones": {
+			"availability_zones": schema.SetAttribute{
 				Description: "Availability Zone of the endpoint.",
-				Type: types.SetType{
-					ElemType: types.StringType,
-				},
-				Computed: true,
-			},
-			"service_name": {
-				Description: "Name of the Service endpoint",
-				Type:        types.StringType,
+				ElementType: types.StringType,
 				Computed:    true,
 			},
-			"cluster_region_info_id": {
+			"service_name": schema.StringAttribute{
+				Description: "Name of the Service endpoint",
+				Computed:    true,
+			},
+			"cluster_region_info_id": schema.StringAttribute{
 				Description: "Cluster region ID. This field is computed ",
-				Type:        types.StringType,
 				Computed:    true,
 			},
 		},
-	}, nil
+	}
 }
-func (r resourcePrivateEndpointType) NewResource(_ context.Context, p tfsdk.Provider) (tfsdk.Resource, diag.Diagnostics) {
-	return resourcePrivateEndpoint{
-		p: *(p.(*provider)),
-	}, nil
+func newResourcePrivateEndpoint() resource.Resource {
+	return &resourcePrivateEndpoint{}
+}
+
+func (r *resourcePrivateEndpoint) Metadata(_ context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
+	resp.TypeName = req.ProviderTypeName + "_private_service_endpoint"
+}
+
+func (r *resourcePrivateEndpoint) Configure(_ context.Context, req resource.ConfigureRequest, _ *resource.ConfigureResponse) {
+	r.p = configuredProvider(req.ProviderData)
 }
 
 type resourcePrivateEndpoint struct {
@@ -123,11 +116,11 @@ func getPrivateEndpointServicePlan(ctx context.Context, plan tfsdk.Plan, pse *Pr
 }
 
 // Read Private service endpoint
-func (r resourcePrivateEndpoint) Read(ctx context.Context, req tfsdk.ReadResourceRequest, resp *tfsdk.ReadResourceResponse) {
+func (r resourcePrivateEndpoint) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
 	var state PrivateServiceEndpoint
 	getIDsFromePrivateEndpointState(ctx, req.State, &state)
-	pseID := state.PrivateServiceEndpointID.Value
-	clusterID := state.ClusterID.Value
+	pseID := state.PrivateServiceEndpointID.ValueString()
+	clusterID := state.ClusterID.ValueString()
 
 	apiClient := r.p.client
 
@@ -156,7 +149,7 @@ func (r resourcePrivateEndpoint) Read(ctx context.Context, req tfsdk.ReadResourc
 	}
 }
 
-func (r resourcePrivateEndpoint) Create(ctx context.Context, req tfsdk.CreateResourceRequest, resp *tfsdk.CreateResourceResponse) {
+func (r resourcePrivateEndpoint) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
 
 	if !r.p.configured {
 		resp.Diagnostics.AddError(
@@ -183,7 +176,7 @@ func (r resourcePrivateEndpoint) Create(ctx context.Context, req tfsdk.CreateRes
 		return
 	}
 
-	if plan.PrivateServiceEndpointID.Value != "" {
+	if plan.PrivateServiceEndpointID.ValueString() != "" {
 		resp.Diagnostics.AddError(
 			"Private service endpoint ID provided for new private service endpoint",
 			"The endpoint_id was provided even though a new private service endpoint is being created. Do not include this field in the provider when creating it.",
@@ -196,8 +189,8 @@ func (r resourcePrivateEndpoint) Create(ctx context.Context, req tfsdk.CreateRes
 		resp.Diagnostics.AddError("Unable to get project ID ", message)
 		return
 	}
-	clusterId := plan.ClusterID.Value
-	region := plan.Region.Value
+	clusterId := plan.ClusterID.ValueString()
+	region := plan.Region.ValueString()
 	securityPrincipals := plan.SecurityPrincipals
 
 	clusterResp, _, err := apiClient.ClusterApi.GetCluster(context.Background(), accountId, projectId, clusterId).Execute()
@@ -290,16 +283,16 @@ func resourcePrivateEndpointRead(accountId string, projectId string, pseID strin
 	if err != nil {
 		return pse, false, GetApiErrorDetails(err)
 	}
-	pse.AccountID.Value = accountId
-	pse.ProjectID.Value = projectId
-	pse.PrivateServiceEndpointID.Value = pseResp.Data.Info.Id
-	pse.ClusterID.Value = clusterId
-	pse.ServiceName.Value = pseResp.Data.Info.GetServiceName()
+	pse.AccountID = types.StringValue(accountId)
+	pse.ProjectID = types.StringValue(projectId)
+	pse.PrivateServiceEndpointID = types.StringValue(pseResp.Data.Info.Id)
+	pse.ClusterID = types.StringValue(clusterId)
+	pse.ServiceName = types.StringValue(pseResp.Data.Info.GetServiceName())
 
 	pse.AvailabilityZones = util.SliceStringToSliceTypesString(pseResp.Data.Info.AvailabilityZones)
 	pse.SecurityPrincipals = util.SliceStringToSliceTypesString(pseResp.Data.Spec.Get().SecurityPrincipals)
 
-	pse.ClusterRegionInfoId.Value = pseResp.Data.Spec.Get().GetClusterRegionInfoId()
+	pse.ClusterRegionInfoId = types.StringValue(pseResp.Data.Spec.Get().GetClusterRegionInfoId())
 
 	// This another call, but we should get all information as much as possible from the API
 	// This is usefull when importing
@@ -308,28 +301,31 @@ func resourcePrivateEndpointRead(accountId string, projectId string, pseID strin
 		return pse, false, fmt.Sprintf("Unable to fetch cluster with id %s: %s", clusterId, GetApiErrorDetails(err))
 	}
 	clusterData := clusterResp.GetData()
-	pse.ClusterRegionInfoId.Value = pseResp.Data.Spec.Get().GetClusterRegionInfoId()
+	pse.ClusterRegionInfoId = types.StringValue(pseResp.Data.Spec.Get().GetClusterRegionInfoId())
 	desiredRegions := util.Filter(clusterData.Info.ClusterRegionInfoDetails, func(regionInfo openapiclient.ClusterRegionInfoDetails) bool {
-		return regionInfo.Id == pse.ClusterRegionInfoId.Value
+		return regionInfo.Id == pse.ClusterRegionInfoId.ValueString()
 	})
 	desiredEndpoints := util.Filter(clusterData.Info.ClusterEndpoints, func(endpoint openapiclient.Endpoint) bool {
 		if !endpoint.HasPseId() {
 			return false
 		}
-		return endpoint.GetPseId() == pse.PrivateServiceEndpointID.Value
+		return endpoint.GetPseId() == pse.PrivateServiceEndpointID.ValueString()
 	})
 	if len(desiredEndpoints) == 1 {
-		pse.Host.Value = desiredEndpoints[0].GetHost()
-		pse.State.Value = string(desiredEndpoints[0].GetStateV1())
+		pse.Host = types.StringValue(desiredEndpoints[0].GetHost())
+		pse.State = types.StringValue(string(desiredEndpoints[0].GetStateV1()))
+	} else {
+		pse.Host = types.StringValue("")
+		pse.State = types.StringValue("")
 	}
-	pse.Region.Value = desiredRegions[0].Region
+	pse.Region = types.StringValue(desiredRegions[0].Region)
 
 	return pse, true, ""
 
 }
 
 // Update private service Endpoint
-func (r resourcePrivateEndpoint) Update(ctx context.Context, req tfsdk.UpdateResourceRequest, resp *tfsdk.UpdateResourceResponse) {
+func (r resourcePrivateEndpoint) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
 	var plan PrivateServiceEndpoint
 	resp.Diagnostics.Append(getPrivateEndpointServicePlan(ctx, req.Plan, &plan)...)
 	if resp.Diagnostics.HasError() {
@@ -340,11 +336,11 @@ func (r resourcePrivateEndpoint) Update(ctx context.Context, req tfsdk.UpdateRes
 	apiClient := r.p.client
 	var state PrivateServiceEndpoint
 	getIDsFromePrivateEndpointState(ctx, req.State, &state)
-	accountId := state.AccountID.Value
-	projectId := state.ProjectID.Value
-	clusterId := state.ClusterID.Value
-	ClusterRegionInfoId := state.ClusterRegionInfoId.Value
-	pseId := state.PrivateServiceEndpointID.Value
+	accountId := state.AccountID.ValueString()
+	projectId := state.ProjectID.ValueString()
+	clusterId := state.ClusterID.ValueString()
+	ClusterRegionInfoId := state.ClusterRegionInfoId.ValueString()
+	pseId := state.PrivateServiceEndpointID.ValueString()
 
 	//Security Principal is the only field we update
 	securityPrincipals := plan.SecurityPrincipals
@@ -403,13 +399,13 @@ func (r resourcePrivateEndpoint) Update(ctx context.Context, req tfsdk.UpdateRes
 }
 
 // Delete allow list
-func (r resourcePrivateEndpoint) Delete(ctx context.Context, req tfsdk.DeleteResourceRequest, resp *tfsdk.DeleteResourceResponse) {
+func (r resourcePrivateEndpoint) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
 	var state PrivateServiceEndpoint
 	getIDsFromePrivateEndpointState(ctx, req.State, &state)
-	accountId := state.AccountID.Value
-	projectId := state.ProjectID.Value
-	pseId := state.PrivateServiceEndpointID.Value
-	clusterID := state.ClusterID.Value
+	accountId := state.AccountID.ValueString()
+	projectId := state.ProjectID.ValueString()
+	pseId := state.PrivateServiceEndpointID.ValueString()
+	clusterID := state.ClusterID.ValueString()
 
 	apiClient := r.p.client
 
@@ -466,7 +462,7 @@ func createPrivateServiceEndpointRegionSpec(regionArnMap map[string][]string) []
 }
 
 // Import PSE
-func (r resourcePrivateEndpoint) ImportState(ctx context.Context, req tfsdk.ImportResourceStateRequest, resp *tfsdk.ImportResourceStateResponse) {
+func (r resourcePrivateEndpoint) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
 	idParts := strings.Split(req.ID, ",")
 
 	if len(idParts) != 2 || idParts[0] == "" || idParts[1] == "" {

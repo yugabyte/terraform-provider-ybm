@@ -12,32 +12,33 @@ import (
 
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/path"
+	"github.com/hashicorp/terraform-plugin-framework/resource"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
-
 	retry "github.com/sethvargo/go-retry"
 	openapiclient "github.com/yugabyte/yugabytedb-managed-go-client-internal"
 )
 
-type resourceDrConfigType struct{}
-
 type ignoreChangesModifier struct{}
 
-func (m ignoreChangesModifier) Modify(ctx context.Context, req tfsdk.ModifyAttributePlanRequest, resp *tfsdk.ModifyAttributePlanResponse) {
+func (m ignoreChangesModifier) PlanModifyString(ctx context.Context, req planmodifier.StringRequest, resp *planmodifier.StringResponse) {
 
-	if req.AttributeState.IsNull() {
+	if req.StateValue.IsNull() {
 		return
 	}
 
-	if !req.AttributeConfig.IsNull() && !req.AttributeConfig.Equal(req.AttributeState) {
+	if !req.ConfigValue.IsNull() && !req.ConfigValue.Equal(req.StateValue) {
 		resp.Diagnostics.AddWarning(
 			"Value Change Ignored",
-			fmt.Sprintf("An attempt to change the value of '%s' will be ignored as this field cannot be modified after creation.", req.AttributePath.String()),
+			fmt.Sprintf("An attempt to change the value of '%s' will be ignored as this field cannot be modified after creation.", req.Path.String()),
 		)
 	}
 
-	resp.AttributePlan = req.AttributeState
+	resp.PlanValue = req.StateValue
 
 }
 
@@ -49,73 +50,71 @@ func (m ignoreChangesModifier) MarkdownDescription(ctx context.Context) string {
 	return "Ignores changes to this field after creation"
 }
 
-func (r resourceDrConfigType) GetSchema(_ context.Context) (tfsdk.Schema, diag.Diagnostics) {
-	return tfsdk.Schema{
+func (r *resourceDrConfig) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
+	resp.Schema = schema.Schema{
 		Description: `The resource to create a Disaster Recovery configuration in YugabyteDB Managed.`,
-		Attributes: map[string]tfsdk.Attribute{
-			"account_id": {
+		Attributes: map[string]schema.Attribute{
+			"account_id": schema.StringAttribute{
 				Description: "The ID of the account this DR config belongs to.",
-				Type:        types.StringType,
 				Computed:    true,
-				PlanModifiers: []tfsdk.AttributePlanModifier{
-					tfsdk.UseStateForUnknown(),
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseNonNullStateForUnknown(),
 				},
 			},
-			"project_id": {
+			"project_id": schema.StringAttribute{
 				Description: "The ID of the project this DR config belongs to.",
-				Type:        types.StringType,
 				Computed:    true,
-				PlanModifiers: []tfsdk.AttributePlanModifier{
-					tfsdk.UseStateForUnknown(),
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseNonNullStateForUnknown(),
 				},
 			},
-			"dr_config_id": {
+			"dr_config_id": schema.StringAttribute{
 				Description: "The ID of the DR configuration.",
-				Type:        types.StringType,
 				Computed:    true,
-				PlanModifiers: []tfsdk.AttributePlanModifier{
-					tfsdk.UseStateForUnknown(),
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseNonNullStateForUnknown(),
 				},
 			},
-			"source_cluster_id": {
+			"source_cluster_id": schema.StringAttribute{
 				Description: "The ID of the source cluster for DR configuration.",
-				Type:        types.StringType,
 				Required:    true,
-				PlanModifiers: []tfsdk.AttributePlanModifier{
+				PlanModifiers: []planmodifier.String{
 					ignoreChangesModifier{},
 				},
 			},
-			"target_cluster_id": {
+			"target_cluster_id": schema.StringAttribute{
 				Description: "The ID of the target cluster for DR configuration.",
-				Type:        types.StringType,
 				Required:    true,
-				PlanModifiers: []tfsdk.AttributePlanModifier{
+				PlanModifiers: []planmodifier.String{
 					ignoreChangesModifier{},
 				},
 			},
-			"name": {
+			"name": schema.StringAttribute{
 				Description: "The name for DR configuration.",
-				Type:        types.StringType,
 				Required:    true,
-				PlanModifiers: []tfsdk.AttributePlanModifier{
+				PlanModifiers: []planmodifier.String{
 					ignoreChangesModifier{},
 				},
 			},
-			"databases": {
+			"databases": schema.SetAttribute{
 				Description: "List of databases to be included in DR configuration.",
-				Type: types.SetType{
-					ElemType: types.StringType,
-				},
-				Required: true,
+				ElementType: types.StringType,
+				Required:    true,
 			},
 		},
-	}, nil
+	}
 }
 
-func (r resourceDrConfigType) NewResource(_ context.Context, p tfsdk.Provider) (tfsdk.Resource, diag.Diagnostics) {
-	return resourceDrConfig{
-		p: *(p.(*provider)),
-	}, nil
+func newResourceDrConfig() resource.Resource {
+	return &resourceDrConfig{}
+}
+
+func (r *resourceDrConfig) Metadata(_ context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
+	resp.TypeName = req.ProviderTypeName + "_dr_config"
+}
+
+func (r *resourceDrConfig) Configure(_ context.Context, req resource.ConfigureRequest, _ *resource.ConfigureResponse) {
+	r.p = configuredProvider(req.ProviderData)
 }
 
 type resourceDrConfig struct {
@@ -144,7 +143,7 @@ func getDrConfigState(ctx context.Context, state tfsdk.State, drConfig *DrConfig
 }
 
 // Create DR configuration
-func (r resourceDrConfig) Create(ctx context.Context, req tfsdk.CreateResourceRequest, resp *tfsdk.CreateResourceResponse) {
+func (r resourceDrConfig) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
 	if !r.p.configured {
 		resp.Diagnostics.AddError(
 			"Provider not configured",
@@ -177,12 +176,12 @@ func (r resourceDrConfig) Create(ctx context.Context, req tfsdk.CreateResourceRe
 	// Convert databases from []types.String to []string
 	databases := []string{}
 	for _, db := range plan.Databases {
-		databases = append(databases, db.Value)
+		databases = append(databases, db.ValueString())
 	}
 
-	sourceClusterId := plan.SourceClusterId.Value
-	targetClusterId := plan.TargetClusterId.Value
-	drName := plan.Name.Value
+	sourceClusterId := plan.SourceClusterId.ValueString()
+	targetClusterId := plan.TargetClusterId.ValueString()
+	drName := plan.Name.ValueString()
 
 	namespacesResp, response, err := apiClient.ClusterApi.GetClusterNamespaces(ctx, accountId, projectId, sourceClusterId).Execute()
 	if err != nil {
@@ -245,9 +244,9 @@ func (r resourceDrConfig) Create(ctx context.Context, req tfsdk.CreateResourceRe
 	}
 
 	// Set the computed fields
-	plan.AccountId = types.String{Value: accountId}
-	plan.ProjectId = types.String{Value: projectId}
-	plan.DrConfigId = types.String{Value: drConfigResp.Data.Info.Id}
+	plan.AccountId = types.StringValue(accountId)
+	plan.ProjectId = types.StringValue(projectId)
+	plan.DrConfigId = types.StringValue(drConfigResp.Data.Info.Id)
 
 	diags := resp.State.Set(ctx, plan)
 	resp.Diagnostics.Append(diags...)
@@ -257,15 +256,15 @@ func (r resourceDrConfig) Create(ctx context.Context, req tfsdk.CreateResourceRe
 }
 
 // Read DR configuration
-func (r resourceDrConfig) Read(ctx context.Context, req tfsdk.ReadResourceRequest, resp *tfsdk.ReadResourceResponse) {
+func (r resourceDrConfig) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
 	var state DrConfig
 	getDrConfigState(ctx, req.State, &state)
 
 	apiClient := r.p.client
-	accountId := state.AccountId.Value
-	projectId := state.ProjectId.Value
-	sourceClusterId := state.SourceClusterId.Value
-	drConfigId := state.DrConfigId.Value
+	accountId := state.AccountId.ValueString()
+	projectId := state.ProjectId.ValueString()
+	sourceClusterId := state.SourceClusterId.ValueString()
+	drConfigId := state.DrConfigId.ValueString()
 
 	drConfigResp, response, err := apiClient.XclusterDrApi.GetXClusterDr(ctx, accountId, projectId, sourceClusterId, drConfigId).Execute()
 	if err != nil {
@@ -279,8 +278,8 @@ func (r resourceDrConfig) Read(ctx context.Context, req tfsdk.ReadResourceReques
 	}
 
 	// Update state with the current values
-	state.SourceClusterId = types.String{Value: drConfigResp.Data.Info.SourceClusterId}
-	state.TargetClusterId = types.String{Value: drConfigResp.Data.Spec.TargetClusterId}
+	state.SourceClusterId = types.StringValue(drConfigResp.Data.Info.SourceClusterId)
+	state.TargetClusterId = types.StringValue(drConfigResp.Data.Spec.TargetClusterId)
 
 	namespacesResp, response, err := apiClient.ClusterApi.GetClusterNamespaces(ctx, accountId, projectId, sourceClusterId).Execute()
 	if err != nil {
@@ -297,7 +296,7 @@ func (r resourceDrConfig) Read(ctx context.Context, req tfsdk.ReadResourceReques
 	databases := []types.String{}
 	for _, dbId := range drConfigResp.Data.Spec.DatabaseIds {
 		database := dbIdToNameMap[dbId]
-		databases = append(databases, types.String{Value: database})
+		databases = append(databases, types.StringValue(database))
 	}
 	state.Databases = databases
 
@@ -309,7 +308,7 @@ func (r resourceDrConfig) Read(ctx context.Context, req tfsdk.ReadResourceReques
 }
 
 // Edit DR configuration
-func (r resourceDrConfig) Update(ctx context.Context, req tfsdk.UpdateResourceRequest, resp *tfsdk.UpdateResourceResponse) {
+func (r resourceDrConfig) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
 	var plan DrConfig
 	var state DrConfig
 
@@ -324,9 +323,9 @@ func (r resourceDrConfig) Update(ctx context.Context, req tfsdk.UpdateResourceRe
 	}
 
 	// Verify that only databases field is being changed
-	if plan.Name.Value != state.Name.Value ||
-		plan.SourceClusterId.Value != state.SourceClusterId.Value ||
-		plan.TargetClusterId.Value != state.TargetClusterId.Value {
+	if plan.Name.ValueString() != state.Name.ValueString() ||
+		plan.SourceClusterId.ValueString() != state.SourceClusterId.ValueString() ||
+		plan.TargetClusterId.ValueString() != state.TargetClusterId.ValueString() {
 		resp.Diagnostics.AddError(
 			"Invalid edit to DR configuration",
 			"Only the databases field can be modified in DR configurations. Other fields cannot be changed.",
@@ -335,15 +334,15 @@ func (r resourceDrConfig) Update(ctx context.Context, req tfsdk.UpdateResourceRe
 	}
 
 	apiClient := r.p.client
-	accountId := state.AccountId.Value
-	projectId := state.ProjectId.Value
-	sourceClusterId := state.SourceClusterId.Value
-	drConfigId := state.DrConfigId.Value
+	accountId := state.AccountId.ValueString()
+	projectId := state.ProjectId.ValueString()
+	sourceClusterId := state.SourceClusterId.ValueString()
+	drConfigId := state.DrConfigId.ValueString()
 
 	// Convert planned databases from []types.String to []string
 	databases := []string{}
 	for _, db := range plan.Databases {
-		databases = append(databases, db.Value)
+		databases = append(databases, db.ValueString())
 	}
 
 	// Get database IDs for the new database list
@@ -424,13 +423,13 @@ func (r resourceDrConfig) Update(ctx context.Context, req tfsdk.UpdateResourceRe
 }
 
 // Delete DR configuration
-func (r resourceDrConfig) Delete(ctx context.Context, req tfsdk.DeleteResourceRequest, resp *tfsdk.DeleteResourceResponse) {
+func (r resourceDrConfig) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
 	var state DrConfig
 	getDrConfigState(ctx, req.State, &state)
-	accountId := state.AccountId.Value
-	projectId := state.ProjectId.Value
-	clusterId := state.SourceClusterId.Value
-	drConfigId := state.DrConfigId.Value
+	accountId := state.AccountId.ValueString()
+	projectId := state.ProjectId.ValueString()
+	clusterId := state.SourceClusterId.ValueString()
+	drConfigId := state.DrConfigId.ValueString()
 
 	apiClient := r.p.client
 
@@ -474,7 +473,7 @@ func (r resourceDrConfig) Delete(ctx context.Context, req tfsdk.DeleteResourceRe
 }
 
 // Import DR configuration
-func (r resourceDrConfig) ImportState(ctx context.Context, req tfsdk.ImportResourceStateRequest, resp *tfsdk.ImportResourceStateResponse) {
+func (r resourceDrConfig) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
 	// Save the import identifier in the id attribute
-	tfsdk.ResourceImportStatePassthroughID(ctx, path.Root("id"), req, resp)
+	resource.ImportStatePassthroughID(ctx, path.Root("id"), req, resp)
 }

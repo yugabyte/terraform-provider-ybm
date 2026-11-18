@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-framework/path"
+	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-go/tftypes"
@@ -46,35 +47,35 @@ func clusterValue(t *testing.T, schemaType tftypes.Type, regions tftypes.Value) 
 
 // runModifyPlanWithRegions drives ModifyPlan over a cluster_region_info list given verbatim, so a
 // test can hand it a list that is itself unknown or null.
-func runModifyPlanWithRegions(t *testing.T, regions func(regionType tftypes.Type) tftypes.Value) tfsdk.ModifyResourcePlanResponse {
+func runModifyPlanWithRegions(t *testing.T, regions func(regionType tftypes.Type) tftypes.Value) resource.ModifyPlanResponse {
 	t.Helper()
 	ctx := context.Background()
-	schema, diags := resourceClusterType{}.GetSchema(ctx)
+	schema, diags := resourceSchema(ctx, &resourceCluster{})
 	if diags.HasError() {
 		t.Fatalf("GetSchema: %v", diags)
 	}
-	schemaType := schema.TerraformType(ctx)
+	schemaType := schema.Type().TerraformType(ctx)
 	regionType := schemaType.(tftypes.Object).AttributeTypes["cluster_region_info"].(tftypes.List).ElementType
 
 	value := clusterValue(t, schemaType, regions(regionType))
-	req := tfsdk.ModifyResourcePlanRequest{
+	req := resource.ModifyPlanRequest{
 		Config: tfsdk.Config{Schema: schema, Raw: value},
 		Plan:   tfsdk.Plan{Schema: schema, Raw: value},
 		State:  tfsdk.State{Schema: schema, Raw: tftypes.NewValue(schemaType, nil)},
 	}
-	resp := tfsdk.ModifyResourcePlanResponse{Plan: req.Plan}
+	resp := resource.ModifyPlanResponse{Plan: req.Plan}
 	resourceCluster{}.ModifyPlan(ctx, req, &resp)
 	return resp
 }
 
-func runModifyPlan(t *testing.T, planDefault, configDefault tftypes.Value, hasState bool) tfsdk.ModifyResourcePlanResponse {
+func runModifyPlan(t *testing.T, planDefault, configDefault tftypes.Value, hasState bool) resource.ModifyPlanResponse {
 	t.Helper()
 	ctx := context.Background()
-	schema, diags := resourceClusterType{}.GetSchema(ctx)
+	schema, diags := resourceSchema(ctx, &resourceCluster{})
 	if diags.HasError() {
 		t.Fatalf("GetSchema: %v", diags)
 	}
-	schemaType := schema.TerraformType(ctx)
+	schemaType := schema.Type().TerraformType(ctx)
 	regionType := schemaType.(tftypes.Object).AttributeTypes["cluster_region_info"].(tftypes.List).ElementType
 
 	plan := tfsdk.Plan{Schema: schema, Raw: clusterValue(t, schemaType, clusterRegionInfoValue(t, regionType, planDefault))}
@@ -84,13 +85,13 @@ func runModifyPlan(t *testing.T, planDefault, configDefault tftypes.Value, hasSt
 		state.Raw = clusterValue(t, schemaType, clusterRegionInfoValue(t, regionType, planDefault))
 	}
 
-	req := tfsdk.ModifyResourcePlanRequest{Config: config, Plan: plan, State: state}
-	resp := tfsdk.ModifyResourcePlanResponse{Plan: plan}
+	req := resource.ModifyPlanRequest{Config: config, Plan: plan, State: state}
+	resp := resource.ModifyPlanResponse{Plan: plan}
 	resourceCluster{}.ModifyPlan(ctx, req, &resp)
 	return resp
 }
 
-func plannedIsDefault(t *testing.T, resp tfsdk.ModifyResourcePlanResponse) types.Bool {
+func plannedIsDefault(t *testing.T, resp resource.ModifyPlanResponse) types.Bool {
 	t.Helper()
 	var planned types.Bool
 	diags := resp.Plan.GetAttribute(context.Background(),
@@ -111,7 +112,7 @@ func TestModifyPlanSingleRegionDefaultFalseBecomesUnknown(t *testing.T) {
 	if resp.Diagnostics.HasError() {
 		t.Fatalf("unexpected diagnostics: %v", resp.Diagnostics)
 	}
-	if planned := plannedIsDefault(t, resp); !planned.Unknown {
+	if planned := plannedIsDefault(t, resp); !planned.IsUnknown() {
 		t.Fatalf("planned is_default = %+v, want unknown", planned)
 	}
 }
@@ -137,7 +138,7 @@ func TestModifyPlanSingleRegionTrueIsLeftAlone(t *testing.T) {
 		t.Fatalf("unexpected diagnostics: %v", resp.Diagnostics)
 	}
 	planned := plannedIsDefault(t, resp)
-	if planned.Unknown || !planned.Value {
+	if planned.IsUnknown() || !planned.ValueBool() {
 		t.Fatalf("planned is_default = %+v, want true", planned)
 	}
 }
@@ -151,7 +152,7 @@ func TestModifyPlanSingleRegionCreateKeepsUnknown(t *testing.T) {
 	if resp.Diagnostics.HasError() {
 		t.Fatalf("unexpected diagnostics: %v", resp.Diagnostics)
 	}
-	if planned := plannedIsDefault(t, resp); !planned.Unknown {
+	if planned := plannedIsDefault(t, resp); !planned.IsUnknown() {
 		t.Fatalf("planned is_default = %+v, want unknown", planned)
 	}
 }
@@ -173,5 +174,30 @@ func TestModifyPlanNullRegionListIsSkipped(t *testing.T) {
 	})
 	if resp.Diagnostics.HasError() {
 		t.Fatalf("unexpected diagnostics for a null cluster_region_info: %v", resp.Diagnostics)
+	}
+}
+
+// On an update the ignore_num_nodes_changes check compares config with state, so an unknown
+// config list must be skipped there too rather than decoded.
+func TestModifyPlanUnknownRegionListOnUpdateIsSkipped(t *testing.T) {
+	ctx := context.Background()
+	schema, diags := resourceSchema(ctx, &resourceCluster{})
+	if diags.HasError() {
+		t.Fatalf("GetSchema: %v", diags)
+	}
+	schemaType := schema.Type().TerraformType(ctx)
+	regionType := schemaType.(tftypes.Object).AttributeTypes["cluster_region_info"].(tftypes.List).ElementType
+
+	unknown := clusterValue(t, schemaType, tftypes.NewValue(tftypes.List{ElementType: regionType}, tftypes.UnknownValue))
+	known := clusterValue(t, schemaType, clusterRegionInfoValue(t, regionType, tftypes.NewValue(tftypes.Bool, true)))
+	req := resource.ModifyPlanRequest{
+		Config: tfsdk.Config{Schema: schema, Raw: unknown},
+		Plan:   tfsdk.Plan{Schema: schema, Raw: unknown},
+		State:  tfsdk.State{Schema: schema, Raw: known},
+	}
+	resp := resource.ModifyPlanResponse{Plan: req.Plan}
+	resourceCluster{}.ModifyPlan(ctx, req, &resp)
+	if resp.Diagnostics.HasError() {
+		t.Fatalf("unexpected diagnostics for an unknown cluster_region_info on update: %v", resp.Diagnostics)
 	}
 }

@@ -9,9 +9,11 @@ import (
 	"net/http"
 	"testing"
 
-	mocks "github.com/yugabyte/terraform-provider-ybm/mock_yugabytedb_managed_go_client_internal"
-
 	gomock "github.com/golang/mock/gomock"
+	"github.com/hashicorp/terraform-plugin-framework/diag"
+	"github.com/hashicorp/terraform-plugin-framework/resource"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
+	mocks "github.com/yugabyte/terraform-provider-ybm/mock_yugabytedb_managed_go_client_internal"
 	openapiclient "github.com/yugabyte/yugabytedb-managed-go-client-internal"
 )
 
@@ -88,4 +90,10 @@ func TestGetProjectID(t *testing.T) {
 			}
 		})
 	}
+}
+
+func resourceSchema(ctx context.Context, r resource.Resource) (schema.Schema, diag.Diagnostics) {
+	var resp resource.SchemaResponse
+	r.Schema(ctx, resource.SchemaRequest{}, &resp)
+	return resp.Schema, resp.Diagnostics
 }

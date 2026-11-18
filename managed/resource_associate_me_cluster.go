@@ -6,10 +6,14 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/hashicorp/terraform-plugin-framework-validators/schemavalidator"
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/path"
+	"github.com/hashicorp/terraform-plugin-framework/resource"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
@@ -17,8 +21,6 @@ import (
 	openapiclient "github.com/yugabyte/yugabytedb-managed-go-client-internal"
 	"golang.org/x/exp/slices"
 )
-
-type resourceAssociateMetricsExporterClusterType struct{}
 
 type metricsExportStateDefaultPlanModifier struct{}
 
@@ -30,96 +32,95 @@ func (m metricsExportStateDefaultPlanModifier) MarkdownDescription(ctx context.C
 	return m.Description(ctx)
 }
 
-func (m metricsExportStateDefaultPlanModifier) Modify(_ context.Context, req tfsdk.ModifyAttributePlanRequest, resp *tfsdk.ModifyAttributePlanResponse) {
-	if req.AttributeConfig == nil || req.AttributeConfig.IsNull() {
-		resp.AttributePlan = types.String{Value: "Active"}
+func (m metricsExportStateDefaultPlanModifier) PlanModifyString(_ context.Context, req planmodifier.StringRequest, resp *planmodifier.StringResponse) {
+	if req.ConfigValue.IsNull() {
+		resp.PlanValue = types.StringValue("Active")
 	}
 }
 
-func (r resourceAssociateMetricsExporterClusterType) GetSchema(_ context.Context) (tfsdk.Schema, diag.Diagnostics) {
-	return tfsdk.Schema{
+func (r *resourceAssociateMetricsExporterCluster) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
+	resp.Schema = schema.Schema{
 		Description: "Use this resource to assign an export configuration (created using the `ybm_integration` resource) to a cluster for the export of cluster metrics. When assigned, cluster metrics are exported to the sink defined in the export configuration.",
-		Attributes: map[string]tfsdk.Attribute{
-			"account_id": {
+		Attributes: map[string]schema.Attribute{
+			"account_id": schema.StringAttribute{
 				Description: "ID of the account this metrics export configuration belongs to.",
-				Type:        types.StringType,
 				Computed:    true,
-				PlanModifiers: []tfsdk.AttributePlanModifier{
-					tfsdk.UseStateForUnknown(),
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseNonNullStateForUnknown(),
 				},
 			},
-			"project_id": {
+			"project_id": schema.StringAttribute{
 				Description: "ID of the project this metrics export configuration belongs to.",
-				Type:        types.StringType,
 				Computed:    true,
-				PlanModifiers: []tfsdk.AttributePlanModifier{
-					tfsdk.UseStateForUnknown(),
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseNonNullStateForUnknown(),
 				},
 			},
-			"cluster_id": {
+			"cluster_id": schema.StringAttribute{
 				Description: "ID of the cluster with which this metrics export configuration will be associated.",
-				Type:        types.StringType,
 				Optional:    true,
 				Computed:    true,
-				PlanModifiers: []tfsdk.AttributePlanModifier{
-					tfsdk.UseStateForUnknown(),
-					tfsdk.RequiresReplace(),
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseNonNullStateForUnknown(),
+					stringplanmodifier.RequiresReplaceIfConfigured(),
 				},
-				Validators: []tfsdk.AttributeValidator{
-					schemavalidator.ExactlyOneOf(path.MatchRoot("cluster_name")),
+				Validators: []validator.String{
+					stringvalidator.ExactlyOneOf(path.MatchRoot("cluster_name")),
 				},
 			},
-			"cluster_name": {
+			"cluster_name": schema.StringAttribute{
 				Description: "Name of the cluster with which this metrics export configuration will be associated.",
-				Type:        types.StringType,
 				Optional:    true,
 				Computed:    true,
-				PlanModifiers: []tfsdk.AttributePlanModifier{
-					tfsdk.UseStateForUnknown(),
-					tfsdk.RequiresReplace(),
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseNonNullStateForUnknown(),
+					stringplanmodifier.RequiresReplaceIfConfigured(),
 				},
-				Validators: []tfsdk.AttributeValidator{
-					schemavalidator.ExactlyOneOf(path.MatchRoot("cluster_id")),
+				Validators: []validator.String{
+					stringvalidator.ExactlyOneOf(path.MatchRoot("cluster_id")),
 				},
 			},
-			"config_id": {
+			"config_id": schema.StringAttribute{
 				Description: "ID of the integration for this metrics export configuration.",
-				Type:        types.StringType,
 				Optional:    true,
 				Computed:    true,
-				Validators: []tfsdk.AttributeValidator{
-					schemavalidator.ExactlyOneOf(path.MatchRoot("config_name")),
+				Validators: []validator.String{
+					stringvalidator.ExactlyOneOf(path.MatchRoot("config_name")),
 				},
 			},
-			"config_name": {
+			"config_name": schema.StringAttribute{
 				Description: "Name of the integration for this metrics export configuration",
-				Type:        types.StringType,
 				Optional:    true,
 				Computed:    true,
-				Validators: []tfsdk.AttributeValidator{
-					schemavalidator.ExactlyOneOf(path.MatchRoot("config_id")),
+				Validators: []validator.String{
+					stringvalidator.ExactlyOneOf(path.MatchRoot("config_id")),
 				},
 			},
-			"export_state": {
+			"export_state": schema.StringAttribute{
 				Description: "The desired metrics export state on the cluster. Valid values are `Active` and `Paused`. Defaults to `Active`.",
-				Type:        types.StringType,
 				Optional:    true,
 				Computed:    true,
-				PlanModifiers: []tfsdk.AttributePlanModifier{
+				PlanModifiers: []planmodifier.String{
 					metricsExportStateDefaultPlanModifier{},
 				},
-				Validators: []tfsdk.AttributeValidator{
+				Validators: []validator.String{
 					stringvalidator.OneOf([]string{"Active", "Paused"}...),
 				},
 			},
 		},
-	}, nil
+	}
 }
 
-func (r resourceAssociateMetricsExporterClusterType) NewResource(_ context.Context, p tfsdk.Provider) (tfsdk.Resource, diag.Diagnostics) {
-	return resourceAssociateMetricsExporterCluster{
-		p: *(p.(*provider)),
-	}, nil
+func newResourceAssociateMetricsExporterCluster() resource.Resource {
+	return &resourceAssociateMetricsExporterCluster{}
+}
+
+func (r *resourceAssociateMetricsExporterCluster) Metadata(_ context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
+	resp.TypeName = req.ProviderTypeName + "_associate_metrics_exporter_cluster"
+}
+
+func (r *resourceAssociateMetricsExporterCluster) Configure(_ context.Context, req resource.ConfigureRequest, _ *resource.ConfigureResponse) {
+	r.p = configuredProvider(req.ProviderData)
 }
 
 type resourceAssociateMetricsExporterCluster struct {
@@ -146,7 +147,7 @@ func getIDsFromAssocMetricsExporterClusterState(ctx context.Context, state tfsdk
 	state.GetAttribute(ctx, path.Root("export_state"), &as.ExportState)
 }
 
-func (r resourceAssociateMetricsExporterCluster) Create(ctx context.Context, req tfsdk.CreateResourceRequest, resp *tfsdk.CreateResourceResponse) {
+func (r resourceAssociateMetricsExporterCluster) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
 
 	if !r.p.configured {
 		resp.Diagnostics.AddError(
@@ -178,16 +179,16 @@ func (r resourceAssociateMetricsExporterCluster) Create(ctx context.Context, req
 		return
 	}
 
-	configID := plan.ConfigID.Value
-	configName := plan.ConfigName.Value
+	configID := plan.ConfigID.ValueString()
+	configName := plan.ConfigName.ValueString()
 
 	config, err := GetConfigByNameorID(accountId, projectId, configID, configName, apiClient)
 	if err != nil {
 		resp.Diagnostics.AddError("unable to associate metrics exporter to cluster", GetApiErrorDetails(err))
 		return
 	}
-	clusterID := plan.ClusterID.Value
-	clusterName := plan.ClusterName.Value
+	clusterID := plan.ClusterID.ValueString()
+	clusterName := plan.ClusterName.ValueString()
 	cluster, err := GetClusterByNameorID(accountId, projectId, clusterID, clusterName, apiClient)
 	if err != nil {
 		resp.Diagnostics.AddError("unable to associate metrics exporter to cluster", GetApiErrorDetails(err))
@@ -229,16 +230,16 @@ func (r resourceAssociateMetricsExporterCluster) Create(ctx context.Context, req
 
 }
 
-func (r resourceAssociateMetricsExporterCluster) Read(ctx context.Context, req tfsdk.ReadResourceRequest, resp *tfsdk.ReadResourceResponse) {
+func (r resourceAssociateMetricsExporterCluster) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
 	var state AssociateMetricsExporterCluster
 
 	getIDsFromAssocMetricsExporterClusterState(ctx, req.State, &state)
 	apiClient := r.p.client
-	accountId := state.AccountID.Value
-	projectId := state.ProjectID.Value
-	configId := state.ConfigID.Value
-	clusterId := state.ClusterID.Value
-	clusterName := state.ClusterName.Value
+	accountId := state.AccountID.ValueString()
+	projectId := state.ProjectID.ValueString()
+	configId := state.ConfigID.ValueString()
+	clusterId := state.ClusterID.ValueString()
+	clusterName := state.ClusterName.ValueString()
 
 	as, readOK, message := resourceAssociateMetricsExporterClusterRead(accountId, projectId, clusterId, configId, clusterName, apiClient)
 	if !readOK {
@@ -260,31 +261,35 @@ func resourceAssociateMetricsExporterClusterRead(accountId string, projectId str
 		return as, false, GetApiErrorDetails(err)
 	}
 
-	as.AccountID.Value = accountId
-	as.ProjectID.Value = projectId
-	as.ConfigID.Value = configID
-	as.ConfigName.Value = config.GetSpec().Name
+	as.AccountID = types.StringValue(accountId)
+	as.ProjectID = types.StringValue(projectId)
+	as.ConfigID = types.StringValue(configID)
+	as.ConfigName = types.StringValue(config.GetSpec().Name)
 
 	if slices.Contains(config.GetInfo().ClusterIds, clusterID) {
-		as.ClusterID.Value = clusterID
+		as.ClusterID = types.StringValue(clusterID)
 		// In case the cluster name change
 		cluster, err := GetClusterByNameorID(accountId, projectId, clusterID, clusterName, apiClient)
 		if err != nil {
 			return as, false, GetApiErrorDetails(err)
 		}
-		as.ClusterName.Value = cluster.Spec.Name
-		as.ExportState.Value = metricsExportStateFromCluster(cluster)
+		as.ClusterName = types.StringValue(cluster.Spec.Name)
+		as.ExportState = types.StringValue(metricsExportStateFromCluster(cluster))
+	} else {
+		as.ClusterID = types.StringValue("")
+		as.ClusterName = types.StringValue("")
+		as.ExportState = types.StringValue("")
 	}
 	return as, true, ""
 }
 
-func (r resourceAssociateMetricsExporterCluster) Delete(ctx context.Context, req tfsdk.DeleteResourceRequest, resp *tfsdk.DeleteResourceResponse) {
+func (r resourceAssociateMetricsExporterCluster) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
 	apiClient := r.p.client
 	var state AssociateMetricsExporterCluster
 	getIDsFromAssocMetricsExporterClusterState(ctx, req.State, &state)
-	accountId := state.AccountID.Value
-	projectId := state.ProjectID.Value
-	clusterId := state.ClusterID.Value
+	accountId := state.AccountID.ValueString()
+	projectId := state.ProjectID.ValueString()
+	clusterId := state.ClusterID.ValueString()
 
 	_, err := apiClient.MetricsExporterConfigApi.RemoveMetricsExporterConfigFromCluster(ctx, accountId, projectId, clusterId).Execute()
 	if err != nil {
@@ -302,7 +307,7 @@ func (r resourceAssociateMetricsExporterCluster) Delete(ctx context.Context, req
 
 }
 
-func (r resourceAssociateMetricsExporterCluster) Update(ctx context.Context, req tfsdk.UpdateResourceRequest, resp *tfsdk.UpdateResourceResponse) {
+func (r resourceAssociateMetricsExporterCluster) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
 	var plan AssociateMetricsExporterCluster
 	resp.Diagnostics.Append(getAssocMetricsExporterClusterPlan(ctx, req.Plan, &plan)...)
 	if resp.Diagnostics.HasError() {
@@ -313,10 +318,10 @@ func (r resourceAssociateMetricsExporterCluster) Update(ctx context.Context, req
 	apiClient := r.p.client
 	var state AssociateMetricsExporterCluster
 	getIDsFromAssocMetricsExporterClusterState(ctx, req.State, &state)
-	accountId := state.AccountID.Value
-	projectId := state.ProjectID.Value
-	clusterId := state.ClusterID.Value
-	clusterName := state.ClusterName.Value
+	accountId := state.AccountID.ValueString()
+	projectId := state.ProjectID.ValueString()
+	clusterId := state.ClusterID.ValueString()
+	clusterName := state.ClusterName.ValueString()
 
 	if plan.ClusterID != state.ClusterID {
 		resp.Diagnostics.AddError("'cluster_id' cannot be updated", "'cluster_id' cannot be updated when updating metrics exporter cluster association")
@@ -330,9 +335,9 @@ func (r resourceAssociateMetricsExporterCluster) Update(ctx context.Context, req
 	}
 
 	desiredExportState := plannedMetricsExportState(plan.ExportState)
-	configChanged := config.GetInfo().Id != state.ConfigID.Value
-	shouldPause := strings.EqualFold(desiredExportState, "Paused") && !strings.EqualFold(state.ExportState.Value, "Paused")
-	shouldResume := strings.EqualFold(desiredExportState, "Active") && strings.EqualFold(state.ExportState.Value, "Paused")
+	configChanged := config.GetInfo().Id != state.ConfigID.ValueString()
+	shouldPause := strings.EqualFold(desiredExportState, "Paused") && !strings.EqualFold(state.ExportState.ValueString(), "Paused")
+	shouldResume := strings.EqualFold(desiredExportState, "Active") && strings.EqualFold(state.ExportState.ValueString(), "Paused")
 
 	if configChanged || shouldResume {
 		err = configureMetricsExporterAndWait(ctx, accountId, projectId, clusterId, config.GetInfo().Id, apiClient)
@@ -365,24 +370,24 @@ func (r resourceAssociateMetricsExporterCluster) Update(ctx context.Context, req
 }
 
 // Import API Key
-func (r resourceAssociateMetricsExporterCluster) ImportState(ctx context.Context, req tfsdk.ImportResourceStateRequest, resp *tfsdk.ImportResourceStateResponse) {
+func (r resourceAssociateMetricsExporterCluster) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
 	// Requires https://yugabyte.atlassian.net/browse/CLOUDGA-22221
 	resp.Diagnostics.AddError("Import is not currently supported", "")
 }
 
 func plannedMetricsExportState(exportState types.String) string {
-	if exportState.Null || exportState.Unknown || exportState.Value == "" {
+	if exportState.IsNull() || exportState.IsUnknown() || exportState.ValueString() == "" {
 		return "Active"
 	}
-	return exportState.Value
+	return exportState.ValueString()
 }
 
 func plannedMetricsExportConfig(plan AssociateMetricsExporterCluster) (configID string, configName string) {
-	if !plan.ConfigID.Null && !plan.ConfigID.Unknown {
-		configID = plan.ConfigID.Value
+	if !plan.ConfigID.IsNull() && !plan.ConfigID.IsUnknown() {
+		configID = plan.ConfigID.ValueString()
 	}
-	if !plan.ConfigName.Null && !plan.ConfigName.Unknown {
-		configName = plan.ConfigName.Value
+	if !plan.ConfigName.IsNull() && !plan.ConfigName.IsUnknown() {
+		configName = plan.ConfigName.ValueString()
 	}
 	return configID, configName
 }

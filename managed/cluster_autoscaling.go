@@ -23,7 +23,7 @@ const disableIgnoreNumNodesWithDriftErrorSummary = "Cannot disable ignore_num_no
 func ignoreNumNodesChangesEnabled(region RegionInfo) bool {
 	return !region.IgnoreNumNodesChanges.IsNull() &&
 		!region.IgnoreNumNodesChanges.IsUnknown() &&
-		region.IgnoreNumNodesChanges.Value
+		region.IgnoreNumNodesChanges.ValueBool()
 }
 
 // appendAutoscalerDriftWarning warns customers to set ignore_num_nodes_changes when
@@ -39,7 +39,7 @@ func appendAutoscalerDriftWarning(diags *diag.Diagnostics, status string) {
 func regionInfoByRegion(regions []RegionInfo) map[string]RegionInfo {
 	result := make(map[string]RegionInfo, len(regions))
 	for _, region := range regions {
-		result[region.Region.Value] = region
+		result[region.Region.ValueString()] = region
 	}
 	return result
 }
@@ -52,7 +52,7 @@ func applyIgnoredNumNodesChanges(cluster *Cluster, managedRegions []RegionInfo) 
 	managedByRegion := regionInfoByRegion(managedRegions)
 
 	for i := range cluster.ClusterRegionInfo {
-		regionCode := cluster.ClusterRegionInfo[i].Region.Value
+		regionCode := cluster.ClusterRegionInfo[i].Region.ValueString()
 		managedRegion, ok := managedByRegion[regionCode]
 		if !ok {
 			continue
@@ -72,12 +72,12 @@ func applyIgnoredNumNodesChanges(cluster *Cluster, managedRegions []RegionInfo) 
 // When ignore remains true with no explicit num_nodes change, the live YBM count is kept.
 func resolveNumNodesForEdit(planRegion RegionInfo, stateRegion RegionInfo, actualNumNodes int32) int32 {
 	planIgnoreEnabled := ignoreNumNodesChangesEnabled(planRegion)
-	numNodesChanged := planRegion.NumNodes.Value != stateRegion.NumNodes.Value
+	numNodesChanged := planRegion.NumNodes.ValueInt64() != stateRegion.NumNodes.ValueInt64()
 	if numNodesChanged {
-		return int32(planRegion.NumNodes.Value)
+		return int32(planRegion.NumNodes.ValueInt64())
 	}
 	if !planIgnoreEnabled {
-		return int32(planRegion.NumNodes.Value)
+		return int32(planRegion.NumNodes.ValueInt64())
 	}
 	return actualNumNodes
 }
@@ -115,7 +115,7 @@ func addIgnoreNumNodesDriftErrors(
 	}
 	stateByRegion := regionInfoByRegion(stateRegions)
 	for _, configRegion := range configRegions {
-		regionCode := configRegion.Region.Value
+		regionCode := configRegion.Region.ValueString()
 		stateRegion, ok := stateByRegion[regionCode]
 		if !ok {
 			continue
@@ -127,10 +127,10 @@ func addIgnoreNumNodesDriftErrors(
 			continue
 		}
 
-		configuredNodes := configRegion.NumNodes.Value
+		configuredNodes := configRegion.NumNodes.ValueInt64()
 
 		if !stateIgnore && configIgnore {
-			currentNodes := stateRegion.NumNodes.Value
+			currentNodes := stateRegion.NumNodes.ValueInt64()
 			if currentNodes != configuredNodes {
 				diags.AddError(
 					enableIgnoreNumNodesWithDriftErrorSummary,

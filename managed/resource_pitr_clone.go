@@ -11,6 +11,10 @@ import (
 
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/path"
+	"github.com/hashicorp/terraform-plugin-framework/resource"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
@@ -18,80 +22,74 @@ import (
 	openapiclient "github.com/yugabyte/yugabytedb-managed-go-client-internal"
 )
 
-type resourcePitrCloneType struct{}
-
-func (r resourcePitrCloneType) GetSchema(_ context.Context) (tfsdk.Schema, diag.Diagnostics) {
-	return tfsdk.Schema{
+func (r *resourcePitrClone) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
+	resp.Schema = schema.Schema{
 		Description: `The resource to clone a namespace in YugabyteDB Aeon.`,
-		Attributes: map[string]tfsdk.Attribute{
-			"account_id": {
+		Attributes: map[string]schema.Attribute{
+			"account_id": schema.StringAttribute{
 				Description: "The ID of the account.",
-				Type:        types.StringType,
 				Computed:    true,
-				PlanModifiers: []tfsdk.AttributePlanModifier{
-					tfsdk.UseStateForUnknown(),
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseNonNullStateForUnknown(),
 				},
 			},
-			"project_id": {
+			"project_id": schema.StringAttribute{
 				Description: "The ID of the project.",
-				Type:        types.StringType,
 				Computed:    true,
-				PlanModifiers: []tfsdk.AttributePlanModifier{
-					tfsdk.UseStateForUnknown(),
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseNonNullStateForUnknown(),
 				},
 			},
-			"cluster_id": {
+			"cluster_id": schema.StringAttribute{
 				Description: "The ID of the cluster.",
-				Type:        types.StringType,
 				Required:    true,
 			},
-			"clone_namespace_id": {
+			"clone_namespace_id": schema.StringAttribute{
 				Description: "The ID of the namespace clone.",
-				Type:        types.StringType,
 				Computed:    true,
 				Optional:    true,
 			},
-			"clone_as": {
+			"clone_as": schema.StringAttribute{
 				Description: "The name for new cloned namespace.",
-				Type:        types.StringType,
 				Required:    true,
 			},
-			"source_namespace_id": {
+			"source_namespace_id": schema.StringAttribute{
 				Description: "The ID of the namespace to be cloned.",
-				Type:        types.StringType,
 				Computed:    true,
-				PlanModifiers: []tfsdk.AttributePlanModifier{
-					tfsdk.UseStateForUnknown(),
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseNonNullStateForUnknown(),
 				},
 			},
-			"namespace_name": {
+			"namespace_name": schema.StringAttribute{
 				Description: "The source namespace name to be cloned.",
-				Type:        types.StringType,
 				Required:    true,
 			},
-			"namespace_type": {
+			"namespace_type": schema.StringAttribute{
 				Description: "The namespace type.",
-				Type:        types.StringType,
 				Required:    true,
 			},
-			"clone_at_millis": {
+			"clone_at_millis": schema.Int64Attribute{
 				Description: "The time in UNIX millis to clone to via PITR Config.",
-				Type:        types.Int64Type,
 				Optional:    true,
 			},
-			"state": {
+			"state": schema.StringAttribute{
 				Description: "The status of the namespace cloning.",
-				Type:        types.StringType,
 				Computed:    true,
 			},
 		},
-	}, nil
+	}
 }
 
-func (r resourcePitrCloneType) NewResource(_ context.Context, p tfsdk.Provider) (tfsdk.Resource, diag.Diagnostics) {
-	return resourcePitrClone{
-		p: *(p.(*provider)),
-	}, nil
+func newResourcePitrClone() resource.Resource {
+	return &resourcePitrClone{}
+}
+
+func (r *resourcePitrClone) Metadata(_ context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
+	resp.TypeName = req.ProviderTypeName + "_pitr_clone"
+}
+
+func (r *resourcePitrClone) Configure(_ context.Context, req resource.ConfigureRequest, _ *resource.ConfigureResponse) {
+	r.p = configuredProvider(req.ProviderData)
 }
 
 type resourcePitrClone struct {
@@ -123,7 +121,7 @@ func getPitrCloneState(ctx context.Context, state tfsdk.State, pitrClone *PitrCl
 }
 
 // Create PITR clone
-func (r resourcePitrClone) Create(ctx context.Context, req tfsdk.CreateResourceRequest, resp *tfsdk.CreateResourceResponse) {
+func (r resourcePitrClone) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
 
 	if !r.p.configured {
 		resp.Diagnostics.AddError(
@@ -143,7 +141,7 @@ func (r resourcePitrClone) Create(ctx context.Context, req tfsdk.CreateResourceR
 		return
 	}
 
-	if (!plan.CloneNamespaceId.Unknown && !plan.CloneNamespaceId.Null) || plan.CloneNamespaceId.Value != "" {
+	if (!plan.CloneNamespaceId.IsUnknown() && !plan.CloneNamespaceId.IsNull()) || plan.CloneNamespaceId.ValueString() != "" {
 		resp.Diagnostics.AddError(
 			"Cloned namespace ID provided for new clone",
 			"The clone_namespace_id was provided even though a new clone creation is being requested. Do not include this field in the provider when cloning a namespace.",
@@ -165,9 +163,9 @@ func (r resourcePitrClone) Create(ctx context.Context, req tfsdk.CreateResourceR
 		return
 	}
 
-	clusterId := plan.ClusterId.Value
-	namespaceName := plan.NamespaceName.Value
-	namespaceType := plan.NamespaceType.Value
+	clusterId := plan.ClusterId.ValueString()
+	namespaceName := plan.NamespaceName.ValueString()
+	namespaceType := plan.NamespaceType.ValueString()
 
 	namespacesResp, response, err := apiClient.ClusterApi.GetClusterNamespaces(ctx, accountId, projectId, clusterId).Execute()
 	if err != nil {
@@ -208,19 +206,19 @@ func (r resourcePitrClone) Create(ctx context.Context, req tfsdk.CreateResourceR
 	if len(pitrConfigId) == 0 {
 		// No PITR config exists, so we create one and clone to current time.
 		// "clone_at_millis" should not be provided in this case.
-		if (!plan.CloneAtMillis.Unknown && !plan.CloneAtMillis.Null) || plan.CloneAtMillis.Value != 0 {
+		if (!plan.CloneAtMillis.IsUnknown() && !plan.CloneAtMillis.IsNull()) || plan.CloneAtMillis.ValueInt64() != 0 {
 			resp.Diagnostics.AddError(
 				"Clone time provided for cloning a namespace without a pre exsiting PITR config",
 				"The clone_at_millis field was provided, but cloning is being requested for a namespace that is not associated with a PITR configuration. Please remove the clone_at_millis field from the provider.",
 			)
 			return
 		}
-		cloneSpec.SetCloneNow(*openapiclient.NewDatabaseCloneNowSpec(namespaceId, plan.CloneAs.Value))
+		cloneSpec.SetCloneNow(*openapiclient.NewDatabaseCloneNowSpec(namespaceId, plan.CloneAs.ValueString()))
 	} else {
-		if (!plan.CloneAtMillis.Unknown && !plan.CloneAtMillis.Null) || plan.CloneAtMillis.Value != 0 {
-			cloneSpec.SetClonePointInTime(*openapiclient.NewDatabaseClonePITSpec(plan.CloneAtMillis.Value, pitrConfigId, plan.CloneAs.Value))
+		if (!plan.CloneAtMillis.IsUnknown() && !plan.CloneAtMillis.IsNull()) || plan.CloneAtMillis.ValueInt64() != 0 {
+			cloneSpec.SetClonePointInTime(*openapiclient.NewDatabaseClonePITSpec(plan.CloneAtMillis.ValueInt64(), pitrConfigId, plan.CloneAs.ValueString()))
 		} else {
-			cloneSpec.SetCloneNow(*openapiclient.NewDatabaseCloneNowSpec(namespaceId, plan.CloneAs.Value))
+			cloneSpec.SetCloneNow(*openapiclient.NewDatabaseCloneNowSpec(namespaceId, plan.CloneAs.ValueString()))
 		}
 	}
 
@@ -262,11 +260,11 @@ func (r resourcePitrClone) Create(ctx context.Context, req tfsdk.CreateResourceR
 	}
 
 	// Set the computed fields
-	plan.AccountId = types.String{Value: accountId}
-	plan.ProjectId = types.String{Value: projectId}
-	plan.CloneNamespaceId = types.String{Value: pitrCloneResp.Data.Info.Id}
-	plan.SourceNamespaceId = types.String{Value: namespaceId}
-	plan.State = types.String{Value: "COMPLETED"}
+	plan.AccountId = types.StringValue(accountId)
+	plan.ProjectId = types.StringValue(projectId)
+	plan.CloneNamespaceId = types.StringValue(pitrCloneResp.Data.Info.Id)
+	plan.SourceNamespaceId = types.StringValue(namespaceId)
+	plan.State = types.StringValue("COMPLETED")
 
 	diags = resp.State.Set(ctx, plan)
 	resp.Diagnostics.Append(diags...)
@@ -276,7 +274,7 @@ func (r resourcePitrClone) Create(ctx context.Context, req tfsdk.CreateResourceR
 }
 
 // Read PITR clone
-func (r resourcePitrClone) Read(ctx context.Context, req tfsdk.ReadResourceRequest, resp *tfsdk.ReadResourceResponse) {
+func (r resourcePitrClone) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
 	var state PitrClone
 	getPitrCloneState(ctx, req.State, &state)
 
@@ -288,19 +286,19 @@ func (r resourcePitrClone) Read(ctx context.Context, req tfsdk.ReadResourceReque
 }
 
 // Update PITR clone
-func (r resourcePitrClone) Update(ctx context.Context, req tfsdk.UpdateResourceRequest, resp *tfsdk.UpdateResourceResponse) {
+func (r resourcePitrClone) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
 	resp.Diagnostics.AddError("Unable to update PITR clone.", "Updating PITR clones is not supported.")
 	return
 }
 
 // Delete PITR clone
-func (r resourcePitrClone) Delete(ctx context.Context, req tfsdk.DeleteResourceRequest, resp *tfsdk.DeleteResourceResponse) {
+func (r resourcePitrClone) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
 	resp.Diagnostics.AddError("Unable to delete PITR clone.", "Deleting PITR clones is not supported.")
 	return
 }
 
 // Import PITR clone
-func (r resourcePitrClone) ImportState(ctx context.Context, req tfsdk.ImportResourceStateRequest, resp *tfsdk.ImportResourceStateResponse) {
+func (r resourcePitrClone) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
 	// Save the import identifier in the id attribute
-	tfsdk.ResourceImportStatePassthroughID(ctx, path.Root("id"), req, resp)
+	resource.ImportStatePassthroughID(ctx, path.Root("id"), req, resp)
 }

@@ -75,6 +75,15 @@ type AzureCMKSpec struct {
 	KeyName      types.String `tfsdk:"key_name"`
 }
 
+// emptyGCPServiceAccount is a service account whose every field is known and empty.
+func emptyGCPServiceAccount() GCPServiceAccount {
+	empty := types.StringValue("")
+	return GCPServiceAccount{
+		Type: empty, ProjectId: empty, PrivateKey: empty, PrivateKeyId: empty, ClientEmail: empty, ClientId: empty,
+		AuthUri: empty, TokenUri: empty, AuthProviderX509CertUrl: empty, ClientX509CertUrl: empty, UniverseDomain: empty,
+	}
+}
+
 type GCPServiceAccount struct {
 	Type                    types.String `tfsdk:"type"`
 	ProjectId               types.String `tfsdk:"project_id"`
@@ -420,36 +429,36 @@ type AwsS3Spec struct {
 }
 
 func (d DataDogSpec) EncryptedKey() string {
-	return util.ObfuscateString(d.ApiKey.Value)
+	return util.ObfuscateString(d.ApiKey.ValueString())
 }
 
 func (g GrafanaSpec) EncryptedKey() string {
-	return util.ObfuscateStringLenght(g.AccessTokenPolicy.Value, 5)
+	return util.ObfuscateStringLenght(g.AccessTokenPolicy.ValueString(), 5)
 }
 
 func (s SumoLogicSpec) EncryptedKey(key string) string {
 	switch key {
 
 	case "access_key":
-		return util.ObfuscateString(s.AccessKey.Value)
+		return util.ObfuscateString(s.AccessKey.ValueString())
 	case "access_id":
-		return util.ObfuscateString(s.AccessId.Value)
+		return util.ObfuscateString(s.AccessId.ValueString())
 	case "installation_token":
-		return util.ObfuscateString(s.InstallationToken.Value)
+		return util.ObfuscateString(s.InstallationToken.ValueString())
 	}
 	return ""
 }
 
 func (d NewRelicSpec) EncryptedKey() string {
-	return util.ObfuscateString(d.LicenseKey.Value)
+	return util.ObfuscateString(d.LicenseKey.ValueString())
 }
 
 func (a AwsS3Spec) EncryptedKey(key string) string {
 	switch key {
 	case "access_key_id":
-		return util.ObfuscateString(a.AccessKeyId.Value)
+		return util.ObfuscateString(a.AccessKeyId.ValueString())
 	case "secret_access_key":
-		return util.ObfuscateString(a.SecretAccessKey.Value)
+		return util.ObfuscateString(a.SecretAccessKey.ValueString())
 	}
 	return ""
 }
@@ -713,4 +722,25 @@ type AmpEndpoint struct {
 	Username              types.String    `tfsdk:"username"`
 	Database              types.String    `tfsdk:"database"`
 	TlsCaCertificate      types.String    `tfsdk:"tls_ca_certificate"`
+}
+
+// zeroRegionInfo is a RegionInfo whose fields are known zero values, as an unset RegionInfo was
+// before terraform-plugin-framework v1 made unset values null.
+func zeroRegionInfo() RegionInfo {
+	return RegionInfo{
+		Region:                     types.StringValue(""),
+		NumNodes:                   types.Int64Value(0),
+		IgnoreNumNodesChanges:      types.BoolValue(false),
+		NumCores:                   types.Int64Value(0),
+		NumZones:                   types.Int64Value(0),
+		DiskSizeGb:                 types.Int64Value(0),
+		DiskIops:                   types.Int64Value(0),
+		VPCID:                      types.StringValue(""),
+		VPCName:                    types.StringValue(""),
+		PublicAccess:               types.BoolValue(false),
+		IsPreferred:                types.BoolValue(false),
+		IsDefault:                  types.BoolValue(false),
+		BackupReplicationGCPTarget: types.StringValue(""),
+		BackupRegion:               types.BoolValue(false),
+	}
 }

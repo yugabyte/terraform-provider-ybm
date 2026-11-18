@@ -14,79 +14,77 @@ import (
 
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/path"
+	"github.com/hashicorp/terraform-plugin-framework/resource"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
 	"github.com/hashicorp/terraform-plugin-framework/types"
-
 	retry "github.com/sethvargo/go-retry"
 	openapiclient "github.com/yugabyte/yugabytedb-managed-go-client-internal"
 )
 
-type resourceVPCType struct{}
-
-func (r resourceVPCType) GetSchema(_ context.Context) (tfsdk.Schema, diag.Diagnostics) {
-	return tfsdk.Schema{
+func (r *resourceVPC) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
+	resp.Schema = schema.Schema{
 		Description: `The resource to create a VPC in YugabyteDB Aeon.`,
-		Attributes: map[string]tfsdk.Attribute{
-			"account_id": {
+		Attributes: map[string]schema.Attribute{
+			"account_id": schema.StringAttribute{
 				Description: "The ID of the account this VPC belongs to.",
-				Type:        types.StringType,
 				Computed:    true,
 			},
-			"project_id": {
+			"project_id": schema.StringAttribute{
 				Description: "The ID of the project this VPC belongs to.",
-				Type:        types.StringType,
 				Computed:    true,
 			},
-			"vpc_id": {
+			"vpc_id": schema.StringAttribute{
 				Description: "The ID of the VPC. Created automatically when the VPC is created. Used to get a specific VPC.",
-				Type:        types.StringType,
 				Computed:    true,
 				Optional:    true,
 			},
-			"external_vpc_id": {
+			"external_vpc_id": schema.StringAttribute{
 				Description: "The ID of the cloud provider(AWS/GCP/Azure) VPC where YugabyteDB Aeon resources are created",
-				Type:        types.StringType,
 				Computed:    true,
 			},
-			"name": {
+			"name": schema.StringAttribute{
 				Description: "The description of the VPC.",
-				Type:        types.StringType,
 				Required:    true,
 			},
-			"cloud": {
+			"cloud": schema.StringAttribute{
 				Description: "The cloud provider (AWS, AZURE or GCP) where the VPC is to be created.",
-				Type:        types.StringType,
 				Required:    true,
 			},
-			"global_cidr": {
+			"global_cidr": schema.StringAttribute{
 				Description: "The global CIDR of the VPC (GCP only).",
-				Type:        types.StringType,
 				Optional:    true,
 				Computed:    true,
 			},
-			"region_cidr_info": {
+			"region_cidr_info": schema.ListNestedAttribute{
 				Description: "The CIDR information for all the regions for the VPC.",
 				Optional:    true,
-				Attributes: tfsdk.ListNestedAttributes(map[string]tfsdk.Attribute{
-					"region": {
-						Type:     types.StringType,
-						Optional: true,
+				NestedObject: schema.NestedAttributeObject{
+					Attributes: map[string]schema.Attribute{
+						"region": schema.StringAttribute{
+							Optional: true,
+						},
+						"cidr": schema.StringAttribute{
+							Computed: true,
+							Optional: true,
+						},
 					},
-					"cidr": {
-						Type:     types.StringType,
-						Computed: true,
-						Optional: true,
-					},
-				}),
+				},
 			},
 		},
-	}, nil
+	}
 }
 
-func (r resourceVPCType) NewResource(_ context.Context, p tfsdk.Provider) (tfsdk.Resource, diag.Diagnostics) {
-	return resourceVPC{
-		p: *(p.(*provider)),
-	}, nil
+func newResourceVPC() resource.Resource {
+	return &resourceVPC{}
+}
+
+func (r *resourceVPC) Metadata(_ context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
+	resp.TypeName = req.ProviderTypeName + "_vpc"
+}
+
+func (r *resourceVPC) Configure(_ context.Context, req resource.ConfigureRequest, _ *resource.ConfigureResponse) {
+	r.p = configuredProvider(req.ProviderData)
 }
 
 type resourceVPC struct {
@@ -110,7 +108,7 @@ func getVPCPlan(ctx context.Context, plan tfsdk.Plan, vpc *VPC) diag.Diagnostics
 }
 
 // Create vpc
-func (r resourceVPC) Create(ctx context.Context, req tfsdk.CreateResourceRequest, resp *tfsdk.CreateResourceResponse) {
+func (r resourceVPC) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
 
 	if !r.p.configured {
 		resp.Diagnostics.AddError(
@@ -136,7 +134,7 @@ func (r resourceVPC) Create(ctx context.Context, req tfsdk.CreateResourceRequest
 		return
 	}
 
-	if (!plan.VPCID.Unknown && !plan.VPCID.Null) || plan.VPCID.Value != "" {
+	if (!plan.VPCID.IsUnknown() && !plan.VPCID.IsNull()) || plan.VPCID.ValueString() != "" {
 		resp.Diagnostics.AddError(
 			"VPC ID provided for new VPC",
 			"The vpc_id was provided even though a new VPC is being created. Do not include this field in the provider when creating a VPC.",
@@ -150,7 +148,7 @@ func (r resourceVPC) Create(ctx context.Context, req tfsdk.CreateResourceRequest
 	}
 
 	globalCIDRPresent := false
-	if (!plan.GlobalCIDR.Unknown && !plan.GlobalCIDR.Null) || plan.GlobalCIDR.Value != "" {
+	if (!plan.GlobalCIDR.IsUnknown() && !plan.GlobalCIDR.IsNull()) || plan.GlobalCIDR.ValueString() != "" {
 		globalCIDRPresent = true
 	}
 
@@ -159,8 +157,8 @@ func (r resourceVPC) Create(ctx context.Context, req tfsdk.CreateResourceRequest
 		regionCIDRInfoPresent = true
 	}
 
-	vpcName := plan.Name.Value
-	cloud := plan.Cloud.Value
+	vpcName := plan.Name.ValueString()
+	cloud := plan.Cloud.ValueString()
 
 	// Exactly one parameter amongst Global CIDR and Region CIDR Info must be present
 	// Simulating XOR by comparing boolean values
@@ -187,7 +185,7 @@ func (r resourceVPC) Create(ctx context.Context, req tfsdk.CreateResourceRequest
 			)
 			return
 		}
-		if (!plan.RegionCIDRInfo[0].CIDR.Unknown && !plan.RegionCIDRInfo[0].CIDR.Null) || plan.RegionCIDRInfo[0].CIDR.Value != "" {
+		if (!plan.RegionCIDRInfo[0].CIDR.IsUnknown() && !plan.RegionCIDRInfo[0].CIDR.IsNull()) || plan.RegionCIDRInfo[0].CIDR.ValueString() != "" {
 			resp.Diagnostics.AddError(
 				"CIDR specifed",
 				"CIDR are auto-assigned for AZURE. Please remove it",
@@ -201,8 +199,8 @@ func (r resourceVPC) Create(ctx context.Context, req tfsdk.CreateResourceRequest
 
 	if regionCIDRInfoPresent {
 		for index, info := range plan.RegionCIDRInfo {
-			region := info.Region.Value
-			cidr := info.CIDR.Value
+			region := info.Region.ValueString()
+			cidr := info.CIDR.ValueString()
 			spec := *openapiclient.NewVpcRegionSpecWithDefaults()
 			regionMap[region] = index
 			spec.SetRegion(region)
@@ -224,7 +222,7 @@ func (r resourceVPC) Create(ctx context.Context, req tfsdk.CreateResourceRequest
 
 	vpcSpec := *openapiclient.NewSingleTenantVpcSpec(vpcName, openapiclient.CloudEnum(cloud), vpcRegionSpec)
 	if globalCIDRPresent {
-		vpcSpec.SetParentCidr(plan.GlobalCIDR.Value)
+		vpcSpec.SetParentCidr(plan.GlobalCIDR.ValueString())
 	}
 	vpcRequest := *openapiclient.NewSingleTenantVpcRequest(vpcSpec)
 
@@ -260,7 +258,7 @@ func (r resourceVPC) Create(ctx context.Context, req tfsdk.CreateResourceRequest
 	}
 
 	if !globalCIDRPresent {
-		vpc.GlobalCIDR.Null = true
+		vpc.GlobalCIDR = types.StringNull()
 	} else {
 		vpc.RegionCIDRInfo = nil
 	}
@@ -305,29 +303,29 @@ func resourceVPCRead(vpcId string, apiClient *openapiclient.APIClient) (vpc VPC,
 		return vpc, false, GetApiErrorDetails(err)
 	}
 
-	vpc.AccountID.Value = accountId
-	vpc.ProjectID.Value = projectId
-	vpc.VPCID.Value = vpcId
+	vpc.AccountID = types.StringValue(accountId)
+	vpc.ProjectID = types.StringValue(projectId)
+	vpc.VPCID = types.StringValue(vpcId)
 
-	vpc.Name.Value = vpcResp.Data.Spec.GetName()
-	vpc.Cloud.Value = string(vpcResp.Data.Spec.GetCloud())
-	vpc.ExternalVPCID.Value = vpcResp.Data.Info.GetExternalVpcId()
+	vpc.Name = types.StringValue(vpcResp.Data.Spec.GetName())
+	vpc.Cloud = types.StringValue(string(vpcResp.Data.Spec.GetCloud()))
+	vpc.ExternalVPCID = types.StringValue(vpcResp.Data.Info.GetExternalVpcId())
 	if vpcResp.Data.Spec.GetParentCidr() != "" {
-		vpc.GlobalCIDR.Value = vpcResp.Data.Spec.GetParentCidr()
+		vpc.GlobalCIDR = types.StringValue(vpcResp.Data.Spec.GetParentCidr())
 	} else {
-		vpc.GlobalCIDR.Null = true
+		vpc.GlobalCIDR = types.StringNull()
 		if v, ok := vpcResp.Data.Spec.GetRegionSpecsOk(); ok {
 			regionInfo := make([]VPCRegionInfo, len(*v))
 			for index, info := range *v {
 				region := info.GetRegion()
 				cidr := info.GetCidr()
 				regionInfo[index] = VPCRegionInfo{
-					Region: types.String{Value: region},
-					CIDR:   types.String{Value: cidr},
+					Region: types.StringValue(region),
+					CIDR:   types.StringValue(cidr),
 				}
 			}
 			sort.Slice(regionInfo, func(i, j int) bool {
-				return string(regionInfo[i].Region.Value) < string(regionInfo[j].Region.Value)
+				return string(regionInfo[i].Region.ValueString()) < string(regionInfo[j].Region.ValueString())
 			})
 			vpc.RegionCIDRInfo = regionInfo
 		}
@@ -338,11 +336,11 @@ func resourceVPCRead(vpcId string, apiClient *openapiclient.APIClient) (vpc VPC,
 }
 
 // Read vpc
-func (r resourceVPC) Read(ctx context.Context, req tfsdk.ReadResourceRequest, resp *tfsdk.ReadResourceResponse) {
+func (r resourceVPC) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
 	var state VPC
 	getIDsFromVPCState(ctx, req.State, &state)
 
-	vpc, readOK, message := resourceVPCRead(state.VPCID.Value, r.p.client)
+	vpc, readOK, message := resourceVPCRead(state.VPCID.ValueString(), r.p.client)
 	if !readOK {
 		resp.Diagnostics.AddError("Unable to read the state of the VPC", message)
 		return
@@ -359,7 +357,7 @@ func (r resourceVPC) Read(ctx context.Context, req tfsdk.ReadResourceRequest, re
 }
 
 // Update vpc
-func (r resourceVPC) Update(ctx context.Context, req tfsdk.UpdateResourceRequest, resp *tfsdk.UpdateResourceResponse) {
+func (r resourceVPC) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
 
 	resp.Diagnostics.AddError("Unable to update VPC.", "Updating VPCs is not currently supported. Delete and recreate the provider.")
 	return
@@ -367,12 +365,12 @@ func (r resourceVPC) Update(ctx context.Context, req tfsdk.UpdateResourceRequest
 }
 
 // Delete vpc
-func (r resourceVPC) Delete(ctx context.Context, req tfsdk.DeleteResourceRequest, resp *tfsdk.DeleteResourceResponse) {
+func (r resourceVPC) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
 	var state VPC
 	getIDsFromVPCState(ctx, req.State, &state)
-	accountId := state.AccountID.Value
-	projectId := state.ProjectID.Value
-	vpcId := state.VPCID.Value
+	accountId := state.AccountID.ValueString()
+	projectId := state.ProjectID.ValueString()
+	vpcId := state.VPCID.ValueString()
 
 	apiClient := r.p.client
 
@@ -405,7 +403,7 @@ func (r resourceVPC) Delete(ctx context.Context, req tfsdk.DeleteResourceRequest
 }
 
 // Import vpc
-func (r resourceVPC) ImportState(ctx context.Context, req tfsdk.ImportResourceStateRequest, resp *tfsdk.ImportResourceStateResponse) {
+func (r resourceVPC) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
 	// Save the import identifier in the vpc_id attribute
 	resp.State.SetAttribute(ctx, path.Root("vpc_id"), req.ID)
 }

@@ -4,72 +4,67 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/hashicorp/terraform-plugin-framework/diag"
-	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
+	"github.com/hashicorp/terraform-plugin-framework/datasource"
+	"github.com/hashicorp/terraform-plugin-framework/datasource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
 )
 
-type dataSourceAllowListType struct{}
-
-func (r dataSourceAllowListType) GetSchema(_ context.Context) (tfsdk.Schema, diag.Diagnostics) {
-	return tfsdk.Schema{
+func (r *dataSourceAllowList) Schema(_ context.Context, _ datasource.SchemaRequest, resp *datasource.SchemaResponse) {
+	resp.Schema = schema.Schema{
 		Description: `The data source to fetch an allow list in YugabyteDB Aeon.`,
-		Attributes: map[string]tfsdk.Attribute{
-			"account_id": {
+		Attributes: map[string]schema.Attribute{
+			"account_id": schema.StringAttribute{
 				Description: "The ID of the account this allow list belongs to.",
-				Type:        types.StringType,
 				Computed:    true,
 			},
-			"project_id": {
+			"project_id": schema.StringAttribute{
 				Description: "The ID of the project this allow list belongs to.",
-				Type:        types.StringType,
 				Computed:    true,
 			},
-			"allow_list_id": {
+			"allow_list_id": schema.StringAttribute{
 				Description: "The ID of the allow list. Created automatically when an allow list is created. Use this ID to get a specific allow list.",
-				Type:        types.StringType,
 				Computed:    true,
 			},
-			"allow_list_name": {
+			"allow_list_name": schema.StringAttribute{
 				Description: "The name of the allow list.",
-				Type:        types.StringType,
 				Required:    true,
 			},
-			"allow_list_description": {
+			"allow_list_description": schema.StringAttribute{
 				Description: "The description of the allow list.",
-				Type:        types.StringType,
 				Computed:    true,
 			},
-			"cidr_list": {
+			"cidr_list": schema.SetAttribute{
 				Description: "The CIDR list of the allow list.",
-				Type: types.SetType{
-					ElemType: types.StringType,
-				},
-				Computed: true,
+				ElementType: types.StringType,
+				Computed:    true,
 			},
-			"cluster_ids": {
+			"cluster_ids": schema.SetAttribute{
 				Description: "List of the IDs of the clusters the allow list is assigned to.",
-				Type: types.SetType{
-					ElemType: types.StringType,
-				},
-				Computed: true,
+				ElementType: types.StringType,
+				Computed:    true,
 			},
 		},
-	}, nil
+	}
 }
 
-func (r dataSourceAllowListType) NewDataSource(_ context.Context, p tfsdk.Provider) (tfsdk.DataSource, diag.Diagnostics) {
-	return dataSourceAllowList{
-		p: *(p.(*provider)),
-	}, nil
+func newDataSourceAllowList() datasource.DataSource {
+	return &dataSourceAllowList{}
+}
+
+func (r *dataSourceAllowList) Metadata(_ context.Context, req datasource.MetadataRequest, resp *datasource.MetadataResponse) {
+	resp.TypeName = req.ProviderTypeName + "_allow_list"
+}
+
+func (r *dataSourceAllowList) Configure(_ context.Context, req datasource.ConfigureRequest, _ *datasource.ConfigureResponse) {
+	r.p = configuredProvider(req.ProviderData)
 }
 
 type dataSourceAllowList struct {
 	p provider
 }
 
-func (r dataSourceAllowList) Read(ctx context.Context, req tfsdk.ReadDataSourceRequest, resp *tfsdk.ReadDataSourceResponse) {
+func (r dataSourceAllowList) Read(ctx context.Context, req datasource.ReadRequest, resp *datasource.ReadResponse) {
 
 	if !r.p.configured {
 		resp.Diagnostics.AddError(
@@ -102,9 +97,9 @@ func (r dataSourceAllowList) Read(ctx context.Context, req tfsdk.ReadDataSourceR
 		return
 	}
 
-	allowList, readOK, message := resourceAllowListRead(accountId, projectId, config.AllowListName.Value, apiClient)
+	allowList, readOK, message := resourceAllowListRead(accountId, projectId, config.AllowListName.ValueString(), apiClient)
 	if !readOK {
-		resp.Diagnostics.AddError(fmt.Sprintf("Unable to fetch allow list %s", config.AllowListName.Value), message)
+		resp.Diagnostics.AddError(fmt.Sprintf("Unable to fetch allow list %s", config.AllowListName.ValueString()), message)
 		return
 	}
 

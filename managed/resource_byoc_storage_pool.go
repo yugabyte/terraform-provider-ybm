@@ -11,61 +11,63 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/path"
-	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
+	"github.com/hashicorp/terraform-plugin-framework/resource"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
 )
 
-type resourceByocStoragePoolType struct{}
-
-func (r resourceByocStoragePoolType) GetSchema(_ context.Context) (tfsdk.Schema, diag.Diagnostics) {
-	return tfsdk.Schema{
+func (r *resourceByocStoragePool) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
+	resp.Schema = schema.Schema{
 		Description: `The resource to create a storage pool in a BYOC environment: a group of clusters, for example for a team or business unit. ` +
 			`Create ybm_amp_byoc_cluster resources in it with storage_pool. Storage pools cannot be deleted, so destroying this resource ` +
 			`only removes it from Terraform state; import the pool to manage it again.`,
-		Attributes: map[string]tfsdk.Attribute{
-			"account_id": {
+		Attributes: map[string]schema.Attribute{
+			"account_id": schema.StringAttribute{
 				Description:   "The ID of the account the environment belongs to.",
-				Type:          types.StringType,
 				Computed:      true,
-				PlanModifiers: []tfsdk.AttributePlanModifier{tfsdk.UseStateForUnknown()},
+				PlanModifiers: []planmodifier.String{stringplanmodifier.UseNonNullStateForUnknown()},
 			},
-			"environment_id": {
+			"environment_id": schema.StringAttribute{
 				Description:   "The ID of the BYOC environment to create the storage pool in. Changing it forces a new storage pool.",
-				Type:          types.StringType,
 				Required:      true,
-				PlanModifiers: []tfsdk.AttributePlanModifier{tfsdk.RequiresReplace()},
+				PlanModifiers: []planmodifier.String{stringplanmodifier.RequiresReplace()},
 			},
 			"name": ampNameAttribute("The name of the storage pool, unique within the environment. Changing it forces a new storage pool."),
-			"owner_user_id": {
+			"owner_user_id": schema.StringAttribute{
 				Description:   "The UUID of the pool's owner, which the environment's agent creates. Defaults to the account ID. Changing it forces a new storage pool.",
-				Type:          types.StringType,
 				Optional:      true,
 				Computed:      true,
-				PlanModifiers: []tfsdk.AttributePlanModifier{tfsdk.UseStateForUnknown(), tfsdk.RequiresReplace()},
+				PlanModifiers: []planmodifier.String{stringplanmodifier.UseNonNullStateForUnknown(), stringplanmodifier.RequiresReplaceIfConfigured()},
 			},
-			"state": {
+			"state": schema.StringAttribute{
 				Description: "The state the storage pool last reported.",
-				Type:        types.StringType,
 				Computed:    true,
 			},
 		},
-	}, nil
+	}
 }
 
-func (r resourceByocStoragePoolType) NewResource(_ context.Context, p tfsdk.Provider) (tfsdk.Resource, diag.Diagnostics) {
-	return resourceByocStoragePool{
-		p: *(p.(*provider)),
-	}, nil
+func newResourceByocStoragePool() resource.Resource {
+	return &resourceByocStoragePool{}
+}
+
+func (r *resourceByocStoragePool) Metadata(_ context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
+	resp.TypeName = req.ProviderTypeName + "_amp_byoc_storage_pool"
+}
+
+func (r *resourceByocStoragePool) Configure(_ context.Context, req resource.ConfigureRequest, _ *resource.ConfigureResponse) {
+	r.p = configuredProvider(req.ProviderData)
 }
 
 type resourceByocStoragePool struct {
 	p provider
 }
 
-func (r resourceByocStoragePool) Create(ctx context.Context, req tfsdk.CreateResourceRequest, resp *tfsdk.CreateResourceResponse) {
+func (r resourceByocStoragePool) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
 	if !r.p.configured {
 		resp.Diagnostics.AddError(
 			"Provider not configured",
@@ -83,7 +85,7 @@ func (r resourceByocStoragePool) Create(ctx context.Context, req tfsdk.CreateRes
 		resp.Diagnostics.AddError("Unable to get account ID", message)
 		return
 	}
-	environmentId, name := plan.EnvironmentID.Value, plan.Name.Value
+	environmentId, name := plan.EnvironmentID.ValueString(), plan.Name.ValueString()
 	owner := stringOr(plan.OwnerUserID, accountId)
 	if err := waitForActiveByocEnvironment(ctx, r.p.client, accountId, environmentId); err != nil {
 		resp.Diagnostics.AddError("Environment "+environmentId+" cannot run clusters", err.Error())
@@ -131,11 +133,11 @@ func resourceByocStoragePoolRead(ctx context.Context, scope ampScope) (pool Byoc
 		}
 	}
 	pool = ByocStoragePool{
-		AccountID:     types.String{Value: scope.accountId},
-		EnvironmentID: types.String{Value: scope.environmentId},
-		Name:          types.String{Value: scope.pool()},
+		AccountID:     types.StringValue(scope.accountId),
+		EnvironmentID: types.StringValue(scope.environmentId),
+		Name:          types.StringValue(scope.pool()),
 		OwnerUserID:   tfString(spec.OwnerUserID),
-		State:         types.String{Value: "creating"},
+		State:         types.StringValue("creating"),
 	}
 	if o, ok := findAmpObserved(snap[0].Observed, ampKindStoragePool, scope.pool()); ok {
 		pool.State = tfString(o.State)
@@ -143,13 +145,13 @@ func resourceByocStoragePoolRead(ctx context.Context, scope ampScope) (pool Byoc
 	return pool, true, nil
 }
 
-func (r resourceByocStoragePool) Read(ctx context.Context, req tfsdk.ReadResourceRequest, resp *tfsdk.ReadResourceResponse) {
+func (r resourceByocStoragePool) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
 	var state ByocStoragePool
 	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
-	accountId := state.AccountID.Value
+	accountId := state.AccountID.ValueString()
 	if accountId == "" {
 		var ok bool
 		var message string
@@ -159,32 +161,32 @@ func (r resourceByocStoragePool) Read(ctx context.Context, req tfsdk.ReadResourc
 			return
 		}
 	}
-	scope := newAmpScope(r.p.client, accountId, state.EnvironmentID.Value, state.Name.Value)
+	scope := newAmpScope(r.p.client, accountId, state.EnvironmentID.ValueString(), state.Name.ValueString())
 	pool, found, err := resourceByocStoragePoolRead(ctx, scope)
 	if isYcpNotFound(err) || (err == nil && !found) {
-		tflog.Warn(ctx, "Storage pool "+state.Name.Value+" no longer exists; removing it from state")
+		tflog.Warn(ctx, "Storage pool "+state.Name.ValueString()+" no longer exists; removing it from state")
 		resp.State.RemoveResource(ctx)
 		return
 	}
 	if err != nil {
-		resp.Diagnostics.AddError("Unable to read the state of storage pool "+state.Name.Value, err.Error())
+		resp.Diagnostics.AddError("Unable to read the state of storage pool "+state.Name.ValueString(), err.Error())
 		return
 	}
 	resp.Diagnostics.Append(resp.State.Set(ctx, &pool)...)
 }
 
 // Update only refreshes computed attributes: every configurable attribute forces a replacement.
-func (r resourceByocStoragePool) Update(ctx context.Context, req tfsdk.UpdateResourceRequest, resp *tfsdk.UpdateResourceResponse) {
+func (r resourceByocStoragePool) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
 	var state ByocStoragePool
 	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
-	scope := newAmpScope(r.p.client, state.AccountID.Value, state.EnvironmentID.Value, state.Name.Value)
+	scope := newAmpScope(r.p.client, state.AccountID.ValueString(), state.EnvironmentID.ValueString(), state.Name.ValueString())
 	pool, found, err := resourceByocStoragePoolRead(ctx, scope)
-	err = requireAmpFound(found, err, "storage pool "+state.Name.Value)
+	err = requireAmpFound(found, err, "storage pool "+state.Name.ValueString())
 	if err != nil {
-		resp.Diagnostics.AddError("Unable to read the state of storage pool "+state.Name.Value, err.Error())
+		resp.Diagnostics.AddError("Unable to read the state of storage pool "+state.Name.ValueString(), err.Error())
 		return
 	}
 	resp.Diagnostics.Append(resp.State.Set(ctx, &pool)...)
@@ -192,20 +194,20 @@ func (r resourceByocStoragePool) Update(ctx context.Context, req tfsdk.UpdateRes
 
 // Delete leaves the pool in the environment: AMP does not delete storage pools, and the console
 // treats them as undeletable too.
-func (r resourceByocStoragePool) Delete(ctx context.Context, req tfsdk.DeleteResourceRequest, resp *tfsdk.DeleteResourceResponse) {
+func (r resourceByocStoragePool) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
 	var state ByocStoragePool
 	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
-	resp.Diagnostics.AddWarning("Storage pool "+state.Name.Value+" was not deleted",
-		"Storage pools cannot be deleted, so the pool stays in environment "+state.EnvironmentID.Value+
+	resp.Diagnostics.AddWarning("Storage pool "+state.Name.ValueString()+" was not deleted",
+		"Storage pools cannot be deleted, so the pool stays in environment "+state.EnvironmentID.ValueString()+
 			" and has only been removed from Terraform state. Import it to manage it again.")
 	resp.State.RemoveResource(ctx)
 }
 
 // ImportState imports a storage pool by "<environment_id>/<name>".
-func (r resourceByocStoragePool) ImportState(ctx context.Context, req tfsdk.ImportResourceStateRequest, resp *tfsdk.ImportResourceStateResponse) {
+func (r resourceByocStoragePool) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
 	parts := strings.Split(req.ID, "/")
 	if len(parts) != 2 || parts[0] == "" || parts[1] == "" {
 		resp.Diagnostics.AddError("Invalid import ID", "Expected <environment_id>/<name>, got "+req.ID)

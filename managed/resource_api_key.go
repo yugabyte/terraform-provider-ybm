@@ -9,106 +9,96 @@ import (
 
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/path"
+	"github.com/hashicorp/terraform-plugin-framework/resource"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
 	openapiclient "github.com/yugabyte/yugabytedb-managed-go-client-internal"
 )
 
-type resourceApiKeyType struct{}
-
-func (r resourceApiKeyType) GetSchema(_ context.Context) (tfsdk.Schema, diag.Diagnostics) {
-	return tfsdk.Schema{
+func (r *resourceApiKey) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
+	resp.Schema = schema.Schema{
 		Description: `The resource to issue an API Key in YugabyteDB Aeon.`,
-		Attributes: map[string]tfsdk.Attribute{
-			"account_id": {
+		Attributes: map[string]schema.Attribute{
+			"account_id": schema.StringAttribute{
 				Description: "The ID of the account this user belongs to.",
-				Type:        types.StringType,
 				Computed:    true,
 			},
-			"project_id": {
+			"project_id": schema.StringAttribute{
 				Description: "The ID of the project this user belongs to.",
-				Type:        types.StringType,
 				Computed:    true,
 			},
-			"api_key_id": {
+			"api_key_id": schema.StringAttribute{
 				Description: "The ID of the API Key. Created automatically when an API Key is created. Use this ID to get a specific API Key.",
-				Type:        types.StringType,
 				Computed:    true,
 				Optional:    true,
 			},
-			"name": {
+			"name": schema.StringAttribute{
 				Description: "The name of the API Key.",
-				Type:        types.StringType,
 				Required:    true,
 			},
-			"duration": {
+			"duration": schema.Int64Attribute{
 				Description: "The duration for which the API Key will be valid. 0 denotes that the key will never expire.",
-				Type:        types.Int64Type,
 				Required:    true,
 			},
-			"unit": {
+			"unit": schema.StringAttribute{
 				Description: "The time units for which the API Key will be valid. Available options are Hours, Days, and Months.",
-				Type:        types.StringType,
 				Required:    true,
 			},
-			"role_name": {
+			"role_name": schema.StringAttribute{
 				Description: "The role of the API Key.",
-				Type:        types.StringType,
 				Required:    true,
 			},
-			"allow_list_ids": {
+			"allow_list_ids": schema.SetAttribute{
 				Description: "List of IDs of the allow lists assigned to the API Key.",
-				Type: types.SetType{
-					ElemType: types.StringType,
-				},
-				Optional: true,
+				ElementType: types.StringType,
+				Optional:    true,
 			},
-			"description": {
+			"description": schema.StringAttribute{
 				Description: "The description of the API Key.",
-				Type:        types.StringType,
 				Computed:    true,
 				Optional:    true,
 			},
-			"api_key": {
+			"api_key": schema.StringAttribute{
 				Description: "The API Key.",
-				Type:        types.StringType,
 				Computed:    true,
 				Sensitive:   true,
 			},
-			"status": {
+			"status": schema.StringAttribute{
 				Description: "The status of the API Key.",
-				Type:        types.StringType,
 				Computed:    true,
 			},
-			"issuer": {
+			"issuer": schema.StringAttribute{
 				Description: "The issuer of the API Key.",
-				Type:        types.StringType,
 				Computed:    true,
 			},
-			"last_used": {
+			"last_used": schema.StringAttribute{
 				Description: "The last used time of the API Key.",
-				Type:        types.StringType,
 				Computed:    true,
 			},
-			"expiration": {
+			"expiration": schema.StringAttribute{
 				Description: "The expiry time of the API Key.",
-				Type:        types.StringType,
 				Computed:    true,
 			},
-			"date_created": {
+			"date_created": schema.StringAttribute{
 				Description: "The creation time of the API Key.",
-				Type:        types.StringType,
 				Computed:    true,
 			},
 		},
-	}, nil
+	}
 }
 
-func (r resourceApiKeyType) NewResource(_ context.Context, p tfsdk.Provider) (tfsdk.Resource, diag.Diagnostics) {
-	return resourceApiKey{
-		p: *(p.(*provider)),
-	}, nil
+func newResourceApiKey() resource.Resource {
+	return &resourceApiKey{}
+}
+
+func (r *resourceApiKey) Metadata(_ context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
+	resp.TypeName = req.ProviderTypeName + "_api_key"
+}
+
+func (r *resourceApiKey) Configure(_ context.Context, req resource.ConfigureRequest, _ *resource.ConfigureResponse) {
+	r.p = configuredProvider(req.ProviderData)
 }
 
 type resourceApiKey struct {
@@ -138,7 +128,7 @@ func GetKeyTimeConversionMap() map[string]int {
 }
 
 // Create API Key
-func (r resourceApiKey) Create(ctx context.Context, req tfsdk.CreateResourceRequest, resp *tfsdk.CreateResourceResponse) {
+func (r resourceApiKey) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
 
 	if !r.p.configured {
 		resp.Diagnostics.AddError(
@@ -157,7 +147,7 @@ func (r resourceApiKey) Create(ctx context.Context, req tfsdk.CreateResourceRequ
 		return
 	}
 
-	if (!plan.ApiKeyID.Unknown && !plan.ApiKeyID.Null) || plan.ApiKeyID.Value != "" {
+	if (!plan.ApiKeyID.IsUnknown() && !plan.ApiKeyID.IsNull()) || plan.ApiKeyID.ValueString() != "" {
 		resp.Diagnostics.AddError(
 			"API Key ID provided for new API Key",
 			"The api_key_id was provided even though a new API Key is being issued. Do not include this field in the provider when creating an API Key.",
@@ -179,10 +169,10 @@ func (r resourceApiKey) Create(ctx context.Context, req tfsdk.CreateResourceRequ
 		return
 	}
 
-	name := plan.Name.Value
+	name := plan.Name.ValueString()
 
-	duration := plan.Duration.Value
-	unit := plan.Unit.Value
+	duration := plan.Duration.ValueInt64()
+	unit := plan.Unit.ValueString()
 	var expiryHours int
 	validTimeUnit := false
 	for k, v := range GetKeyTimeConversionMap() {
@@ -199,7 +189,7 @@ func (r resourceApiKey) Create(ctx context.Context, req tfsdk.CreateResourceRequ
 		return
 	}
 
-	roleName := plan.RoleName.Value
+	roleName := plan.RoleName.ValueString()
 
 	roleResp, response, err := apiClient.RoleApi.ListRbacRoles(ctx, accountId).RoleTypes("ALL").Limit(100).DisplayName(roleName).Execute()
 	if err != nil {
@@ -219,14 +209,14 @@ func (r resourceApiKey) Create(ctx context.Context, req tfsdk.CreateResourceRequ
 	apiKeySpec := openapiclient.NewApiKeySpec(name, int32(expiryHours))
 	apiKeySpec.SetRoleId(roleId)
 
-	if plan.Description.Value != "" {
-		apiKeySpec.SetDescription(plan.Description.Value)
+	if plan.Description.ValueString() != "" {
+		apiKeySpec.SetDescription(plan.Description.ValueString())
 	}
 
 	allowListIDs := []string{}
 	if plan.AllowListIDs != nil {
 		for i := range plan.AllowListIDs {
-			allowListIDs = append(allowListIDs, plan.AllowListIDs[i].Value)
+			allowListIDs = append(allowListIDs, plan.AllowListIDs[i].ValueString())
 		}
 	}
 	apiKeySpec.SetAllowListInfo(allowListIDs)
@@ -273,34 +263,31 @@ func resourceApiKeyRead(accountId string, projectId string, apiKeyId string, dur
 		return apiKey, false, errMsg
 	}
 
-	apiKey.AccountID.Value = accountId
-	apiKey.ProjectID.Value = projectId
-	apiKey.ApiKeyID.Value = apiKeyId
-	apiKey.Name.Value = apiKeyResp.Data.Spec.Name
-	apiKey.Duration.Value = duration
-	apiKey.Unit.Value = unit
-	apiKey.ApiKey.Value = key
-	description := apiKeyResp.Data.Spec.GetDescription()
-	if description != "" {
-		apiKey.Description.Value = description
-	}
+	apiKey.AccountID = types.StringValue(accountId)
+	apiKey.ProjectID = types.StringValue(projectId)
+	apiKey.ApiKeyID = types.StringValue(apiKeyId)
+	apiKey.Name = types.StringValue(apiKeyResp.Data.Spec.Name)
+	apiKey.Duration = types.Int64Value(duration)
+	apiKey.Unit = types.StringValue(unit)
+	apiKey.ApiKey = types.StringValue(key)
+	apiKey.Description = types.StringValue(apiKeyResp.Data.Spec.GetDescription())
 	var allowListIDs []types.String
 	for _, elem := range *apiKeyResp.Data.Spec.AllowListInfo {
-		allowListIDs = append(allowListIDs, types.String{Value: elem})
+		allowListIDs = append(allowListIDs, types.StringValue(elem))
 	}
 	apiKey.AllowListIDs = allowListIDs
-	apiKey.RoleName.Value = apiKeyResp.Data.Info.Role.Info.GetDisplayName()
-	apiKey.Status.Value = string(apiKeyResp.Data.Info.Status)
-	apiKey.Issuer.Value = apiKeyResp.Data.Info.Issuer
-	apiKey.LastUsed.Value = apiKeyResp.Data.Info.GetLastUsedTime()
-	apiKey.ExpiryTime.Value = apiKeyResp.Data.Info.ExpiryTime
-	apiKey.CreatedAt.Value = apiKeyResp.Data.Info.Metadata.Get().GetCreatedOn()
+	apiKey.RoleName = types.StringValue(apiKeyResp.Data.Info.Role.Info.GetDisplayName())
+	apiKey.Status = types.StringValue(string(apiKeyResp.Data.Info.Status))
+	apiKey.Issuer = types.StringValue(apiKeyResp.Data.Info.Issuer)
+	apiKey.LastUsed = types.StringValue(apiKeyResp.Data.Info.GetLastUsedTime())
+	apiKey.ExpiryTime = types.StringValue(apiKeyResp.Data.Info.ExpiryTime)
+	apiKey.CreatedAt = types.StringValue(apiKeyResp.Data.Info.Metadata.Get().GetCreatedOn())
 
 	return apiKey, true, ""
 }
 
 // Read API Key
-func (r resourceApiKey) Read(ctx context.Context, req tfsdk.ReadResourceRequest, resp *tfsdk.ReadResourceResponse) {
+func (r resourceApiKey) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
 	var state ApiKey
 	getIDsFromApiKeyState(ctx, req.State, &state)
 
@@ -308,7 +295,7 @@ func (r resourceApiKey) Read(ctx context.Context, req tfsdk.ReadResourceRequest,
 		"Name":     state.Name,
 		"RoleName": state.RoleName})
 
-	apiKey, readOK, message := resourceApiKeyRead(state.AccountID.Value, state.ProjectID.Value, state.ApiKeyID.Value, state.Duration.Value, state.Unit.Value, state.ApiKey.Value, r.p.client)
+	apiKey, readOK, message := resourceApiKeyRead(state.AccountID.ValueString(), state.ProjectID.ValueString(), state.ApiKeyID.ValueString(), state.Duration.ValueInt64(), state.Unit.ValueString(), state.ApiKey.ValueString(), r.p.client)
 	if !readOK {
 		resp.Diagnostics.AddError("Unable to read the state of the API Key ", message)
 		return
@@ -324,17 +311,17 @@ func (r resourceApiKey) Read(ctx context.Context, req tfsdk.ReadResourceRequest,
 }
 
 // Update API Key
-func (r resourceApiKey) Update(ctx context.Context, req tfsdk.UpdateResourceRequest, resp *tfsdk.UpdateResourceResponse) {
+func (r resourceApiKey) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
 	resp.Diagnostics.AddError("Unable to update API Key", "Updating API Keys is not supported. Delete and recreate the provider.")
 	return
 }
 
 // Revoke API Key
-func (r resourceApiKey) Delete(ctx context.Context, req tfsdk.DeleteResourceRequest, resp *tfsdk.DeleteResourceResponse) {
+func (r resourceApiKey) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
 	var state ApiKey
 	getIDsFromApiKeyState(ctx, req.State, &state)
-	accountId := state.AccountID.Value
-	apiKeyId := state.ApiKeyID.Value
+	accountId := state.AccountID.ValueString()
+	apiKeyId := state.ApiKeyID.ValueString()
 
 	apiClient := r.p.client
 
@@ -350,7 +337,7 @@ func (r resourceApiKey) Delete(ctx context.Context, req tfsdk.DeleteResourceRequ
 }
 
 // Import API Key
-func (r resourceApiKey) ImportState(ctx context.Context, req tfsdk.ImportResourceStateRequest, resp *tfsdk.ImportResourceStateResponse) {
+func (r resourceApiKey) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
 	// Save the import identifier in the id attribute
-	tfsdk.ResourceImportStatePassthroughID(ctx, path.Root("id"), req, resp)
+	resource.ImportStatePassthroughID(ctx, path.Root("id"), req, resp)
 }

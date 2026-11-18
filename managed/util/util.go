@@ -72,7 +72,7 @@ func Filter[T any](ss []T, test func(T) bool) (ret []T) {
 func SliceTypesStringToSliceString(slice []types.String) []string {
 	var result []string
 	for _, s := range slice {
-		result = append(result, s.Value)
+		result = append(result, s.ValueString())
 	}
 	return result
 }
@@ -80,7 +80,7 @@ func SliceTypesStringToSliceString(slice []types.String) []string {
 func SliceStringToSliceTypesString(slice []string) []types.String {
 	var result []types.String
 	for _, s := range slice {
-		result = append(result, types.String{Value: s})
+		result = append(result, types.StringValue(s))
 	}
 	return result
 }

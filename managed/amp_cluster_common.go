@@ -17,7 +17,13 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/path"
-	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
+	"github.com/hashicorp/terraform-plugin-framework/resource"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/int64planmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/setplanmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 )
 
@@ -50,145 +56,129 @@ const ampSettingsManaged = "Leave it unset to leave the settings as they are, su
 	"set it to {} to clear them. Removing a key resets the setting: an endpoint setting falls back to its branch's value, " +
 	"and a branch setting to the PostgreSQL default."
 
-func ampNameAttribute(description string) tfsdk.Attribute {
-	return tfsdk.Attribute{
+func ampNameAttribute(description string) schema.StringAttribute {
+	return schema.StringAttribute{
 		Description:   description,
-		Type:          types.StringType,
 		Required:      true,
-		Validators:    []tfsdk.AttributeValidator{stringvalidator.RegexMatches(ampNamePattern, ampNameRule)},
-		PlanModifiers: []tfsdk.AttributePlanModifier{tfsdk.RequiresReplace()},
+		Validators:    []validator.String{stringvalidator.RegexMatches(ampNamePattern, ampNameRule)},
+		PlanModifiers: []planmodifier.String{stringplanmodifier.RequiresReplace()},
 	}
 }
 
-func ampPgSettingsAttribute(description string) tfsdk.Attribute {
-	return tfsdk.Attribute{
+func ampPgSettingsAttribute(description string) schema.Attribute {
+	return schema.MapAttribute{
 		Description: description + " Can be changed in place. " + ampSettingsManaged,
-		Type:        types.MapType{ElemType: types.StringType},
+		ElementType: types.StringType,
 		Optional:    true,
 	}
 }
 
-func ampExtensionsAttribute(description string) tfsdk.Attribute {
-	return tfsdk.Attribute{
+func ampExtensionsAttribute(description string) schema.Attribute {
+	return schema.SetAttribute{
 		Description: description + " Extensions can be added in place but not removed.",
-		Type:        types.SetType{ElemType: types.StringType},
+		ElementType: types.StringType,
 		Optional:    true,
 	}
 }
 
-func ampForceDestroyAttribute(description string) tfsdk.Attribute {
-	return tfsdk.Attribute{
+func ampForceDestroyAttribute(description string) schema.Attribute {
+	return schema.BoolAttribute{
 		Description: description + " Defaults to false. It is read from state, so apply it before the destroy or replacement that needs it.",
-		Type:        types.BoolType,
 		Optional:    true,
 	}
 }
 
-func ampCredentialsAttribute(description string) tfsdk.Attribute {
-	return tfsdk.Attribute{
+func ampCredentialsAttribute(description string) schema.Attribute {
+	return schema.SingleNestedAttribute{
 		Description: description,
 		Optional:    true,
-		Attributes: tfsdk.SingleNestedAttributes(map[string]tfsdk.Attribute{
-			"username": {
+		Attributes: map[string]schema.Attribute{
+			"username": schema.StringAttribute{
 				Description: "The user. Only the default, " + ampUsername + ", is supported for now.",
-				Type:        types.StringType,
 				Optional:    true,
 			},
-			"password": {
+			"password": schema.StringAttribute{
 				Description: "The password, 8 to 128 printable ASCII characters. It is stored in state as configured and never read back. " +
 					"It cannot be changed yet, since passwords cannot be rotated.",
-				Type:       types.StringType,
 				Optional:   true,
 				Sensitive:  true,
-				Validators: []tfsdk.AttributeValidator{stringvalidator.LengthBetween(8, 128)},
+				Validators: []validator.String{stringvalidator.LengthBetween(8, 128)},
 			},
-			"password_wo": {
+			"password_wo": schema.StringAttribute{
 				Description: "Reserved for a write-only password that is never stored in state. Not supported yet.",
-				Type:        types.StringType,
 				Optional:    true,
 				Sensitive:   true,
 			},
-			"password_wo_version": {
+			"password_wo_version": schema.Int64Attribute{
 				Description: "Reserved for rotating password_wo: changing it sets the new password. Not supported yet.",
-				Type:        types.Int64Type,
 				Optional:    true,
 			},
-		}),
+		},
 	}
 }
 
 // ampEndpointAttributes are the attributes of the ybm_amp_endpoint resource's compute and
 // connection details.
-func ampEndpointAttributes() map[string]tfsdk.Attribute {
-	return map[string]tfsdk.Attribute{
-		"cpu": {
+func ampEndpointAttributes() map[string]schema.Attribute {
+	return map[string]schema.Attribute{
+		"cpu": schema.StringAttribute{
 			Description:   "The CPU of the endpoint as a Kubernetes quantity, such as 2 or 500m. Defaults to the service's default. Can be changed in place to resize the endpoint.",
-			Type:          types.StringType,
 			Optional:      true,
 			Computed:      true,
-			Validators:    []tfsdk.AttributeValidator{stringvalidator.RegexMatches(ampCpuPattern, "must be a CPU quantity such as 2, 0.5 or 500m")},
-			PlanModifiers: []tfsdk.AttributePlanModifier{tfsdk.UseStateForUnknown()},
+			Validators:    []validator.String{stringvalidator.RegexMatches(ampCpuPattern, "must be a CPU quantity such as 2, 0.5 or 500m")},
+			PlanModifiers: []planmodifier.String{stringplanmodifier.UseNonNullStateForUnknown()},
 		},
-		"memory": {
+		"memory": schema.StringAttribute{
 			Description: "The memory of the endpoint as a Kubernetes quantity, such as 16Gi. Must be at least 8Gi per vCPU. " +
 				"Defaults to the service's default for the cpu. When it is unset, changing cpu resizes memory to 8Gi per vCPU. Can be changed in place.",
-			Type:       types.StringType,
 			Optional:   true,
 			Computed:   true,
-			Validators: []tfsdk.AttributeValidator{stringvalidator.RegexMatches(ampMemoryPattern, "must be a memory quantity such as 16Gi or 512Mi")},
+			Validators: []validator.String{stringvalidator.RegexMatches(ampMemoryPattern, "must be a memory quantity such as 16Gi or 512Mi")},
 		},
-		"suspend_timeout_seconds": {
+		"suspend_timeout_seconds": schema.Int64Attribute{
 			Description: "Reserved for suspending the endpoint after this many idle seconds. Not supported yet.",
-			Type:        types.Int64Type,
 			Optional:    true,
 		},
-		"connectivity_mode": {
+		"connectivity_mode": schema.StringAttribute{
 			Description:   "How the endpoint is exposed: " + strings.Join(ampConnectivityModes, ", ") + ". Defaults to the service's default. Changing it forces a replacement.",
-			Type:          types.StringType,
 			Optional:      true,
 			Computed:      true,
-			Validators:    []tfsdk.AttributeValidator{stringvalidator.OneOf(ampConnectivityModes...)},
-			PlanModifiers: []tfsdk.AttributePlanModifier{tfsdk.UseStateForUnknown(), tfsdk.RequiresReplace()},
+			Validators:    []validator.String{stringvalidator.OneOf(ampConnectivityModes...)},
+			PlanModifiers: []planmodifier.String{stringplanmodifier.UseNonNullStateForUnknown(), stringplanmodifier.RequiresReplaceIfConfigured()},
 		},
-		"allowed_cidrs": {
+		"allowed_cidrs": schema.SetAttribute{
 			Description: "CIDR blocks allowed to connect to the endpoint. Leave it unset to leave them as they are.",
-			Type:        types.SetType{ElemType: types.StringType},
+			ElementType: types.StringType,
 			Optional:    true,
 		},
-		"state": {
+		"state": schema.StringAttribute{
 			Description: "The state the endpoint last reported, such as ready or provisioning.",
-			Type:        types.StringType,
 			Computed:    true,
 		},
-		"host": {
+		"host": schema.StringAttribute{
 			Description:   "The host of the endpoint.",
-			Type:          types.StringType,
 			Computed:      true,
-			PlanModifiers: []tfsdk.AttributePlanModifier{tfsdk.UseStateForUnknown()},
+			PlanModifiers: []planmodifier.String{stringplanmodifier.UseNonNullStateForUnknown()},
 		},
-		"port": {
+		"port": schema.StringAttribute{
 			Description:   "The port of the endpoint.",
-			Type:          types.StringType,
 			Computed:      true,
-			PlanModifiers: []tfsdk.AttributePlanModifier{tfsdk.UseStateForUnknown()},
+			PlanModifiers: []planmodifier.String{stringplanmodifier.UseNonNullStateForUnknown()},
 		},
-		"username": {
+		"username": schema.StringAttribute{
 			Description:   "The user to connect as.",
-			Type:          types.StringType,
 			Computed:      true,
-			PlanModifiers: []tfsdk.AttributePlanModifier{tfsdk.UseStateForUnknown()},
+			PlanModifiers: []planmodifier.String{stringplanmodifier.UseNonNullStateForUnknown()},
 		},
-		"database": {
+		"database": schema.StringAttribute{
 			Description:   "The database to connect to.",
-			Type:          types.StringType,
 			Computed:      true,
-			PlanModifiers: []tfsdk.AttributePlanModifier{tfsdk.UseStateForUnknown()},
+			PlanModifiers: []planmodifier.String{stringplanmodifier.UseNonNullStateForUnknown()},
 		},
-		"tls_ca_certificate": {
+		"tls_ca_certificate": schema.StringAttribute{
 			Description:   "The CA certificate to verify the endpoint's TLS certificate with, when the endpoint requires one.",
-			Type:          types.StringType,
 			Computed:      true,
-			PlanModifiers: []tfsdk.AttributePlanModifier{tfsdk.UseStateForUnknown()},
+			PlanModifiers: []planmodifier.String{stringplanmodifier.UseNonNullStateForUnknown()},
 		},
 	}
 }
@@ -196,45 +186,40 @@ func ampEndpointAttributes() map[string]tfsdk.Attribute {
 // ampClusterAttributes are the attributes shared by the shared and BYOC cluster resources: a
 // cluster and its main branch. Endpoints, including the read-write one, are ybm_amp_endpoint
 // resources.
-func ampClusterAttributes() map[string]tfsdk.Attribute {
-	return map[string]tfsdk.Attribute{
-		"account_id": {
+func ampClusterAttributes() map[string]schema.Attribute {
+	return map[string]schema.Attribute{
+		"account_id": schema.StringAttribute{
 			Description:   "The ID of the account this cluster belongs to.",
-			Type:          types.StringType,
 			Computed:      true,
-			PlanModifiers: []tfsdk.AttributePlanModifier{tfsdk.UseStateForUnknown()},
+			PlanModifiers: []planmodifier.String{stringplanmodifier.UseNonNullStateForUnknown()},
 		},
 		"cluster_name": ampNameAttribute("The name of the cluster. Must be unique within its storage pool. Changing it forces a new cluster."),
-		"pg_version": {
+		"pg_version": schema.Int64Attribute{
 			Description:   "The PostgreSQL major version. Defaults to the service's default. Changing it forces a new cluster.",
-			Type:          types.Int64Type,
 			Optional:      true,
 			Computed:      true,
-			PlanModifiers: []tfsdk.AttributePlanModifier{tfsdk.UseStateForUnknown(), tfsdk.RequiresReplace()},
+			PlanModifiers: []planmodifier.Int64{int64planmodifier.UseNonNullStateForUnknown(), int64planmodifier.RequiresReplaceIfConfigured()},
 		},
-		"engine": {
+		"engine": schema.StringAttribute{
 			Description:   "The database engine: " + strings.Join(ampEngines, ", ") + ". Defaults to postgres. Changing it forces a new cluster.",
-			Type:          types.StringType,
 			Optional:      true,
 			Computed:      true,
-			Validators:    []tfsdk.AttributeValidator{stringvalidator.OneOf(ampEngines...)},
-			PlanModifiers: []tfsdk.AttributePlanModifier{tfsdk.UseStateForUnknown(), tfsdk.RequiresReplace()},
+			Validators:    []validator.String{stringvalidator.OneOf(ampEngines...)},
+			PlanModifiers: []planmodifier.String{stringplanmodifier.UseNonNullStateForUnknown(), stringplanmodifier.RequiresReplaceIfConfigured()},
 		},
-		"extensions": {
+		"extensions": schema.SetAttribute{
 			Description:   "Extensions to install in the cluster. Changing it forces a new cluster; use branch_extensions to add extensions to the main branch in place.",
-			Type:          types.SetType{ElemType: types.StringType},
+			ElementType:   types.StringType,
 			Optional:      true,
-			PlanModifiers: []tfsdk.AttributePlanModifier{tfsdk.RequiresReplace()},
+			PlanModifiers: []planmodifier.Set{setplanmodifier.RequiresReplace()},
 		},
-		"cluster_id": {
+		"cluster_id": schema.StringAttribute{
 			Description:   "The ID of the cluster. Set a branch's or endpoint's cluster_id to it so that replacing the cluster replaces them too.",
-			Type:          types.StringType,
 			Computed:      true,
-			PlanModifiers: []tfsdk.AttributePlanModifier{tfsdk.UseStateForUnknown()},
+			PlanModifiers: []planmodifier.String{stringplanmodifier.UseNonNullStateForUnknown()},
 		},
-		"state": {
+		"state": schema.StringAttribute{
 			Description: "The state the cluster last reported, such as ready or provisioning.",
-			Type:        types.StringType,
 			Computed:    true,
 		},
 		"branch_pg_settings": ampPgSettingsAttribute(
@@ -272,7 +257,7 @@ func ampPassword(c *AmpCredentials) string {
 	if c == nil {
 		return ""
 	}
-	return c.Password.Value
+	return c.Password.ValueString()
 }
 
 func newAmpEndpointConfig(role string, plan AmpEndpoint, prior *AmpEndpoint) (ampEndpointConfig, error) {
@@ -284,7 +269,7 @@ func newAmpEndpointConfig(role string, plan AmpEndpoint, prior *AmpEndpoint) (am
 		ConnectivityMode: stringOr(plan.ConnectivityMode, ""),
 	}
 	var priorCidrs []types.String
-	priorPg := types.Map{Null: true}
+	priorPg := types.MapNull(types.StringType)
 	if prior != nil {
 		priorCidrs, priorPg = prior.AllowedCidrs, prior.PgSettings
 	}
@@ -310,8 +295,8 @@ func newAmpClusterConfig(pgVersion types.Int64, engine types.String, extensions 
 		BranchPgSettings: managedMap(branchPgSettings, priorBranchPgSettings),
 		BranchExtensions: stringsFromTf(branchExtensions),
 	}
-	if known(pgVersion.Null, pgVersion.Unknown) {
-		c.PgVersion = pgVersion.Value
+	if known(pgVersion.IsNull(), pgVersion.IsUnknown()) {
+		c.PgVersion = pgVersion.ValueInt64()
 	}
 	return c
 }
@@ -326,7 +311,7 @@ func stringsFromTf(values []types.String) []string {
 	}
 	out := make([]string, 0, len(values))
 	for _, v := range values {
-		out = append(out, v.Value)
+		out = append(out, v.ValueString())
 	}
 	return out
 }
@@ -340,7 +325,7 @@ func stringsToTf(values []string, prior []types.String) []types.String {
 	}
 	out := make([]types.String, 0, len(values))
 	for _, v := range values {
-		out = append(out, types.String{Value: v})
+		out = append(out, types.StringValue(v))
 	}
 	return out
 }
@@ -360,9 +345,9 @@ func managedStrings(values []types.String, prior []types.String) *[]string {
 
 func mapFromTf(m types.Map) map[string]string {
 	out := map[string]string{}
-	for k, v := range m.Elems {
+	for k, v := range m.Elements() {
 		if s, ok := v.(types.String); ok {
-			out[k] = s.Value
+			out[k] = s.ValueString()
 		}
 	}
 	return out
@@ -371,10 +356,10 @@ func mapFromTf(m types.Map) map[string]string {
 // managedMap is managedStrings for a map.
 func managedMap(m types.Map, prior types.Map) *map[string]string {
 	switch {
-	case known(m.Null, m.Unknown):
+	case known(m.IsNull(), m.IsUnknown()):
 		out := mapFromTf(m)
 		return &out
-	case known(prior.Null, prior.Unknown):
+	case known(prior.IsNull(), prior.IsUnknown()):
 		return &map[string]string{}
 	}
 	return nil
@@ -382,14 +367,14 @@ func managedMap(m types.Map, prior types.Map) *map[string]string {
 
 // mapToTf is stringsToTf for a map.
 func mapToTf(m map[string]string, prior types.Map) types.Map {
-	if !known(prior.Null, prior.Unknown) {
-		return types.Map{ElemType: types.StringType, Null: true}
+	if !known(prior.IsNull(), prior.IsUnknown()) {
+		return types.MapNull(types.StringType)
 	}
 	elems := make(map[string]attr.Value, len(m))
 	for k, v := range m {
-		elems[k] = types.String{Value: v}
+		elems[k] = types.StringValue(v)
 	}
-	return types.Map{ElemType: types.StringType, Elems: elems}
+	return types.MapValueMust(types.StringType, elems)
 }
 
 // ampCredentialsToTf returns the credentials to store. The password is never read back: the
@@ -399,8 +384,8 @@ func ampCredentialsToTf(prior *AmpCredentials) *AmpCredentials {
 		return nil
 	}
 	c := *prior
-	if c.Password.Unknown {
-		c.Password = types.String{Null: true}
+	if c.Password.IsUnknown() {
+		c.Password = types.StringNull()
 	}
 	return &c
 }
@@ -470,34 +455,34 @@ type ampEndpointPlanCheck struct {
 // rather than part way through an apply.
 func (c ampEndpointPlanCheck) check() diag.Diagnostics {
 	var diags diag.Diagnostics
-	if known(c.SuspendTimeout.Null, c.SuspendTimeout.Unknown) {
+	if known(c.SuspendTimeout.IsNull(), c.SuspendTimeout.IsUnknown()) {
 		diags.AddAttributeError(path.Root("suspend_timeout_seconds"), "Not supported yet",
 			"Endpoints cannot suspend when idle yet. Remove suspend_timeout_seconds.")
 	}
-	password := types.String{Null: true}
+	password := types.StringNull()
 	if c.Credentials != nil {
 		creds := c.Credentials
-		if !creds.PasswordWo.Null || !creds.PasswordWoVersion.Null {
+		if !creds.PasswordWo.IsNull() || !creds.PasswordWoVersion.IsNull() {
 			diags.AddAttributeError(path.Root("credentials").AtName("password_wo"), "Not supported yet",
 				"Write-only passwords and password rotation are not supported yet. Set credentials.password instead.")
 		}
-		if known(creds.Username.Null, creds.Username.Unknown) && creds.Username.Value != ampUsername {
+		if known(creds.Username.IsNull(), creds.Username.IsUnknown()) && creds.Username.ValueString() != ampUsername {
 			diags.AddAttributeError(path.Root("credentials").AtName("username"), "Not supported yet",
 				fmt.Sprintf("Only the %s user is supported for now.", ampUsername))
 		}
 		password = creds.Password
 	}
-	if c.Role == ampRoleReadOnly && !password.Null {
+	if c.Role == ampRoleReadOnly && !password.IsNull() {
 		diags.AddAttributeError(path.Root("credentials"), "Unexpected password",
 			"A read_only endpoint does not take a password; it uses the cluster's.")
 	}
-	if c.Exists && !password.Unknown {
-		prior := types.String{Null: true}
+	if c.Exists && !password.IsUnknown() {
+		prior := types.StringNull()
 		if c.PriorCredentials != nil {
 			prior = c.PriorCredentials.Password
 		}
 		switch {
-		case prior.Null && !password.Null:
+		case prior.IsNull() && !password.IsNull():
 			// An imported endpoint has no password in state, since it is never read back.
 			diags.AddAttributeWarning(path.Root("credentials").AtName("password"), "Password is only recorded",
 				"The password of an existing endpoint cannot be set, so this password is only stored in state. "+
@@ -512,7 +497,7 @@ func (c ampEndpointPlanCheck) check() diag.Diagnostics {
 
 // ampPlanCheckFrom reads the attributes an endpoint's plan-time checks need. Values that are not
 // known yet are skipped; Terraform plans again with them known before it applies.
-func ampPlanCheckFrom(ctx context.Context, req tfsdk.ModifyResourcePlanRequest, role string) (ampEndpointPlanCheck, bool) {
+func ampPlanCheckFrom(ctx context.Context, req resource.ModifyPlanRequest, role string) (ampEndpointPlanCheck, bool) {
 	c := ampEndpointPlanCheck{Role: role, Exists: !req.State.Raw.IsNull()}
 	if req.Plan.Raw.IsNull() {
 		return c, false
@@ -533,7 +518,7 @@ func ampPlanCheckFrom(ctx context.Context, req tfsdk.ModifyResourcePlanRequest, 
 
 // checkExtensionsKept returns an error for each extension the plan removes from a branch, which
 // AMP cannot do.
-func checkExtensionsKept(ctx context.Context, req tfsdk.ModifyResourcePlanRequest, attribute string) diag.Diagnostics {
+func checkExtensionsKept(ctx context.Context, req resource.ModifyPlanRequest, attribute string) diag.Diagnostics {
 	var diags diag.Diagnostics
 	if req.State.Raw.IsNull() || req.Plan.Raw.IsNull() {
 		return diags
@@ -541,20 +526,20 @@ func checkExtensionsKept(ctx context.Context, req tfsdk.ModifyResourcePlanReques
 	var planned, prior types.Set
 	diags.Append(req.Plan.GetAttribute(ctx, path.Root(attribute), &planned)...)
 	diags.Append(req.State.GetAttribute(ctx, path.Root(attribute), &prior)...)
-	if diags.HasError() || planned.Unknown {
+	if diags.HasError() || planned.IsUnknown() {
 		return diags
 	}
-	for _, old := range prior.Elems {
+	for _, old := range prior.Elements() {
 		if !setContains(planned, old) {
 			diags.AddAttributeError(path.Root(attribute), "Extensions cannot be removed",
-				fmt.Sprintf("Extension %s cannot be removed from a branch; extensions can only be added.", old.(types.String).Value))
+				fmt.Sprintf("Extension %s cannot be removed from a branch; extensions can only be added.", old.(types.String).ValueString()))
 		}
 	}
 	return diags
 }
 
 func setContains(s types.Set, v attr.Value) bool {
-	for _, e := range s.Elems {
+	for _, e := range s.Elements() {
 		if e.Equal(v) {
 			return true
 		}
@@ -563,7 +548,7 @@ func setContains(s types.Set, v attr.Value) bool {
 }
 
 // modifyAmpClusterPlan runs the plan-time checks of a cluster resource.
-func modifyAmpClusterPlan(ctx context.Context, req tfsdk.ModifyResourcePlanRequest, resp *tfsdk.ModifyResourcePlanResponse) {
+func modifyAmpClusterPlan(ctx context.Context, req resource.ModifyPlanRequest, resp *resource.ModifyPlanResponse) {
 	resp.Diagnostics.Append(checkExtensionsKept(ctx, req, "branch_extensions")...)
 }
 
@@ -688,9 +673,9 @@ func derefStrings(s *[]string) []string {
 
 func tfInt64(v int64) types.Int64 {
 	if v == 0 {
-		return types.Int64{Null: true}
+		return types.Int64Null()
 	}
-	return types.Int64{Value: v}
+	return types.Int64Value(v)
 }
 
 // ampCreateClusterItems are the resources a cluster resource creates: the cluster and its main
@@ -788,7 +773,7 @@ func deleteAmpCluster(ctx context.Context, scope ampScope, region, clusterName s
 
 func tfString(v string) types.String {
 	if v == "" {
-		return types.String{Null: true}
+		return types.StringNull()
 	}
-	return types.String{Value: v}
+	return types.StringValue(v)
 }

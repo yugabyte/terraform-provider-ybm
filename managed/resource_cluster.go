@@ -11,20 +11,25 @@ import (
 	"fmt"
 	"net/http"
 	"regexp"
-	"strconv"
-	"strings"
-
-	"time"
-
 	"slices"
 	"sort"
+	"strconv"
+	"strings"
+	"time"
 
 	"github.com/hashicorp/terraform-plugin-framework-validators/int64validator"
-	"github.com/hashicorp/terraform-plugin-framework-validators/schemavalidator"
+	"github.com/hashicorp/terraform-plugin-framework-validators/objectvalidator"
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/path"
+	"github.com/hashicorp/terraform-plugin-framework/resource"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/boolplanmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/int64planmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
@@ -34,968 +39,864 @@ import (
 	openapiclient "github.com/yugabyte/yugabytedb-managed-go-client-internal"
 )
 
-type resourceClusterType struct{}
-
 // Short function for Base64 encoding
 func b64(s string) string {
 	return base64.StdEncoding.EncodeToString([]byte(s))
 }
 
 func shouldUseRestoreBackupID(backupID types.String) bool {
-	return !backupID.Unknown && !backupID.Null && backupID.Value != ""
+	return !backupID.IsUnknown() && !backupID.IsNull() && backupID.ValueString() != ""
 }
 
-func (r resourceClusterType) GetSchema(_ context.Context) (tfsdk.Schema, diag.Diagnostics) {
-	attributes := map[string]tfsdk.Attribute{
-		"account_id": {
+func (r *resourceCluster) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
+	attributes := map[string]schema.Attribute{
+		"account_id": schema.StringAttribute{
 			Description: "The ID of the account this cluster belongs to.",
-			Type:        types.StringType,
 			Computed:    true,
-			PlanModifiers: []tfsdk.AttributePlanModifier{
-				tfsdk.UseStateForUnknown(),
+			PlanModifiers: []planmodifier.String{
+				stringplanmodifier.UseNonNullStateForUnknown(),
 			},
 		},
-		"project_id": {
+		"project_id": schema.StringAttribute{
 			Description: "The ID of the project this cluster belongs to.",
-			Type:        types.StringType,
 			Computed:    true,
-			PlanModifiers: []tfsdk.AttributePlanModifier{
-				tfsdk.UseStateForUnknown(),
+			PlanModifiers: []planmodifier.String{
+				stringplanmodifier.UseNonNullStateForUnknown(),
 			},
 		},
-		"cluster_id": {
+		"cluster_id": schema.StringAttribute{
 			Description: "The ID of the cluster. Created automatically when a cluster is created. Used to get a specific cluster.",
-			Type:        types.StringType,
 			Computed:    true,
-			PlanModifiers: []tfsdk.AttributePlanModifier{
-				tfsdk.UseStateForUnknown(),
+			PlanModifiers: []planmodifier.String{
+				stringplanmodifier.UseNonNullStateForUnknown(),
 			},
 		},
-		"cluster_name": {
+		"cluster_name": schema.StringAttribute{
 			Description: "The name of the cluster.",
-			Type:        types.StringType,
 			Required:    true,
 		},
-		"cluster_type": {
+		"cluster_type": schema.StringAttribute{
 			Description: "The type of the cluster. SYNCHRONOUS or GEO_PARTITIONED",
-			Type:        types.StringType,
 			Required:    true,
-			Validators: []tfsdk.AttributeValidator{
+			Validators: []validator.String{
 				stringvalidator.OneOf("SYNCHRONOUS", "GEO_PARTITIONED"),
 			},
 		},
-		"cloud_type": {
+		"cloud_type": schema.StringAttribute{
 			Description: "The cloud provider where the cluster is deployed: AWS, AZURE or GCP.",
-			Type:        types.StringType,
 			Optional:    true,
 			Computed:    true,
-			PlanModifiers: []tfsdk.AttributePlanModifier{
-				tfsdk.UseStateForUnknown(),
+			PlanModifiers: []planmodifier.String{
+				stringplanmodifier.UseNonNullStateForUnknown(),
 			},
-			Validators: []tfsdk.AttributeValidator{stringvalidator.OneOf("AWS", "GCP", "AZURE")},
+			Validators: []validator.String{stringvalidator.OneOf("AWS", "GCP", "AZURE")},
 		},
-		"cluster_region_info": {
+		"cluster_region_info": schema.ListNestedAttribute{
 			Required: true,
-			Attributes: tfsdk.ListNestedAttributes(map[string]tfsdk.Attribute{
-				"num_nodes": {
-					Type:     types.Int64Type,
-					Required: true,
-				},
-				"ignore_num_nodes_changes": {
-					Description: "When true, Terraform ignores num_nodes changes made outside Terraform, such as changes made by an ACTIVE autoscaler policy. Explicit num_nodes changes in the Terraform configuration are still applied. Set this to true for regions managed by an ACTIVE autoscaler policy.",
-					Type:        types.BoolType,
-					Optional:    true,
-				},
-				"region": {
-					Type:     types.StringType,
-					Required: true,
-				},
-				"num_zones": {
-					Description: "Number of zones in the region.",
-					Type:        types.Int64Type,
-					Optional:    true,
-					Computed:    true,
-				},
-				"num_cores": {
-					Description: "Number of CPU cores in the nodes of the region.",
-					Type:        types.Int64Type,
-					Optional:    true,
-					Computed:    true,
-					Validators: []tfsdk.AttributeValidator{
-						schemavalidator.ExactlyOneOf(
-							path.MatchRelative().AtParent().AtParent().AtParent().AtName("node_config").AtName("num_cores"),
-							path.MatchRelative(),
-						),
+			NestedObject: schema.NestedAttributeObject{
+				Attributes: map[string]schema.Attribute{
+					"num_nodes": schema.Int64Attribute{
+						Required: true,
+					},
+					"ignore_num_nodes_changes": schema.BoolAttribute{
+						Description: "When true, Terraform ignores num_nodes changes made outside Terraform, such as changes made by an ACTIVE autoscaler policy. Explicit num_nodes changes in the Terraform configuration are still applied. Set this to true for regions managed by an ACTIVE autoscaler policy.",
+						Optional:    true,
+					},
+					"region": schema.StringAttribute{
+						Required: true,
+					},
+					"num_zones": schema.Int64Attribute{
+						Description: "Number of zones in the region.",
+						Optional:    true,
+						Computed:    true,
+					},
+					"num_cores": schema.Int64Attribute{
+						Description: "Number of CPU cores in the nodes of the region.",
+						Optional:    true,
+						Computed:    true,
+						Validators: []validator.Int64{
+							int64validator.ExactlyOneOf(
+								path.MatchRelative().AtParent().AtParent().AtParent().AtName("node_config").AtName("num_cores"),
+								path.MatchRelative(),
+							),
+						},
+					},
+					"disk_size_gb": schema.Int64Attribute{
+						Description: "Disk size of the nodes of the region.",
+						Optional:    true,
+						Computed:    true,
+						Validators: []validator.Int64{
+							int64validator.ConflictsWith(
+								path.MatchRelative().AtParent().AtParent().AtParent().AtName("node_config").AtName("disk_size_gb"),
+							),
+						},
+					},
+					"disk_iops": schema.Int64Attribute{
+						Description: "Disk IOPS of the nodes of the region.",
+						Optional:    true,
+						Computed:    true,
+						Validators: []validator.Int64{
+							int64validator.ConflictsWith(
+								path.MatchRelative().AtParent().AtParent().AtParent().AtName("node_config").AtName("disk_iops"),
+							),
+						},
+					},
+					"vpc_id": schema.StringAttribute{
+						Optional: true,
+						Computed: true,
+						Validators: []validator.String{
+							stringvalidator.ConflictsWith(path.MatchRelative().AtParent().AtName("vpc_name")),
+						},
+						PlanModifiers: []planmodifier.String{
+							stringplanmodifier.UseNonNullStateForUnknown(),
+						},
+					},
+					"vpc_name": schema.StringAttribute{
+						Optional: true,
+						Computed: true,
+						Validators: []validator.String{
+							stringvalidator.ConflictsWith(path.MatchRelative().AtParent().AtName("vpc_id")),
+						},
+						PlanModifiers: []planmodifier.String{
+							stringplanmodifier.UseNonNullStateForUnknown(),
+						},
+					},
+					"public_access": schema.BoolAttribute{
+						Optional: true,
+						Computed: true,
+						PlanModifiers: []planmodifier.Bool{
+							boolplanmodifier.UseNonNullStateForUnknown(),
+						},
+					},
+					"is_preferred": schema.BoolAttribute{
+						Optional: true,
+						Computed: true,
+						PlanModifiers: []planmodifier.Bool{
+							boolplanmodifier.UseNonNullStateForUnknown(),
+						},
+					},
+					"is_default": schema.BoolAttribute{
+						Optional: true,
+						Computed: true,
+						PlanModifiers: []planmodifier.Bool{
+							boolplanmodifier.UseNonNullStateForUnknown(),
+						},
+					},
+					"backup_replication_gcp_target": schema.StringAttribute{
+						Description: "GCS bucket name for backup replication target",
+						Computed:    true,
+					},
+					"backup_region": schema.BoolAttribute{
+						Description: "Indicates whether cluster backup data will be stored in this region.",
+						Computed:    true,
 					},
 				},
-				"disk_size_gb": {
-					Description: "Disk size of the nodes of the region.",
-					Type:        types.Int64Type,
-					Optional:    true,
-					Computed:    true,
-					Validators: []tfsdk.AttributeValidator{
-						schemavalidator.ConflictsWith(
-							path.MatchRelative().AtParent().AtParent().AtParent().AtName("node_config").AtName("disk_size_gb"),
-						),
-					},
-				},
-				"disk_iops": {
-					Description: "Disk IOPS of the nodes of the region.",
-					Type:        types.Int64Type,
-					Optional:    true,
-					Computed:    true,
-					Validators: []tfsdk.AttributeValidator{
-						schemavalidator.ConflictsWith(
-							path.MatchRelative().AtParent().AtParent().AtParent().AtName("node_config").AtName("disk_iops"),
-						),
-					},
-				},
-				"vpc_id": {
-					Type:     types.StringType,
-					Optional: true,
-					Computed: true,
-					Validators: []tfsdk.AttributeValidator{
-						schemavalidator.ConflictsWith(path.MatchRelative().AtParent().AtName("vpc_name")),
-					},
-					PlanModifiers: []tfsdk.AttributePlanModifier{
-						tfsdk.UseStateForUnknown(),
-					},
-				},
-				"vpc_name": {
-					Type:     types.StringType,
-					Optional: true,
-					Computed: true,
-					Validators: []tfsdk.AttributeValidator{
-						schemavalidator.ConflictsWith(path.MatchRelative().AtParent().AtName("vpc_id")),
-					},
-					PlanModifiers: []tfsdk.AttributePlanModifier{
-						tfsdk.UseStateForUnknown(),
-					},
-				},
-				"public_access": {
-					Type:     types.BoolType,
-					Optional: true,
-					Computed: true,
-					PlanModifiers: []tfsdk.AttributePlanModifier{
-						tfsdk.UseStateForUnknown(),
-					},
-				},
-				"is_preferred": {
-					Type:     types.BoolType,
-					Optional: true,
-					Computed: true,
-					PlanModifiers: []tfsdk.AttributePlanModifier{
-						tfsdk.UseStateForUnknown(),
-					},
-				},
-				"is_default": {
-					Type:     types.BoolType,
-					Optional: true,
-					Computed: true,
-					PlanModifiers: []tfsdk.AttributePlanModifier{
-						tfsdk.UseStateForUnknown(),
-					},
-				},
-				"backup_replication_gcp_target": {
-					Description: "GCS bucket name for backup replication target",
-					Type:        types.StringType,
-					Computed:    true,
-				},
-				"backup_region": {
-					Description: "Indicates whether cluster backup data will be stored in this region.",
-					Type:        types.BoolType,
-					Computed:    true,
-				},
-			}),
+			},
 		},
-		"backup_replication_spec": {
+		"backup_replication_spec": schema.SingleNestedAttribute{
 			Description: "Configuration for backup replication. Enables replication of cluster backups to offsite buckets.",
 			Optional:    true,
 			Computed:    true,
-			Attributes: tfsdk.SingleNestedAttributes(map[string]tfsdk.Attribute{
-				"gcp_spec": {
+			Attributes: map[string]schema.Attribute{
+				"gcp_spec": schema.SingleNestedAttribute{
 					Description: "GCP-specific backup replication configuration.",
 					Optional:    true,
 					Computed:    true,
-					Validators: []tfsdk.AttributeValidator{
-						schemavalidator.AlsoRequires(
+					Validators: []validator.Object{
+						objectvalidator.AlsoRequires(
 							path.MatchRoot("cloud_type"),
 						),
 					},
 
-					Attributes: tfsdk.SingleNestedAttributes(map[string]tfsdk.Attribute{
-						"enabled": {
+					Attributes: map[string]schema.Attribute{
+						"enabled": schema.BoolAttribute{
 							Description: "Whether GCP backup replication is enabled for this cluster.",
-							Type:        types.BoolType,
 							Optional:    true,
 							Computed:    true,
-							PlanModifiers: []tfsdk.AttributePlanModifier{
-								tfsdk.UseStateForUnknown(),
+							PlanModifiers: []planmodifier.Bool{
+								boolplanmodifier.UseNonNullStateForUnknown(),
 							},
 						},
-						"sync_cluster_spec": {
+						"sync_cluster_spec": schema.SingleNestedAttribute{
 							Description: "Backup replication configuration for SYNCHRONOUS clusters.",
 							Optional:    true,
 							Computed:    true,
-							Validators: []tfsdk.AttributeValidator{
-								schemavalidator.ConflictsWith(
+							Validators: []validator.Object{
+								objectvalidator.ConflictsWith(
 									path.MatchRelative().AtParent().AtName("geo_partitioned_cluster_spec"),
 								),
 							},
-							Attributes: tfsdk.SingleNestedAttributes(map[string]tfsdk.Attribute{
-								"replication_config": {
+							Attributes: map[string]schema.Attribute{
+								"replication_config": schema.SingleNestedAttribute{
 									Description: "Replication configuration specifying the target GCS bucket and status information.",
 									Required:    true,
-									Attributes: tfsdk.SingleNestedAttributes(map[string]tfsdk.Attribute{
-										"target": {
+									Attributes: map[string]schema.Attribute{
+										"target": schema.StringAttribute{
 											Description: "The GCS bucket name where backups will be replicated",
-											Type:        types.StringType,
 											Required:    true,
-											Validators: []tfsdk.AttributeValidator{
+											Validators: []validator.String{
 												stringvalidator.RegexMatches(
 													regexp.MustCompile(`^[a-z0-9](?:[a-z0-9._-]*[a-z0-9])?$`),
 													"GCS bucket names must contain only lowercase letters, numbers, hyphens, and underscores, and must start and end with a letter or number",
 												),
 											},
 										},
-										"assigned_region": {
+										"assigned_region": schema.StringAttribute{
 											Description: "The desginated backup region from where the backups will be replicated",
-											Type:        types.StringType,
 											Computed:    true,
 										},
-										"config_state": {
+										"config_state": schema.StringAttribute{
 											Description: "The current state of the replication configuration (e.g., ENABLED, DISABLED etc.).",
-											Type:        types.StringType,
 											Computed:    true,
 										},
-										"id": {
+										"id": schema.StringAttribute{
 											Description: "Unique identifier for the replication configuration.",
-											Type:        types.StringType,
 											Computed:    true,
 										},
-										"next_transfer_operation_time": {
+										"next_transfer_operation_time": schema.StringAttribute{
 											Description: "Timestamp of the next scheduled backup transfer operation.",
-											Type:        types.StringType,
 											Computed:    true,
 										},
-										"latest_transfer_operation_details": {
+										"latest_transfer_operation_details": schema.SingleNestedAttribute{
 											Description: "Details about the most recent backup transfer operation.",
 											Computed:    true,
-											Attributes: tfsdk.SingleNestedAttributes(map[string]tfsdk.Attribute{
-												"start_time": {
+											Attributes: map[string]schema.Attribute{
+												"start_time": schema.StringAttribute{
 													Description: "Start time of the latest transfer operation.",
-													Type:        types.StringType,
 													Computed:    true,
 												},
-												"end_time": {
+												"end_time": schema.StringAttribute{
 													Description: "End time of the latest transfer operation.",
-													Type:        types.StringType,
 													Computed:    true,
 												},
-												"status": {
+												"status": schema.StringAttribute{
 													Description: "Status of the latest transfer operation (e.g., SUCCESS, FAILED, IN_PROGRESS).",
-													Type:        types.StringType,
 													Computed:    true,
 												},
-											}),
+											},
 										},
-										"expiry_on": {
+										"expiry_on": schema.StringAttribute{
 											Description: "Timestamp when this replication configuration expires, if applicable.",
-											Type:        types.StringType,
 											Computed:    true,
 										},
-									}),
+									},
 								},
-								"configs_set_for_expiry": {
+								"configs_set_for_expiry": schema.ListNestedAttribute{
 									Description: "List of replication configurations that are set to expire.",
 									Computed:    true,
-									Attributes: tfsdk.ListNestedAttributes(map[string]tfsdk.Attribute{
-										"region": {
-											Description: "The region associated with this replication configuration.",
-											Type:        types.StringType,
-											Computed:    true,
-										},
-										"target": {
-											Description: "The GCS bucket name for this replication configuration",
-											Type:        types.StringType,
-											Computed:    true,
-											Validators: []tfsdk.AttributeValidator{
-												stringvalidator.RegexMatches(
-													regexp.MustCompile(`^[a-z0-9](?:[a-z0-9._-]*[a-z0-9])?$`),
-													"GCS bucket names must contain only lowercase letters, numbers, hyphens, and underscores, and must start and end with a letter or number",
-												),
+									NestedObject: schema.NestedAttributeObject{
+										Attributes: map[string]schema.Attribute{
+											"region": schema.StringAttribute{
+												Description: "The region associated with this replication configuration.",
+												Computed:    true,
+											},
+											"target": schema.StringAttribute{
+												Description: "The GCS bucket name for this replication configuration",
+												Computed:    true,
+												Validators: []validator.String{
+													stringvalidator.RegexMatches(
+														regexp.MustCompile(`^[a-z0-9](?:[a-z0-9._-]*[a-z0-9])?$`),
+														"GCS bucket names must contain only lowercase letters, numbers, hyphens, and underscores, and must start and end with a letter or number",
+													),
+												},
+											},
+											"config_state": schema.StringAttribute{
+												Description: "The current state of the replication configuration (e.g., ENABLED, DISABLED etc.).",
+												Computed:    true,
+											},
+											"id": schema.StringAttribute{
+												Description: "Unique identifier for the replication configuration.",
+												Computed:    true,
+											},
+											"next_transfer_operation_time": schema.StringAttribute{
+												Description: "Timestamp of the next scheduled backup transfer operation.",
+												Computed:    true,
+											},
+											"latest_transfer_operation_details": schema.SingleNestedAttribute{
+												Description: "Details about the most recent backup transfer operation.",
+												Computed:    true,
+												Attributes: map[string]schema.Attribute{
+													"start_time": schema.StringAttribute{
+														Description: "Start time of the latest transfer operation.",
+														Computed:    true,
+													},
+													"end_time": schema.StringAttribute{
+														Description: "End time of the latest transfer operation.",
+														Computed:    true,
+													},
+													"status": schema.StringAttribute{
+														Description: "Status of the latest transfer operation (e.g., SUCCESS, FAILED, IN_PROGRESS).",
+														Computed:    true,
+													},
+												},
+											},
+											"expiry_on": schema.StringAttribute{
+												Description: "Timestamp when this replication configuration expires.",
+												Computed:    true,
 											},
 										},
-										"config_state": {
-											Description: "The current state of the replication configuration (e.g., ENABLED, DISABLED etc.).",
-											Type:        types.StringType,
-											Computed:    true,
-										},
-										"id": {
-											Description: "Unique identifier for the replication configuration.",
-											Type:        types.StringType,
-											Computed:    true,
-										},
-										"next_transfer_operation_time": {
-											Description: "Timestamp of the next scheduled backup transfer operation.",
-											Type:        types.StringType,
-											Computed:    true,
-										},
-										"latest_transfer_operation_details": {
-											Description: "Details about the most recent backup transfer operation.",
-											Computed:    true,
-											Attributes: tfsdk.SingleNestedAttributes(map[string]tfsdk.Attribute{
-												"start_time": {
-													Description: "Start time of the latest transfer operation.",
-													Type:        types.StringType,
-													Computed:    true,
-												},
-												"end_time": {
-													Description: "End time of the latest transfer operation.",
-													Type:        types.StringType,
-													Computed:    true,
-												},
-												"status": {
-													Description: "Status of the latest transfer operation (e.g., SUCCESS, FAILED, IN_PROGRESS).",
-													Type:        types.StringType,
-													Computed:    true,
-												},
-											}),
-										},
-										"expiry_on": {
-											Description: "Timestamp when this replication configuration expires.",
-											Type:        types.StringType,
-											Computed:    true,
-										},
-									}),
+									},
 								},
-							}),
+							},
 						},
-						"geo_partitioned_cluster_spec": {
+						"geo_partitioned_cluster_spec": schema.SingleNestedAttribute{
 							Description: "Backup replication configuration for GEO_PARTITIONED clusters.",
 							Optional:    true,
 							Computed:    true,
-							Validators: []tfsdk.AttributeValidator{
-								schemavalidator.ConflictsWith(
+							Validators: []validator.Object{
+								objectvalidator.ConflictsWith(
 									path.MatchRelative().AtParent().AtName("sync_cluster_spec"),
 								),
 							},
-							Attributes: tfsdk.SingleNestedAttributes(map[string]tfsdk.Attribute{
-								"replication_configs": {
+							Attributes: map[string]schema.Attribute{
+								"replication_configs": schema.ListNestedAttribute{
 									Description: "List of replication configurations, one for each region in the geo-partitioned cluster.",
 									Optional:    true,
 									Computed:    true,
-									Attributes: tfsdk.ListNestedAttributes(map[string]tfsdk.Attribute{
-										"desired_region": {
-											Description: "The region name for this replication configuration. Must match one of the cluster's regions.",
-											Type:        types.StringType,
-											Required:    true,
-										},
-										"target": {
-											Description: "The GCS bucket name where backups for this region will be replicated.",
-											Type:        types.StringType,
-											Required:    true,
-										},
-										"config_state": {
-											Description: "The current state of the replication configuration (e.g., ENABLED, DISABLED etc.).",
-											Type:        types.StringType,
-											Computed:    true,
-										},
-										"id": {
-											Description: "Unique identifier for the replication configuration.",
-											Type:        types.StringType,
-											Computed:    true,
-										},
-										"next_transfer_operation_time": {
-											Description: "Timestamp of the next scheduled backup transfer operation.",
-											Type:        types.StringType,
-											Computed:    true,
-										},
-										"latest_transfer_operation_details": {
-											Description: "Details about the most recent backup transfer operation.",
-											Computed:    true,
-											Attributes: tfsdk.SingleNestedAttributes(map[string]tfsdk.Attribute{
-												"start_time": {
-													Description: "Start time of the latest transfer operation.",
-													Type:        types.StringType,
-													Computed:    true,
+									NestedObject: schema.NestedAttributeObject{
+										Attributes: map[string]schema.Attribute{
+											"desired_region": schema.StringAttribute{
+												Description: "The region name for this replication configuration. Must match one of the cluster's regions.",
+												Required:    true,
+											},
+											"target": schema.StringAttribute{
+												Description: "The GCS bucket name where backups for this region will be replicated.",
+												Required:    true,
+											},
+											"config_state": schema.StringAttribute{
+												Description: "The current state of the replication configuration (e.g., ENABLED, DISABLED etc.).",
+												Computed:    true,
+											},
+											"id": schema.StringAttribute{
+												Description: "Unique identifier for the replication configuration.",
+												Computed:    true,
+											},
+											"next_transfer_operation_time": schema.StringAttribute{
+												Description: "Timestamp of the next scheduled backup transfer operation.",
+												Computed:    true,
+											},
+											"latest_transfer_operation_details": schema.SingleNestedAttribute{
+												Description: "Details about the most recent backup transfer operation.",
+												Computed:    true,
+												Attributes: map[string]schema.Attribute{
+													"start_time": schema.StringAttribute{
+														Description: "Start time of the latest transfer operation.",
+														Computed:    true,
+													},
+													"end_time": schema.StringAttribute{
+														Description: "End time of the latest transfer operation.",
+														Computed:    true,
+													},
+													"status": schema.StringAttribute{
+														Description: "Status of the latest transfer operation (e.g., SUCCESS, FAILED, IN_PROGRESS).",
+														Computed:    true,
+													},
 												},
-												"end_time": {
-													Description: "End time of the latest transfer operation.",
-													Type:        types.StringType,
-													Computed:    true,
-												},
-												"status": {
-													Description: "Status of the latest transfer operation (e.g., SUCCESS, FAILED, IN_PROGRESS).",
-													Type:        types.StringType,
-													Computed:    true,
-												},
-											}),
+											},
+											"expiry_on": schema.StringAttribute{
+												Description: "Timestamp when this replication configuration expires, if applicable.",
+												Computed:    true,
+											},
 										},
-										"expiry_on": {
-											Description: "Timestamp when this replication configuration expires, if applicable.",
-											Type:        types.StringType,
-											Computed:    true,
-										},
-									}),
+									},
 								},
-								"configs_set_for_expiry": {
+								"configs_set_for_expiry": schema.ListNestedAttribute{
 									Description: "List of replication configurations that are set to expire.",
 									Computed:    true,
-									Attributes: tfsdk.ListNestedAttributes(map[string]tfsdk.Attribute{
-										"region": {
-											Description: "The region associated with this replication configuration.",
-											Type:        types.StringType,
-											Computed:    true,
-										},
-										"target": {
-											Description: "The GCS bucket name for this replication configuration.",
-											Type:        types.StringType,
-											Computed:    true,
-										},
-										"config_state": {
-											Description: "The current state of the replication configuration (e.g., ACTIVE, PENDING, ERROR).",
-											Type:        types.StringType,
-											Computed:    true,
-										},
-										"id": {
-											Description: "Unique identifier for the replication configuration.",
-											Type:        types.StringType,
-											Computed:    true,
-										},
-										"next_transfer_operation_time": {
-											Description: "Timestamp of the next scheduled backup transfer operation.",
-											Type:        types.StringType,
-											Computed:    true,
-										},
-										"latest_transfer_operation_details": {
-											Description: "Details about the most recent backup transfer operation.",
-											Computed:    true,
-											Attributes: tfsdk.SingleNestedAttributes(map[string]tfsdk.Attribute{
-												"start_time": {
-													Description: "Start time of the latest transfer operation.",
-													Type:        types.StringType,
-													Computed:    true,
+									NestedObject: schema.NestedAttributeObject{
+										Attributes: map[string]schema.Attribute{
+											"region": schema.StringAttribute{
+												Description: "The region associated with this replication configuration.",
+												Computed:    true,
+											},
+											"target": schema.StringAttribute{
+												Description: "The GCS bucket name for this replication configuration.",
+												Computed:    true,
+											},
+											"config_state": schema.StringAttribute{
+												Description: "The current state of the replication configuration (e.g., ACTIVE, PENDING, ERROR).",
+												Computed:    true,
+											},
+											"id": schema.StringAttribute{
+												Description: "Unique identifier for the replication configuration.",
+												Computed:    true,
+											},
+											"next_transfer_operation_time": schema.StringAttribute{
+												Description: "Timestamp of the next scheduled backup transfer operation.",
+												Computed:    true,
+											},
+											"latest_transfer_operation_details": schema.SingleNestedAttribute{
+												Description: "Details about the most recent backup transfer operation.",
+												Computed:    true,
+												Attributes: map[string]schema.Attribute{
+													"start_time": schema.StringAttribute{
+														Description: "Start time of the latest transfer operation.",
+														Computed:    true,
+													},
+													"end_time": schema.StringAttribute{
+														Description: "End time of the latest transfer operation.",
+														Computed:    true,
+													},
+													"status": schema.StringAttribute{
+														Description: "Status of the latest transfer operation (e.g., SUCCESS, FAILED, IN_PROGRESS).",
+														Computed:    true,
+													},
 												},
-												"end_time": {
-													Description: "End time of the latest transfer operation.",
-													Type:        types.StringType,
-													Computed:    true,
-												},
-												"status": {
-													Description: "Status of the latest transfer operation (e.g., SUCCESS, FAILED, IN_PROGRESS).",
-													Type:        types.StringType,
-													Computed:    true,
-												},
-											}),
+											},
+											"expiry_on": schema.StringAttribute{
+												Description: "Timestamp when this replication configuration expires.",
+												Computed:    true,
+											},
 										},
-										"expiry_on": {
-											Description: "Timestamp when this replication configuration expires.",
-											Type:        types.StringType,
-											Computed:    true,
-										},
-									}),
+									},
 								},
-							}),
+							},
 						},
-					}),
+					},
 				},
-			}),
+			},
 		},
-		"backup_schedules": {
+		"backup_schedules": schema.ListNestedAttribute{
 			Optional: true,
-			Attributes: tfsdk.ListNestedAttributes(map[string]tfsdk.Attribute{
-				"state": {
-					Description: "The state of the backup schedule. Used to pause or resume the backup schedule. Valid values are ACTIVE or PAUSED.",
-					Type:        types.StringType,
-					Computed:    true,
-					Optional:    true,
-					PlanModifiers: []tfsdk.AttributePlanModifier{
-						tfsdk.UseStateForUnknown(),
+			NestedObject: schema.NestedAttributeObject{
+				Attributes: map[string]schema.Attribute{
+					"state": schema.StringAttribute{
+						Description: "The state of the backup schedule. Used to pause or resume the backup schedule. Valid values are ACTIVE or PAUSED.",
+						Computed:    true,
+						Optional:    true,
+						PlanModifiers: []planmodifier.String{
+							stringplanmodifier.UseNonNullStateForUnknown(),
+						},
+					},
+
+					"cron_expression": schema.StringAttribute{
+						Description: "The cron expression for the backup schedule",
+						Computed:    true,
+						Optional:    true,
+					},
+
+					"time_interval_in_days": schema.Int64Attribute{
+						Description: "The time interval in days for the backup schedule.",
+						Computed:    true,
+						Optional:    true,
+					},
+
+					"retention_period_in_days": schema.Int64Attribute{
+						Description: "The retention period of the backup schedule.",
+						Computed:    true,
+						Optional:    true,
+						PlanModifiers: []planmodifier.Int64{
+							int64planmodifier.UseNonNullStateForUnknown(),
+						},
+					},
+
+					"backup_description": schema.StringAttribute{
+						Description: "The description of the backup schedule.",
+						Computed:    true,
+						Optional:    true,
+						PlanModifiers: []planmodifier.String{
+							stringplanmodifier.UseNonNullStateForUnknown(),
+						},
+					},
+
+					"schedule_id": schema.StringAttribute{
+						Description: "The ID of the backup schedule. Created automatically when the backup schedule is created. Used to get a specific backup schedule.",
+						Computed:    true,
+						Optional:    true,
+						PlanModifiers: []planmodifier.String{
+							stringplanmodifier.UseNonNullStateForUnknown(),
+						},
+					},
+					"incremental_interval_in_mins": schema.Int64Attribute{
+						Description: "The time interval in minutes for the incremental backup schedule.",
+						Optional:    true,
+						Validators:  []validator.Int64{int64validator.AtLeast(60)},
+					},
+					"use_roles": schema.BoolAttribute{
+						Description: "Backup global YSQL roles in scheduled backups. Defaults to false.",
+						Optional:    true,
+						Computed:    true,
 					},
 				},
-
-				"cron_expression": {
-					Description: "The cron expression for the backup schedule",
-					Type:        types.StringType,
-					Computed:    true,
-					Optional:    true,
-				},
-
-				"time_interval_in_days": {
-					Description: "The time interval in days for the backup schedule.",
-					Type:        types.Int64Type,
-					Computed:    true,
-					Optional:    true,
-				},
-
-				"retention_period_in_days": {
-					Description: "The retention period of the backup schedule.",
-					Type:        types.Int64Type,
-					Computed:    true,
-					Optional:    true,
-					PlanModifiers: []tfsdk.AttributePlanModifier{
-						tfsdk.UseStateForUnknown(),
-					},
-				},
-
-				"backup_description": {
-					Description: "The description of the backup schedule.",
-					Type:        types.StringType,
-					Computed:    true,
-					Optional:    true,
-					PlanModifiers: []tfsdk.AttributePlanModifier{
-						tfsdk.UseStateForUnknown(),
-					},
-				},
-
-				"schedule_id": {
-					Description: "The ID of the backup schedule. Created automatically when the backup schedule is created. Used to get a specific backup schedule.",
-					Type:        types.StringType,
-					Computed:    true,
-					Optional:    true,
-					PlanModifiers: []tfsdk.AttributePlanModifier{
-						tfsdk.UseStateForUnknown(),
-					},
-				},
-				"incremental_interval_in_mins": {
-					Description: "The time interval in minutes for the incremental backup schedule.",
-					Type:        types.Int64Type,
-					Optional:    true,
-					Validators:  []tfsdk.AttributeValidator{int64validator.AtLeast(60)},
-				},
-				"use_roles": {
-					Description: "Backup global YSQL roles in scheduled backups. Defaults to false.",
-					Type:        types.BoolType,
-					Optional:    true,
-					Computed:    true,
-				},
-			}),
+			},
 		},
-		"cmk_spec": {
+		"cmk_spec": schema.SingleNestedAttribute{
 			Description: "KMS Provider Configuration.",
 			Optional:    true,
-			Attributes: tfsdk.SingleNestedAttributes(map[string]tfsdk.Attribute{
-				"provider_type": {
+			Attributes: map[string]schema.Attribute{
+				"provider_type": schema.StringAttribute{
 					Description: "CMK Provider Type.",
-					Type:        types.StringType,
 					Required:    true,
-					Validators:  []tfsdk.AttributeValidator{stringvalidator.OneOf("AWS", "GCP", "AZURE")},
+					Validators:  []validator.String{stringvalidator.OneOf("AWS", "GCP", "AZURE")},
 				},
-				"is_enabled": {
+				"is_enabled": schema.BoolAttribute{
 					Description: "Is Enabled",
-					Type:        types.BoolType,
 					Required:    true,
 				},
-				"aws_cmk_spec": {
+				"aws_cmk_spec": schema.SingleNestedAttribute{
 					Description: "AWS CMK Provider Configuration.",
 					Optional:    true,
-					Attributes: tfsdk.SingleNestedAttributes(map[string]tfsdk.Attribute{
-						"access_key": {
+					Attributes: map[string]schema.Attribute{
+						"access_key": schema.StringAttribute{
 							Description: "Access Key",
-							Type:        types.StringType,
 							Required:    true,
 						},
-						"secret_key": {
+						"secret_key": schema.StringAttribute{
 							Description: "Secret Key",
-							Type:        types.StringType,
 							Required:    true,
 						},
-						"arn_list": {
+						"arn_list": schema.ListAttribute{
 							Description: "AWS ARN List",
-							Type:        types.ListType{ElemType: types.StringType},
+							ElementType: types.StringType,
 							Required:    true,
 						},
-					}),
+					},
 				},
-				"gcp_cmk_spec": {
+				"gcp_cmk_spec": schema.SingleNestedAttribute{
 					Description: "GCP CMK Provider Configuration.",
 					Optional:    true,
-					Attributes: tfsdk.SingleNestedAttributes(map[string]tfsdk.Attribute{
-						"key_ring_name": {
+					Attributes: map[string]schema.Attribute{
+						"key_ring_name": schema.StringAttribute{
 							Description: "Key Ring Name",
-							Type:        types.StringType,
 							Required:    true,
 						},
-						"key_name": {
+						"key_name": schema.StringAttribute{
 							Description: "Key Name",
-							Type:        types.StringType,
 							Required:    true,
 						},
-						"location": {
+						"location": schema.StringAttribute{
 							Description: "Location",
-							Type:        types.StringType,
 							Required:    true,
 						},
-						"protection_level": {
+						"protection_level": schema.StringAttribute{
 							Description: "Key Protection Level",
-							Type:        types.StringType,
 							Required:    true,
 						},
-						"gcp_service_account": {
+						"gcp_service_account": schema.SingleNestedAttribute{
 							Description: "GCP Service Account",
 							Required:    true,
-							Attributes: tfsdk.SingleNestedAttributes(map[string]tfsdk.Attribute{
-								"type": {
+							Attributes: map[string]schema.Attribute{
+								"type": schema.StringAttribute{
 									Description: "Service Account Type",
-									Type:        types.StringType,
 									Required:    true,
 								},
-								"project_id": {
+								"project_id": schema.StringAttribute{
 									Description: "GCP Project ID",
-									Type:        types.StringType,
 									Required:    true,
 								},
-								"private_key": {
+								"private_key": schema.StringAttribute{
 									Description: "Private Key",
-									Type:        types.StringType,
 									Required:    true,
 								},
-								"private_key_id": {
+								"private_key_id": schema.StringAttribute{
 									Description: "Private Key ID",
-									Type:        types.StringType,
 									Required:    true,
 								},
-								"client_email": {
+								"client_email": schema.StringAttribute{
 									Description: "Client Email",
-									Type:        types.StringType,
 									Required:    true,
 								},
-								"client_id": {
+								"client_id": schema.StringAttribute{
 									Description: "Client ID",
-									Type:        types.StringType,
 									Required:    true,
 								},
-								"auth_uri": {
+								"auth_uri": schema.StringAttribute{
 									Description: "Auth URI",
-									Type:        types.StringType,
 									Required:    true,
 								},
-								"token_uri": {
+								"token_uri": schema.StringAttribute{
 									Description: "Token URI",
-									Type:        types.StringType,
 									Required:    true,
 								},
-								"auth_provider_x509_cert_url": {
+								"auth_provider_x509_cert_url": schema.StringAttribute{
 									Description: "Auth Provider X509 Cert URL",
-									Type:        types.StringType,
 									Required:    true,
 								},
-								"client_x509_cert_url": {
+								"client_x509_cert_url": schema.StringAttribute{
 									Description: "Client X509 Cert URL",
-									Type:        types.StringType,
 									Required:    true,
 								},
-								"universe_domain": {
+								"universe_domain": schema.StringAttribute{
 									Description: "Google Universe Domain",
-									Type:        types.StringType,
 									Optional:    true,
 								},
-							}),
+							},
 						},
-					}),
+					},
 				},
-				"azure_cmk_spec": {
+				"azure_cmk_spec": schema.SingleNestedAttribute{
 					Description: "AZURE CMK Provider Configuration.",
 					Optional:    true,
-					Attributes: tfsdk.SingleNestedAttributes(map[string]tfsdk.Attribute{
-						"client_id": {
+					Attributes: map[string]schema.Attribute{
+						"client_id": schema.StringAttribute{
 							Description: "Azure Active Directory (AD) Client ID for Key Vault service principal.",
-							Type:        types.StringType,
 							Required:    true,
 						},
-						"client_secret": {
+						"client_secret": schema.StringAttribute{
 							Description: "Azure AD Client Secret for Key Vault service principal.",
-							Type:        types.StringType,
 							Required:    true,
 						},
-						"tenant_id": {
+						"tenant_id": schema.StringAttribute{
 							Description: "Azure AD Tenant ID for Key Vault service principal.",
-							Type:        types.StringType,
 							Required:    true,
 						},
-						"key_vault_uri": {
+						"key_vault_uri": schema.StringAttribute{
 							Description: "URI of Azure Key Vault storing cryptographic keys.",
-							Type:        types.StringType,
 							Required:    true,
 						},
-						"key_name": {
+						"key_name": schema.StringAttribute{
 							Description: "Name of cryptographic key in Azure Key Vault.",
-							Type:        types.StringType,
 							Required:    true,
 						},
-					}),
+					},
 				},
-			}),
+			},
 		},
-		"cluster_tier": {
+		"cluster_tier": schema.StringAttribute{
 			Description: "FREE (Sandbox) or PAID (Dedicated).",
-			Type:        types.StringType,
 			Required:    true,
-			Validators:  []tfsdk.AttributeValidator{stringvalidator.OneOf("FREE", "PAID")},
+			Validators:  []validator.String{stringvalidator.OneOf("FREE", "PAID")},
 		},
-		"fault_tolerance": {
+		"fault_tolerance": schema.StringAttribute{
 			Description: "The fault tolerance of the cluster. NONE, NODE, ZONE or REGION.",
-			Type:        types.StringType,
 			Optional:    true,
 			Computed:    true,
-			Validators:  []tfsdk.AttributeValidator{stringvalidator.OneOf("NONE", "NODE", "ZONE", "REGION")},
-			PlanModifiers: []tfsdk.AttributePlanModifier{
-				tfsdk.UseStateForUnknown(),
+			Validators:  []validator.String{stringvalidator.OneOf("NONE", "NODE", "ZONE", "REGION")},
+			PlanModifiers: []planmodifier.String{
+				stringplanmodifier.UseNonNullStateForUnknown(),
 			},
 		},
-		"num_faults_to_tolerate": {
+		"num_faults_to_tolerate": schema.Int64Attribute{
 			Description: "The number of domain faults the cluster can tolerate. 0 for NONE, 1 for ZONE and [1-3] for NODE and REGION",
-			Type:        types.Int64Type,
 			Optional:    true,
 			Computed:    true,
-			Validators:  []tfsdk.AttributeValidator{int64validator.OneOf(0, 1, 2, 3)},
-			PlanModifiers: []tfsdk.AttributePlanModifier{
-				tfsdk.UseStateForUnknown(),
+			Validators:  []validator.Int64{int64validator.OneOf(0, 1, 2, 3)},
+			PlanModifiers: []planmodifier.Int64{
+				int64planmodifier.UseNonNullStateForUnknown(),
 			},
 		},
-		"is_multi_cloud": {
+		"is_multi_cloud": schema.BoolAttribute{
 			Description: "Set to true to deploy a cluster that spans multiple cloud providers. Optional; defaults to false. This value cannot be modified after the cluster is created.",
-			Type:        types.BoolType,
 			Optional:    true,
 			Computed:    true,
-			PlanModifiers: []tfsdk.AttributePlanModifier{
-				tfsdk.UseStateForUnknown(),
+			PlanModifiers: []planmodifier.Bool{
+				boolplanmodifier.UseNonNullStateForUnknown(),
 			},
 		},
-		"enterprise_security": {
+		"enterprise_security": schema.BoolAttribute{
 			Description: "Set to true to enable the advanced security profile (enterprise security) on the cluster. Optional; defaults to false. This value cannot be modified after the cluster is created.",
-			Type:        types.BoolType,
 			Optional:    true,
 			Computed:    true,
-			PlanModifiers: []tfsdk.AttributePlanModifier{
-				tfsdk.UseStateForUnknown(),
+			PlanModifiers: []planmodifier.Bool{
+				boolplanmodifier.UseNonNullStateForUnknown(),
 			},
 		},
-		"cluster_allow_list_ids": {
+		"cluster_allow_list_ids": schema.ListAttribute{
 			Description: "List of IDs of the allow lists assigned to the cluster.",
-			Type: types.ListType{
-				ElemType: types.StringType,
-			},
-			Optional: true,
+			ElementType: types.StringType,
+			Optional:    true,
 		},
-		"restore_backup_id": {
+		"restore_backup_id": schema.StringAttribute{
 			Description:        "The ID of the backup to be restored to the cluster.",
 			DeprecationMessage: "Use the ybm_backup_restore resource instead. This attribute will be removed in a future release.",
-			Type:               types.StringType,
 			Optional:           true,
 		},
-		"node_config": {
+		"node_config": schema.SingleNestedAttribute{
 			Optional: true,
 			Computed: true,
-			Attributes: tfsdk.SingleNestedAttributes(map[string]tfsdk.Attribute{
-				"num_cores": {
+			Attributes: map[string]schema.Attribute{
+				"num_cores": schema.Int64Attribute{
 					Description: "Number of CPU cores in the node.",
-					Type:        types.Int64Type,
 					Optional:    true,
 					Computed:    true,
 				},
-				"disk_size_gb": {
+				"disk_size_gb": schema.Int64Attribute{
 					Description: "Disk size of the node.",
-					Type:        types.Int64Type,
 					Computed:    true,
 					Optional:    true,
-					Validators: []tfsdk.AttributeValidator{
-						schemavalidator.ConflictsWith(
+					Validators: []validator.Int64{
+						int64validator.ConflictsWith(
 							path.MatchRelative().AtParent().AtParent().AtName("cluster_region_info").AtAnyListIndex().AtName("disk_size_gb"),
 						),
 					},
 				},
-				"disk_iops": {
+				"disk_iops": schema.Int64Attribute{
 					Description: "Disk IOPS of the node.",
-					Type:        types.Int64Type,
 					Computed:    true,
 					Optional:    true,
-					Validators: []tfsdk.AttributeValidator{
-						schemavalidator.ConflictsWith(
+					Validators: []validator.Int64{
+						int64validator.ConflictsWith(
 							path.MatchRelative().AtParent().AtParent().AtName("cluster_region_info").AtAnyListIndex().AtName("disk_iops"),
 						),
 					},
 				},
-			}),
+			},
 			DeprecationMessage: "Remove this attribute's configuration as it's no longer in use and the attribute will be removed in the next major version of the provider. Please use cluster_region_info to specify node config instead.",
 		},
-		"credentials": {
+		"credentials": schema.SingleNestedAttribute{
 			Description: `Credentials to be used by the database. Required only at the time of creation. Please provide 'username' and 'password' 
 (which would be used in common for both YSQL and YCQL) OR all of 'ysql_username',
 'ysql_password', 'ycql_username' and 'ycql_password' but not a mix of both.`,
 			Optional: true,
-			Attributes: tfsdk.SingleNestedAttributes(map[string]tfsdk.Attribute{
-				"username": {
+			Attributes: map[string]schema.Attribute{
+				"username": schema.StringAttribute{
 					Description: "The username to be used for both YSQL and YCQL.",
-					Type:        types.StringType,
 					Optional:    true,
 				},
-				"password": {
+				"password": schema.StringAttribute{
 					Description: "The password to be used for both YSQL and YCQL. Note that this will be stored in the state file.",
-					Type:        types.StringType,
 					Optional:    true,
 					Sensitive:   true,
 				},
-				"ysql_username": {
+				"ysql_username": schema.StringAttribute{
 					Description: "YSQL username for the database.",
-					Type:        types.StringType,
 					Optional:    true,
 				},
-				"ysql_password": {
+				"ysql_password": schema.StringAttribute{
 					Description: "YSQL password for the database. Note that this will be stored in the state file.",
-					Type:        types.StringType,
 					Optional:    true,
 					Sensitive:   true,
 				},
-				"ycql_username": {
+				"ycql_username": schema.StringAttribute{
 					Description: "YCQL username for the database.",
-					Type:        types.StringType,
 					Optional:    true,
 				},
-				"ycql_password": {
+				"ycql_password": schema.StringAttribute{
 					Description: "YCQL password for the database. Note that this will be stored in the state file.",
-					Type:        types.StringType,
 					Optional:    true,
 					Sensitive:   true,
 				},
-			}),
+			},
 		},
-		"cluster_info": {
+		"cluster_info": schema.SingleNestedAttribute{
 			Computed: true,
-			Attributes: tfsdk.SingleNestedAttributes(map[string]tfsdk.Attribute{
-				"state": {
-					Type:     types.StringType,
+			Attributes: map[string]schema.Attribute{
+				"state": schema.StringAttribute{
 					Computed: true,
 				},
-				"software_version": {
-					Type:     types.StringType,
+				"software_version": schema.StringAttribute{
 					Computed: true,
 				},
-				"created_time": {
-					Type:     types.StringType,
+				"created_time": schema.StringAttribute{
 					Computed: true,
-					PlanModifiers: []tfsdk.AttributePlanModifier{
-						tfsdk.UseStateForUnknown(),
+					PlanModifiers: []planmodifier.String{
+						stringplanmodifier.UseNonNullStateForUnknown(),
 					},
 				},
-				"updated_time": {
-					Type:     types.StringType,
+				"updated_time": schema.StringAttribute{
 					Computed: true,
 				},
-			}),
+			},
 		},
-		"cluster_version": {
-			Type:     types.StringType,
+		"cluster_version": schema.StringAttribute{
 			Computed: true,
 		},
-		"database_track": {
+		"database_track": schema.StringAttribute{
 			Description: "Database software release track for the cluster. Supported values are Extended and Rapid. Deprecated values are still accepted for backward compatibility: Production and Innovation map to Extended; Preview and Early Access map to Rapid.",
 			MarkdownDescription: "Database software release track for the cluster. Supported values are `Extended` and `Rapid`.\n\n" +
 				"> **Note:** Deprecated track names are still accepted for backward compatibility, but should be updated in configuration.\n" +
 				"> - `Production` and `Innovation` are deprecated in favor of `Extended`.\n" +
 				"> - `Preview` and `Early Access` are deprecated in favor of `Rapid`.",
-			Type:     types.StringType,
 			Optional: true,
 			Computed: true,
-			PlanModifiers: []tfsdk.AttributePlanModifier{
-				tfsdk.UseStateForUnknown(),
+			PlanModifiers: []planmodifier.String{
+				stringplanmodifier.UseNonNullStateForUnknown(),
 			},
 		},
-		"desired_state": {
+		"desired_state": schema.StringAttribute{
 			Description: "The desired state of the cluster, Active or Paused. This parameter can be used to pause/resume a cluster.",
-			Type:        types.StringType,
 			Optional:    true,
 			Computed:    true,
-			PlanModifiers: []tfsdk.AttributePlanModifier{
-				tfsdk.UseStateForUnknown(),
+			PlanModifiers: []planmodifier.String{
+				stringplanmodifier.UseNonNullStateForUnknown(),
 			},
-			Validators: []tfsdk.AttributeValidator{
+			Validators: []validator.String{
 				// Validate string value must be "Active" or "Paused"
 				stringvalidator.OneOf([]string{"Active", "Paused"}...),
 			},
 		},
-		"desired_connection_pooling_state": {
+		"desired_connection_pooling_state": schema.StringAttribute{
 			Description: "The desired connection pooling state of the cluster, Enabled or Disabled. Can be used during or after cluster creation.",
-			Type:        types.StringType,
 			Optional:    true,
 			Computed:    true,
-			PlanModifiers: []tfsdk.AttributePlanModifier{
-				tfsdk.UseStateForUnknown(),
+			PlanModifiers: []planmodifier.String{
+				stringplanmodifier.UseNonNullStateForUnknown(),
 			},
-			Validators: []tfsdk.AttributeValidator{
+			Validators: []validator.String{
 				// Validate string value must be "Enabled" or "Disabled"
 				stringvalidator.OneOf([]string{"Enabled", "Disabled"}...),
 			},
 		},
-		"cluster_endpoints": {
+		"cluster_endpoints": schema.MapAttribute{
 			Description:        "The endpoints used to connect to the cluster.",
 			DeprecationMessage: "This attribute is deprecated. Please use the 'endpoints' attribute instead.",
-			Type: types.MapType{
-				ElemType: types.StringType,
+			ElementType:        types.StringType,
+			Computed:           true,
+		},
+		"endpoints": schema.ListNestedAttribute{
+			Description: "The endpoints used to connect to the cluster.",
+			NestedObject: schema.NestedAttributeObject{
+				Attributes: map[string]schema.Attribute{
+					"accessibility_type": schema.StringAttribute{
+						Description: "The accessibility type of the endpoint. PUBLIC or PRIVATE.",
+						Computed:    true,
+						Optional:    true,
+					},
+					"host": schema.StringAttribute{
+						Description: "The host of the endpoint.",
+						Computed:    true,
+						Optional:    true,
+					},
+					"region": schema.StringAttribute{
+						Description: "The region of the endpoint.",
+						Computed:    true,
+						Optional:    true,
+					},
+				},
 			},
 			Computed: true,
 		},
-		"endpoints": {
-			Description: "The endpoints used to connect to the cluster.",
-			Attributes: tfsdk.ListNestedAttributes(map[string]tfsdk.Attribute{
-				"accessibility_type": {
-					Description: "The accessibility type of the endpoint. PUBLIC or PRIVATE.",
-					Type:        types.StringType,
-					Computed:    true,
-					Optional:    true,
-				},
-				"host": {
-					Description: "The host of the endpoint.",
-					Type:        types.StringType,
-					Computed:    true,
-					Optional:    true,
-				},
-				"region": {
-					Description: "The region of the endpoint.",
-					Type:        types.StringType,
-					Computed:    true,
-					Optional:    true,
-				},
-			}),
-			Computed: true,
-		},
-		"cluster_certificate": {
+		"cluster_certificate": schema.StringAttribute{
 			Description: "The certificate used to connect to the cluster.",
-			Type:        types.StringType,
 			Computed:    true,
-			PlanModifiers: []tfsdk.AttributePlanModifier{
-				tfsdk.UseStateForUnknown(),
+			PlanModifiers: []planmodifier.String{
+				stringplanmodifier.UseNonNullStateForUnknown(),
 			},
 		},
 	}
 
-	return tfsdk.Schema{
+	resp.Schema = schema.Schema{
 		Description: `The resource to create a YugabyteDB cluster. Use this resource to create both 
 single- and multi-region clusters. You can also use this resource to bind allow lists to the cluster 
 being created; restore previously taken backups to the cluster being created; 
 and modify the backup schedule of the cluster being created.`,
 		Attributes: attributes,
-	}, nil
+	}
 }
 
-func (r resourceClusterType) NewResource(_ context.Context, p tfsdk.Provider) (tfsdk.Resource, diag.Diagnostics) {
-	return resourceCluster{
-		p: *(p.(*provider)),
-	}, nil
+func newResourceCluster() resource.Resource {
+	return &resourceCluster{}
+}
+
+func (r *resourceCluster) Metadata(_ context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
+	resp.TypeName = req.ProviderTypeName + "_cluster"
+}
+
+func (r *resourceCluster) Configure(_ context.Context, req resource.ConfigureRequest, _ *resource.ConfigureResponse) {
+	r.p = configuredProvider(req.ProviderData)
 }
 
 type resourceCluster struct {
 	p provider
 }
 
-var _ tfsdk.ResourceWithValidateConfig = resourceCluster{}
-var _ tfsdk.ResourceWithModifyPlan = resourceCluster{}
+var _ resource.ResourceWithValidateConfig = &resourceCluster{}
+var _ resource.ResourceWithModifyPlan = &resourceCluster{}
 
 // ModifyPlan blocks changing ignore_num_nodes_changes while the current YBM node
 // count differs from configured num_nodes. Node counts must be aligned before
 // changing Terraform's node-count management behavior.
-func (r resourceCluster) ModifyPlan(ctx context.Context, req tfsdk.ModifyResourcePlanRequest, resp *tfsdk.ModifyResourcePlanResponse) {
+func (r resourceCluster) ModifyPlan(ctx context.Context, req resource.ModifyPlanRequest, resp *resource.ModifyPlanResponse) {
 	resp.Plan = req.Plan
 
 	// Destroy plans have a null planned state.
@@ -1015,9 +916,16 @@ func (r resourceCluster) ModifyPlan(ctx context.Context, req tfsdk.ModifyResourc
 
 	// Only decode the attributes we need. Full Cluster Get() fails on null nested
 	// attributes (credentials, cmk_spec, backup_replication_spec, etc.).
+	// A wholly unknown list (dynamically typed vars) can't be decoded into []RegionInfo, and an
+	// unknown or null one has no per-region ignore setting to compare.
+	var configList types.List
+	resp.Diagnostics.Append(req.Config.GetAttribute(ctx, path.Root("cluster_region_info"), &configList)...)
+	if resp.Diagnostics.HasError() || configList.IsNull() || configList.IsUnknown() {
+		return
+	}
 	var configRegions []RegionInfo
 	var stateRegions []RegionInfo
-	resp.Diagnostics.Append(req.Config.GetAttribute(ctx, path.Root("cluster_region_info"), &configRegions)...)
+	resp.Diagnostics.Append(configList.ElementsAs(ctx, &configRegions, false)...)
 	resp.Diagnostics.Append(req.State.GetAttribute(ctx, path.Root("cluster_region_info"), &stateRegions)...)
 	if resp.Diagnostics.HasError() {
 		return
@@ -1027,7 +935,7 @@ func (r resourceCluster) ModifyPlan(ctx context.Context, req tfsdk.ModifyResourc
 
 	needsLiveNumNodes := false
 	for _, configRegion := range configRegions {
-		stateRegion, ok := stateByRegion[configRegion.Region.Value]
+		stateRegion, ok := stateByRegion[configRegion.Region.ValueString()]
 		if !ok {
 			continue
 		}
@@ -1060,7 +968,7 @@ func (r resourceCluster) ModifyPlan(ctx context.Context, req tfsdk.ModifyResourc
 			return
 		}
 
-		clusterResp, response, err := r.p.client.ClusterApi.GetCluster(ctx, accountId.Value, projectId.Value, clusterId.Value).Execute()
+		clusterResp, response, err := r.p.client.ClusterApi.GetCluster(ctx, accountId.ValueString(), projectId.ValueString(), clusterId.ValueString()).Execute()
 		if err != nil {
 			resp.Diagnostics.AddError(
 				disableIgnoreNumNodesWithDriftErrorSummary,
@@ -1083,7 +991,7 @@ func (r resourceCluster) ModifyPlan(ctx context.Context, req tfsdk.ModifyResourc
 // said false - as happens when a multi-region cluster is shrunk to one region and the prior
 // state carried false - and the apply fails with "Provider produced inconsistent result after
 // apply".
-func modifySingleRegionDefaultPlan(ctx context.Context, req tfsdk.ModifyResourcePlanRequest, resp *tfsdk.ModifyResourcePlanResponse) {
+func modifySingleRegionDefaultPlan(ctx context.Context, req resource.ModifyPlanRequest, resp *resource.ModifyPlanResponse) {
 	// With dynamically typed vars (e.g. list(any)), cluster_region_info can be wholly unknown
 	// here; decoding it into []RegionInfo then fails with "unhandled unknown value". A list that
 	// is unknown or null says nothing about the region count, so there is nothing to fix up.
@@ -1115,25 +1023,25 @@ func modifySingleRegionDefaultPlan(ctx context.Context, req tfsdk.ModifyResource
 	// plan time instead of letting the apply run and then fail.
 	if len(configRegions) == 1 {
 		configDefault := configRegions[0].IsDefault
-		if !configDefault.IsNull() && !configDefault.IsUnknown() && !configDefault.Value {
+		if !configDefault.IsNull() && !configDefault.IsUnknown() && !configDefault.ValueBool() {
 			resp.Diagnostics.AddError(
 				"Invalid is_default for a single region cluster",
 				"The only region of a single region cluster is always its default region. Set is_default = true "+
-					"for region "+configRegions[0].Region.Value+", or leave it unset and the provider will.",
+					"for region "+configRegions[0].Region.ValueString()+", or leave it unset and the provider will.",
 			)
 			return
 		}
 	}
 
 	// Unknown already resolves to whatever the apply returns; true is what the apply returns.
-	if planRegions[0].IsDefault.IsUnknown() || planRegions[0].IsDefault.Value {
+	if planRegions[0].IsDefault.IsUnknown() || planRegions[0].IsDefault.ValueBool() {
 		return
 	}
 
 	resp.Diagnostics.Append(resp.Plan.SetAttribute(
 		ctx,
 		path.Root("cluster_region_info").AtListIndex(0).AtName("is_default"),
-		types.Bool{Unknown: true},
+		types.BoolUnknown(),
 	)...)
 }
 
@@ -1142,34 +1050,34 @@ func EditBackupSchedule(ctx context.Context, backupScheduleStruct BackupSchedule
 }
 
 func editBackupScheduleV2(ctx context.Context, backupScheduleStruct BackupScheduleInfo, scheduleId string, backupDes string, accountId string, projectId string, clusterId string, apiClient *openapiclient.APIClient) error {
-	if backupScheduleStruct.State.Value != "" && backupScheduleStruct.RetentionPeriodInDays.Value != 0 {
-		backupRetentionPeriodInDays := int32(backupScheduleStruct.RetentionPeriodInDays.Value)
+	if backupScheduleStruct.State.ValueString() != "" && backupScheduleStruct.RetentionPeriodInDays.ValueInt64() != 0 {
+		backupRetentionPeriodInDays := int32(backupScheduleStruct.RetentionPeriodInDays.ValueInt64())
 		backupScheduleSpec := *openapiclient.NewScheduleSpecV2WithDefaults()
 		backupScheduleSpec.SetDescription(backupDes)
 		backupScheduleSpec.SetRetentionPeriodInDays(backupRetentionPeriodInDays)
-		backupScheduleSpec.SetState(openapiclient.ScheduleStateEnum(backupScheduleStruct.State.Value))
-		if !backupScheduleStruct.IncrementalIntervalInMins.IsNull() && !backupScheduleStruct.IncrementalIntervalInMins.IsUnknown() && backupScheduleStruct.IncrementalIntervalInMins.Value != 0 {
-			incrementalIntervalInMins := int32(backupScheduleStruct.IncrementalIntervalInMins.Value)
+		backupScheduleSpec.SetState(openapiclient.ScheduleStateEnum(backupScheduleStruct.State.ValueString()))
+		if !backupScheduleStruct.IncrementalIntervalInMins.IsNull() && !backupScheduleStruct.IncrementalIntervalInMins.IsUnknown() && backupScheduleStruct.IncrementalIntervalInMins.ValueInt64() != 0 {
+			incrementalIntervalInMins := int32(backupScheduleStruct.IncrementalIntervalInMins.ValueInt64())
 			backupScheduleSpec.SetIncrementalIntervalInMinutes(incrementalIntervalInMins)
 		} else {
 			backupScheduleSpec.UnsetIncrementalIntervalInMinutes()
 		}
-		if !backupScheduleStruct.TimeIntervalInDays.IsNull() && !backupScheduleStruct.TimeIntervalInDays.IsUnknown() && backupScheduleStruct.TimeIntervalInDays.Value != 0 {
-			timeIntervalInDays := int32(backupScheduleStruct.TimeIntervalInDays.Value)
+		if !backupScheduleStruct.TimeIntervalInDays.IsNull() && !backupScheduleStruct.TimeIntervalInDays.IsUnknown() && backupScheduleStruct.TimeIntervalInDays.ValueInt64() != 0 {
+			timeIntervalInDays := int32(backupScheduleStruct.TimeIntervalInDays.ValueInt64())
 			backupScheduleSpec.SetTimeIntervalInDays(timeIntervalInDays)
 			backupScheduleSpec.UnsetCronExpression()
 		}
-		if backupScheduleStruct.CronExpression.Value != "" {
-			cronExp := backupScheduleStruct.CronExpression.Value
+		if backupScheduleStruct.CronExpression.ValueString() != "" {
+			cronExp := backupScheduleStruct.CronExpression.ValueString()
 			backupScheduleSpec.SetCronExpression(cronExp)
 			backupScheduleSpec.UnsetTimeIntervalInDays()
 		}
-		if backupScheduleStruct.TimeIntervalInDays.Value != 0 && backupScheduleStruct.CronExpression.Value != "" {
+		if backupScheduleStruct.TimeIntervalInDays.ValueInt64() != 0 && backupScheduleStruct.CronExpression.ValueString() != "" {
 			return errors.New("unable to create custom backup schedule. You can't pass both the cron expression and time interval in days")
 		}
 
 		if !backupScheduleStruct.UseRoles.IsNull() && !backupScheduleStruct.UseRoles.IsUnknown() {
-			backupScheduleSpec.SetUseRoles(backupScheduleStruct.UseRoles.Value)
+			backupScheduleSpec.SetUseRoles(backupScheduleStruct.UseRoles.ValueBool())
 		}
 
 		_, res, err := apiClient.BackupApi.ModifyBackupScheduleV2(ctx, accountId, projectId, clusterId, scheduleId).ScheduleSpecV2(backupScheduleSpec).Execute()
@@ -1193,8 +1101,8 @@ func createClusterSpec(ctx context.Context, apiClient *openapiclient.APIClient, 
 
 	// Compute track ID for database version
 	softwareInfo := *openapiclient.NewSoftwareInfoWithDefaults()
-	if !plan.DatabaseTrack.Unknown {
-		trackName = plan.DatabaseTrack.Value
+	if !plan.DatabaseTrack.IsUnknown() {
+		trackName = plan.DatabaseTrack.ValueString()
 		trackId, trackIdOK, message = getTrackId(ctx, apiClient, accountId, trackName)
 		if !trackIdOK {
 			return nil, false, message
@@ -1204,13 +1112,13 @@ func createClusterSpec(ctx context.Context, apiClient *openapiclient.APIClient, 
 
 	var clusterRegionInfo []openapiclient.ClusterRegionInfo
 	totalNodes := 0
-	clusterType := plan.ClusterType.Value
+	clusterType := plan.ClusterType.ValueString()
 	isDefaultSet := false
 	pseInfoMap := make(map[string]openapiclient.PrivateServiceEndpointRegionSpec)
 	actualNumNodesMap := make(map[string]int32)
 	stateRegionsByCode := regionInfoByRegion(state.ClusterRegionInfo)
 	if clusterExists {
-		clusterResp, response, err := apiClient.ClusterApi.GetCluster(context.Background(), accountId, projectId, state.ClusterID.Value).Execute()
+		clusterResp, response, err := apiClient.ClusterApi.GetCluster(context.Background(), accountId, projectId, state.ClusterID.ValueString()).Execute()
 		if err != nil {
 			errMsg := getErrorMessage(response, err)
 			return nil, false, errMsg
@@ -1227,10 +1135,10 @@ func createClusterSpec(ctx context.Context, apiClient *openapiclient.APIClient, 
 	tflog.Debug(ctx, fmt.Sprintf("PSE info map is %v", pseInfoMap))
 
 	for _, regionInfo := range plan.ClusterRegionInfo {
-		regionNodes := int32(regionInfo.NumNodes.Value)
+		regionNodes := int32(regionInfo.NumNodes.ValueInt64())
 		if clusterExists {
-			stateRegion, hasStateRegion := stateRegionsByCode[regionInfo.Region.Value]
-			actualNumNodes, hasActualNumNodes := actualNumNodesMap[regionInfo.Region.Value]
+			stateRegion, hasStateRegion := stateRegionsByCode[regionInfo.Region.ValueString()]
+			actualNumNodes, hasActualNumNodes := actualNumNodesMap[regionInfo.Region.ValueString()]
 			if hasStateRegion && hasActualNumNodes {
 				regionNodes = resolveNumNodesForEdit(regionInfo, stateRegion, actualNumNodes)
 			}
@@ -1239,27 +1147,27 @@ func createClusterSpec(ctx context.Context, apiClient *openapiclient.APIClient, 
 		info := *openapiclient.NewClusterRegionInfo(
 			*openapiclient.NewPlacementInfo(
 				*openapiclient.NewCloudInfo(
-					openapiclient.CloudEnum(plan.CloudType.Value),
-					regionInfo.Region.Value), regionNodes),
+					openapiclient.CloudEnum(plan.CloudType.ValueString()),
+					regionInfo.Region.ValueString()), regionNodes),
 		)
-		if vpcName := regionInfo.VPCName.Value; vpcName != "" {
+		if vpcName := regionInfo.VPCName.ValueString(); vpcName != "" {
 			vpcData, err := getVPCByName(context.Background(), accountId, projectId, vpcName, apiClient)
 			if err != nil {
 				return nil, false, err.Error()
 			}
 
-			regionInfo.VPCID.Value = vpcData.Info.Id
+			regionInfo.VPCID = types.StringValue(vpcData.Info.Id)
 		}
 
-		cloud := plan.CloudType.Value
-		tier := plan.ClusterTier.Value
-		region := regionInfo.Region.Value
+		cloud := plan.CloudType.ValueString()
+		tier := plan.ClusterTier.ValueString()
+		region := regionInfo.Region.ValueString()
 		var numCores int32
 		// If regionInfo numCores is null, then it must be coming from the root level node info.
 		if regionInfo.NumCores.IsNull() || regionInfo.NumCores.IsUnknown() {
-			numCores = int32(plan.NodeConfig.NumCores.Value)
+			numCores = int32(plan.NodeConfig.NumCores.ValueInt64())
 		} else {
-			numCores = int32(regionInfo.NumCores.Value)
+			numCores = int32(regionInfo.NumCores.ValueInt64())
 		}
 
 		memoryMb, memoryOK, message = getMemoryFromInstanceType(ctx, apiClient, accountId, cloud, tier, region, numCores)
@@ -1268,9 +1176,9 @@ func createClusterSpec(ctx context.Context, apiClient *openapiclient.APIClient, 
 		}
 
 		if !regionInfo.DiskSizeGb.IsUnknown() && !regionInfo.DiskSizeGb.IsNull() {
-			diskSizeGb = int32(regionInfo.DiskSizeGb.Value)
+			diskSizeGb = int32(regionInfo.DiskSizeGb.ValueInt64())
 		} else if plan.NodeConfig != nil && !plan.NodeConfig.DiskSizeGb.IsUnknown() && !plan.NodeConfig.DiskSizeGb.IsNull() {
-			diskSizeGb = int32(plan.NodeConfig.DiskSizeGb.Value)
+			diskSizeGb = int32(plan.NodeConfig.DiskSizeGb.ValueInt64())
 		} else {
 			diskSizeGb, diskSizeOK, message = getDiskSizeFromInstanceType(ctx, apiClient, accountId, cloud, tier, region, numCores)
 			if !diskSizeOK {
@@ -1279,10 +1187,10 @@ func createClusterSpec(ctx context.Context, apiClient *openapiclient.APIClient, 
 		}
 
 		nodeInfo := *openapiclient.NewOptionalClusterNodeInfo(numCores, memoryMb, diskSizeGb)
-		if !regionInfo.DiskIops.IsUnknown() && !regionInfo.DiskIops.IsNull() && int32(regionInfo.DiskIops.Value) > 0 {
-			nodeInfo.SetDiskIops(int32(regionInfo.DiskIops.Value))
-		} else if plan.NodeConfig != nil && !plan.NodeConfig.DiskIops.IsNull() && !plan.NodeConfig.DiskIops.IsNull() && int32(plan.NodeConfig.DiskIops.Value) > 0 {
-			nodeInfo.SetDiskIops(int32(plan.NodeConfig.DiskIops.Value))
+		if !regionInfo.DiskIops.IsUnknown() && !regionInfo.DiskIops.IsNull() && int32(regionInfo.DiskIops.ValueInt64()) > 0 {
+			nodeInfo.SetDiskIops(int32(regionInfo.DiskIops.ValueInt64()))
+		} else if plan.NodeConfig != nil && !plan.NodeConfig.DiskIops.IsNull() && !plan.NodeConfig.DiskIops.IsNull() && int32(plan.NodeConfig.DiskIops.ValueInt64()) > 0 {
+			nodeInfo.SetDiskIops(int32(plan.NodeConfig.DiskIops.ValueInt64()))
 		} else {
 			nodeInfo.UnsetDiskIops()
 		}
@@ -1296,11 +1204,11 @@ func createClusterSpec(ctx context.Context, apiClient *openapiclient.APIClient, 
 		// if the cluster is in a private VPC and customer wants public access, it MUST have PRIVATE and PUBLIC.
 		var accessibilityTypes []openapiclient.AccessibilityType
 
-		if vpcID := regionInfo.VPCID.Value; vpcID != "" {
+		if vpcID := regionInfo.VPCID.ValueString(); vpcID != "" {
 			info.PlacementInfo.SetVpcId(vpcID)
 			accessibilityTypes = append(accessibilityTypes, openapiclient.ACCESSIBILITYTYPE_PRIVATE)
 
-			if regionInfo.PublicAccess.Value {
+			if regionInfo.PublicAccess.ValueBool() {
 				accessibilityTypes = append(accessibilityTypes, openapiclient.ACCESSIBILITYTYPE_PUBLIC)
 			}
 		} else {
@@ -1308,14 +1216,14 @@ func createClusterSpec(ctx context.Context, apiClient *openapiclient.APIClient, 
 
 			// If the value is specified, and it is false, then it is an error because the user
 			// wants disabled public access on a non-dedicated VPC cluster.
-			if !regionInfo.PublicAccess.IsUnknown() && !regionInfo.PublicAccess.Value {
-				tflog.Debug(ctx, fmt.Sprintf("Cluster %v is in a public VPC and public access is disabled. ", plan.ClusterName.Value))
+			if !regionInfo.PublicAccess.IsUnknown() && !regionInfo.PublicAccess.ValueBool() {
+				tflog.Debug(ctx, fmt.Sprintf("Cluster %v is in a public VPC and public access is disabled. ", plan.ClusterName.ValueString()))
 				return nil, false, "Cluster is in a public VPC and public access is disabled. Please enable public access."
 			}
 		}
 
 		if clusterExists {
-			if pseEndpointSpec, exists := pseInfoMap[regionInfo.Region.Value]; exists {
+			if pseEndpointSpec, exists := pseInfoMap[regionInfo.Region.ValueString()]; exists {
 				accessibilityTypes = append(accessibilityTypes, openapiclient.ACCESSIBILITYTYPE_PRIVATE_SERVICE_ENDPOINT)
 				info.SetPrivateServiceEndpointInfo(pseEndpointSpec)
 			}
@@ -1330,20 +1238,20 @@ func createClusterSpec(ctx context.Context, apiClient *openapiclient.APIClient, 
 
 		if fflags.IsFeatureFlagEnabled(fflags.MultiZoneSupport) {
 			if !regionInfo.NumZones.IsNull() && !regionInfo.NumZones.IsUnknown() {
-				info.PlacementInfo.SetNumZones(int32(regionInfo.NumZones.Value))
+				info.PlacementInfo.SetNumZones(int32(regionInfo.NumZones.ValueInt64()))
 			}
 		}
 		info.SetIsDefault(false)
 		info.SetIsAffinitized(false)
 		if !regionInfo.IsPreferred.IsUnknown() && !regionInfo.IsPreferred.IsNull() {
-			info.SetIsAffinitized(regionInfo.IsPreferred.Value)
+			info.SetIsAffinitized(regionInfo.IsPreferred.ValueBool())
 		}
 
-		if !regionInfo.IsDefault.IsUnknown() && !regionInfo.IsDefault.IsNull() && regionInfo.IsDefault.Value {
+		if !regionInfo.IsDefault.IsUnknown() && !regionInfo.IsDefault.IsNull() && regionInfo.IsDefault.ValueBool() {
 			if isDefaultSet {
 				return nil, false, "Cluster must have exactly one default region."
 			}
-			info.SetIsDefault(regionInfo.IsDefault.Value)
+			info.SetIsDefault(regionInfo.IsDefault.ValueBool())
 			isDefaultSet = true
 		}
 
@@ -1365,43 +1273,43 @@ func createClusterSpec(ctx context.Context, apiClient *openapiclient.APIClient, 
 	// This is to support a redundant value in the API.
 	// Needs to be removed once API cleans it up.
 	isProduction := true
-	if plan.ClusterTier.Value == "FREE" {
+	if plan.ClusterTier.ValueString() == "FREE" {
 		isProduction = false
 	}
 
 	clusterInfo := *openapiclient.NewClusterInfo(
-		openapiclient.ClusterTier(plan.ClusterTier.Value),
+		openapiclient.ClusterTier(plan.ClusterTier.ValueString()),
 		int32(totalNodes),
-		openapiclient.ClusterFaultTolerance(plan.FaultTolerance.Value),
+		openapiclient.ClusterFaultTolerance(plan.FaultTolerance.ValueString()),
 		isProduction,
 	)
 
 	clusterInfo.UnsetNodeInfo()
 
 	if !plan.NumFaultsToTolerate.IsUnknown() {
-		clusterInfo.SetNumFaultsToTolerate(int32(plan.NumFaultsToTolerate.Value))
+		clusterInfo.SetNumFaultsToTolerate(int32(plan.NumFaultsToTolerate.ValueInt64()))
 	}
 
 	if fflags.IsFeatureFlagEnabled(fflags.MultiCloudSupport) {
 		if !plan.IsMultiCloud.IsUnknown() && !plan.IsMultiCloud.IsNull() {
-			clusterInfo.SetIsMultiCloud(plan.IsMultiCloud.Value)
+			clusterInfo.SetIsMultiCloud(plan.IsMultiCloud.ValueBool())
 		}
 	}
 
 	// enterprise_security defaults to false (set by NewClusterInfo) when not configured.
 	// On edit, the plan carries the state value, so the existing setting is preserved.
 	if !plan.EnterpriseSecurity.IsUnknown() && !plan.EnterpriseSecurity.IsNull() {
-		clusterInfo.SetEnterpriseSecurity(plan.EnterpriseSecurity.Value)
+		clusterInfo.SetEnterpriseSecurity(plan.EnterpriseSecurity.ValueBool())
 	}
 
 	clusterInfo.SetClusterType(openapiclient.ClusterType(clusterType))
 	if clusterExists {
-		clusterVersion, _ := strconv.Atoi(plan.ClusterVersion.Value)
+		clusterVersion, _ := strconv.Atoi(plan.ClusterVersion.ValueString())
 		clusterInfo.SetVersion(int32(clusterVersion))
 	}
 
 	clusterSpec = openapiclient.NewClusterSpec(
-		plan.ClusterName.Value,
+		plan.ClusterName.ValueString(),
 		clusterInfo,
 		softwareInfo)
 
@@ -1429,11 +1337,11 @@ func setBackupReplicationTargetsInEditClusterSpec(
 		return nil
 	}
 
-	switch plan.ClusterType.Value {
+	switch plan.ClusterType.ValueString() {
 
 	case "SYNCHRONOUS":
 		// All regions share the same target
-		target := spec.GCPSpec.SyncClusterSpec.ReplicationConfig.Target.Value
+		target := spec.GCPSpec.SyncClusterSpec.ReplicationConfig.Target.ValueString()
 		for i := range clusterRegionInfo {
 			clusterRegionInfo[i].SetBackupReplicationGcpTarget(target)
 		}
@@ -1443,7 +1351,7 @@ func setBackupReplicationTargetsInEditClusterSpec(
 		// Map each region → target
 		targetMap := make(map[string]string)
 		for _, cfg := range spec.GCPSpec.GeoPartitionedClusterSpec.ReplicationConfigs {
-			targetMap[cfg.DesiredRegion.Value] = cfg.Target.Value
+			targetMap[cfg.DesiredRegion.ValueString()] = cfg.Target.ValueString()
 		}
 
 		for i := range clusterRegionInfo {
@@ -1453,7 +1361,7 @@ func setBackupReplicationTargetsInEditClusterSpec(
 		return nil
 
 	default:
-		return fmt.Errorf("unsupported cluster type: %s", plan.ClusterType.Value)
+		return fmt.Errorf("unsupported cluster type: %s", plan.ClusterType.ValueString())
 	}
 }
 
@@ -1643,7 +1551,7 @@ func validateOnlyOneCMKSpec(plan *Cluster) error {
 }
 
 func createCmkSpec(plan Cluster) (*openapiclient.CMKSpec, error) {
-	cmkProvider := plan.CMKSpec.ProviderType.Value
+	cmkProvider := plan.CMKSpec.ProviderType.ValueString()
 	cmkSpec := openapiclient.NewCMKSpec(openapiclient.CMKProviderEnum(cmkProvider))
 
 	if err := validateOnlyOneCMKSpec(&plan); err != nil {
@@ -1655,28 +1563,28 @@ func createCmkSpec(plan Cluster) (*openapiclient.CMKSpec, error) {
 		if plan.CMKSpec.GCPCMKSpec == nil {
 			return nil, errors.New("provider type is GCP but GCP CMK spec is missing")
 		}
-		gcpKeyRingName := plan.CMKSpec.GCPCMKSpec.KeyRingName.Value
-		gcpKeyName := plan.CMKSpec.GCPCMKSpec.KeyName.Value
-		gcpLocation := plan.CMKSpec.GCPCMKSpec.Location.Value
-		gcpProtectionLevel := plan.CMKSpec.GCPCMKSpec.ProtectionLevel.Value
+		gcpKeyRingName := plan.CMKSpec.GCPCMKSpec.KeyRingName.ValueString()
+		gcpKeyName := plan.CMKSpec.GCPCMKSpec.KeyName.ValueString()
+		gcpLocation := plan.CMKSpec.GCPCMKSpec.Location.ValueString()
+		gcpProtectionLevel := plan.CMKSpec.GCPCMKSpec.ProtectionLevel.ValueString()
 		gcpServiceAccount := plan.CMKSpec.GCPCMKSpec.GcpServiceAccount
 		gcpServiceAccountSpec := openapiclient.NewGCPServiceAccount(
-			gcpServiceAccount.Type.Value,
-			gcpServiceAccount.ProjectId.Value,
+			gcpServiceAccount.Type.ValueString(),
+			gcpServiceAccount.ProjectId.ValueString(),
 			"",
-			gcpServiceAccount.PrivateKeyId.Value,
-			gcpServiceAccount.ClientEmail.Value,
-			gcpServiceAccount.ClientId.Value,
-			gcpServiceAccount.AuthUri.Value,
-			gcpServiceAccount.TokenUri.Value,
-			gcpServiceAccount.AuthProviderX509CertUrl.Value,
-			gcpServiceAccount.ClientX509CertUrl.Value,
+			gcpServiceAccount.PrivateKeyId.ValueString(),
+			gcpServiceAccount.ClientEmail.ValueString(),
+			gcpServiceAccount.ClientId.ValueString(),
+			gcpServiceAccount.AuthUri.ValueString(),
+			gcpServiceAccount.TokenUri.ValueString(),
+			gcpServiceAccount.AuthProviderX509CertUrl.ValueString(),
+			gcpServiceAccount.ClientX509CertUrl.ValueString(),
 		)
-		if !gcpServiceAccount.PrivateKey.Null && !gcpServiceAccount.PrivateKey.Unknown && gcpServiceAccount.PrivateKey.Value != "" {
-			gcpServiceAccountSpec.SetPrivateKey(gcpServiceAccount.PrivateKey.Value)
+		if !gcpServiceAccount.PrivateKey.IsNull() && !gcpServiceAccount.PrivateKey.IsUnknown() && gcpServiceAccount.PrivateKey.ValueString() != "" {
+			gcpServiceAccountSpec.SetPrivateKey(gcpServiceAccount.PrivateKey.ValueString())
 		}
-		if !gcpServiceAccount.UniverseDomain.Null && !gcpServiceAccount.UniverseDomain.Unknown && gcpServiceAccount.UniverseDomain.Value != "" {
-			gcpServiceAccountSpec.SetUniverseDomain(gcpServiceAccount.UniverseDomain.Value)
+		if !gcpServiceAccount.UniverseDomain.IsNull() && !gcpServiceAccount.UniverseDomain.IsUnknown() && gcpServiceAccount.UniverseDomain.ValueString() != "" {
+			gcpServiceAccountSpec.SetUniverseDomain(gcpServiceAccount.UniverseDomain.ValueString())
 		}
 		gcpCmkSpec := openapiclient.NewGCPCMKSpec(gcpKeyRingName, gcpKeyName, gcpLocation, gcpProtectionLevel)
 		gcpCmkSpec.SetGcpServiceAccount(*gcpServiceAccountSpec)
@@ -1685,12 +1593,12 @@ func createCmkSpec(plan Cluster) (*openapiclient.CMKSpec, error) {
 		if plan.CMKSpec.AWSCMKSpec == nil {
 			return nil, errors.New("provider type is AWS but AWS CMK spec is missing")
 		}
-		awsSecretKey := plan.CMKSpec.AWSCMKSpec.SecretKey.Value
-		awsAccessKey := plan.CMKSpec.AWSCMKSpec.AccessKey.Value
+		awsSecretKey := plan.CMKSpec.AWSCMKSpec.SecretKey.ValueString()
+		awsAccessKey := plan.CMKSpec.AWSCMKSpec.AccessKey.ValueString()
 		awsArnList := make([]string, len(plan.CMKSpec.AWSCMKSpec.ARNList))
 
 		for i, arn := range plan.CMKSpec.AWSCMKSpec.ARNList {
-			awsArnList[i] = arn.Value
+			awsArnList[i] = arn.ValueString()
 		}
 
 		awsCmkSpec := openapiclient.NewAWSCMKSpec(awsAccessKey, awsSecretKey, awsArnList)
@@ -1699,22 +1607,22 @@ func createCmkSpec(plan Cluster) (*openapiclient.CMKSpec, error) {
 		if plan.CMKSpec.AzureCMKSpec == nil {
 			return nil, errors.New("provider type is AZURE but AZURE CMK spec is missing")
 		}
-		azureClientId := plan.CMKSpec.AzureCMKSpec.ClientID.Value
-		azureClientSecret := plan.CMKSpec.AzureCMKSpec.ClientSecret.Value
-		azureTenantId := plan.CMKSpec.AzureCMKSpec.TenantID.Value
-		azureKeyVaultUri := plan.CMKSpec.AzureCMKSpec.KeyVaultUri.Value
-		azureKeyName := plan.CMKSpec.AzureCMKSpec.KeyName.Value
+		azureClientId := plan.CMKSpec.AzureCMKSpec.ClientID.ValueString()
+		azureClientSecret := plan.CMKSpec.AzureCMKSpec.ClientSecret.ValueString()
+		azureTenantId := plan.CMKSpec.AzureCMKSpec.TenantID.ValueString()
+		azureKeyVaultUri := plan.CMKSpec.AzureCMKSpec.KeyVaultUri.ValueString()
+		azureKeyName := plan.CMKSpec.AzureCMKSpec.KeyName.ValueString()
 
 		azureCmkSpec := openapiclient.NewAzureCMKSpec(azureClientId, azureClientSecret, azureTenantId, azureKeyVaultUri, azureKeyName)
 		cmkSpec.SetAzureCmkSpec(*azureCmkSpec)
 	}
 
-	cmkSpec.SetIsEnabled(plan.CMKSpec.IsEnabled.Value)
+	cmkSpec.SetIsEnabled(plan.CMKSpec.IsEnabled.ValueBool())
 
 	return cmkSpec, nil
 }
 
-func (r resourceCluster) ValidateConfig(ctx context.Context, req tfsdk.ValidateResourceConfigRequest, resp *tfsdk.ValidateResourceConfigResponse) {
+func (r resourceCluster) ValidateConfig(ctx context.Context, req resource.ValidateConfigRequest, resp *resource.ValidateConfigResponse) {
 	// With dynamically typed vars (e.g. list(any)), cluster_region_info can be wholly
 	// unknown here; decoding into []RegionInfo then fails with "unhandled unknown value".
 	var clusterRegionInfoList types.List
@@ -1747,7 +1655,7 @@ func (r resourceCluster) ValidateConfig(ctx context.Context, req tfsdk.ValidateR
 }
 
 // Create a new resource
-func (r resourceCluster) Create(ctx context.Context, req tfsdk.CreateResourceRequest, resp *tfsdk.CreateResourceResponse) {
+func (r resourceCluster) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
 	if !r.p.configured {
 		resp.Diagnostics.AddError(
 			"Provider not configured",
@@ -1782,13 +1690,13 @@ func (r resourceCluster) Create(ctx context.Context, req tfsdk.CreateResourceReq
 		return
 	}
 
-	if plan.NodeConfig != nil && !plan.NodeConfig.DiskSizeGb.IsNull() && !plan.NodeConfig.DiskSizeGb.IsUnknown() && !util.IsDiskSizeValid(plan.ClusterTier.Value, plan.NodeConfig.DiskSizeGb.Value) {
+	if plan.NodeConfig != nil && !plan.NodeConfig.DiskSizeGb.IsNull() && !plan.NodeConfig.DiskSizeGb.IsUnknown() && !util.IsDiskSizeValid(plan.ClusterTier.ValueString(), plan.NodeConfig.DiskSizeGb.ValueInt64()) {
 		resp.Diagnostics.AddError("Invalid disk size", "The disk size for a paid cluster must be at least 50 GB.")
 		return
 	}
 
 	if plan.NodeConfig != nil && !plan.NodeConfig.DiskIops.IsNull() && !plan.NodeConfig.DiskIops.IsUnknown() {
-		isValid, err := util.IsDiskIopsValid(plan.CloudType.Value, plan.ClusterTier.Value, plan.NodeConfig.DiskIops.Value)
+		isValid, err := util.IsDiskIopsValid(plan.CloudType.ValueString(), plan.ClusterTier.ValueString(), plan.NodeConfig.DiskIops.ValueInt64())
 		if !isValid {
 			resp.Diagnostics.AddError("Invalid disk IOPS", err)
 			return
@@ -1804,7 +1712,7 @@ func (r resourceCluster) Create(ctx context.Context, req tfsdk.CreateResourceReq
 		return
 	}
 
-	if !plan.ClusterID.Unknown && !plan.ClusterID.Null && plan.ClusterID.Value != "" {
+	if !plan.ClusterID.IsUnknown() && !plan.ClusterID.IsNull() && plan.ClusterID.ValueString() != "" {
 		resp.Diagnostics.AddError(
 			"Cluster ID provided for new cluster",
 			"The cluster_id was provided even though a new cluster is being created. Do not include this field in the provider when creating a cluster.",
@@ -1813,21 +1721,21 @@ func (r resourceCluster) Create(ctx context.Context, req tfsdk.CreateResourceReq
 	}
 
 	for _, regionInfo := range plan.ClusterRegionInfo {
-		if !regionInfo.DiskSizeGb.IsUnknown() && !util.IsDiskSizeValid(plan.ClusterTier.Value, regionInfo.DiskSizeGb.Value) {
-			resp.Diagnostics.AddError("Invalid disk size in "+regionInfo.Region.Value, "The disk size for a paid cluster must be at least 50 GB.")
+		if !regionInfo.DiskSizeGb.IsUnknown() && !util.IsDiskSizeValid(plan.ClusterTier.ValueString(), regionInfo.DiskSizeGb.ValueInt64()) {
+			resp.Diagnostics.AddError("Invalid disk size in "+regionInfo.Region.ValueString(), "The disk size for a paid cluster must be at least 50 GB.")
 			return
 		}
 
 		if !regionInfo.DiskIops.IsUnknown() && !regionInfo.DiskIops.IsNull() {
-			isValid, err := util.IsDiskIopsValid(plan.CloudType.Value, plan.ClusterTier.Value, regionInfo.DiskIops.Value)
+			isValid, err := util.IsDiskIopsValid(plan.CloudType.ValueString(), plan.ClusterTier.ValueString(), regionInfo.DiskIops.ValueInt64())
 			if !isValid {
-				resp.Diagnostics.AddError("Invalid disk IOPS in "+regionInfo.Region.Value, err)
+				resp.Diagnostics.AddError("Invalid disk IOPS in "+regionInfo.Region.ValueString(), err)
 				return
 			}
 		}
 
 		// Validate that backup replication targets are not provided during cluster creation
-		if !regionInfo.BackupReplicationGCPTarget.IsNull() && !regionInfo.BackupReplicationGCPTarget.IsUnknown() && regionInfo.BackupReplicationGCPTarget.Value != "" {
+		if !regionInfo.BackupReplicationGCPTarget.IsNull() && !regionInfo.BackupReplicationGCPTarget.IsUnknown() && regionInfo.BackupReplicationGCPTarget.ValueString() != "" {
 			resp.Diagnostics.AddError(
 				"Backup replication targets not supported during cluster creation",
 				"Backup replication targets can only be configured when editing existing clusters. Please remove the backup_replication_gcp_target field and try again.",
@@ -1852,16 +1760,16 @@ func (r resourceCluster) Create(ctx context.Context, req tfsdk.CreateResourceReq
 
 	encryptedCredentials := openapiclient.NewCreateClusterRequestEncryptedDbCredentialsWithDefaults()
 	if plan.Credentials.Username.IsNull() {
-		encryptedCredentials.SetYsql(*openapiclient.NewEncryptedDBCredentials(b64(plan.Credentials.YSQLUsername.Value), b64(plan.Credentials.YSQLPassword.Value)))
-		encryptedCredentials.SetYcql(*openapiclient.NewEncryptedDBCredentials(b64(plan.Credentials.YCQLUsername.Value), b64(plan.Credentials.YCQLPassword.Value)))
+		encryptedCredentials.SetYsql(*openapiclient.NewEncryptedDBCredentials(b64(plan.Credentials.YSQLUsername.ValueString()), b64(plan.Credentials.YSQLPassword.ValueString())))
+		encryptedCredentials.SetYcql(*openapiclient.NewEncryptedDBCredentials(b64(plan.Credentials.YCQLUsername.ValueString()), b64(plan.Credentials.YCQLPassword.ValueString())))
 	} else {
-		encryptedCredentials.SetYsql(*openapiclient.NewEncryptedDBCredentials(b64(plan.Credentials.Username.Value), b64(plan.Credentials.Password.Value)))
-		encryptedCredentials.SetYcql(*openapiclient.NewEncryptedDBCredentials(b64(plan.Credentials.Username.Value), b64(plan.Credentials.Password.Value)))
+		encryptedCredentials.SetYsql(*openapiclient.NewEncryptedDBCredentials(b64(plan.Credentials.Username.ValueString()), b64(plan.Credentials.Password.ValueString())))
+		encryptedCredentials.SetYcql(*openapiclient.NewEncryptedDBCredentials(b64(plan.Credentials.Username.ValueString()), b64(plan.Credentials.Password.ValueString())))
 	}
 	createClusterRequest.SetEncryptedDbCredentials(*encryptedCredentials)
 
 	// Connection Pooling
-	if !plan.DesiredConnectionPoolingState.Unknown && strings.EqualFold(plan.DesiredConnectionPoolingState.Value, "Enabled") {
+	if !plan.DesiredConnectionPoolingState.IsUnknown() && strings.EqualFold(plan.DesiredConnectionPoolingState.ValueString(), "Enabled") {
 		features := []openapiclient.CreateClusterFeatureEnum{openapiclient.CREATECLUSTERFEATUREENUM_ENABLE_CONNECTION_POOLING}
 		createClusterRequest.SetFeatures(features)
 	}
@@ -1870,7 +1778,7 @@ func (r resourceCluster) Create(ctx context.Context, req tfsdk.CreateResourceReq
 
 	if plan.CMKSpec != nil {
 		// EAR disabled is not supported with cluster creation
-		if !plan.CMKSpec.IsEnabled.Value {
+		if !plan.CMKSpec.IsEnabled.ValueBool() {
 			resp.Diagnostics.AddError(
 				"EAR will be enabled by default.", "Cluster creation with EAR disabled is not supported.",
 			)
@@ -1964,22 +1872,22 @@ func (r resourceCluster) Create(ctx context.Context, req tfsdk.CreateResourceReq
 			return
 		}
 
-		if plan.BackupSchedules[0].State.Value != "" && plan.BackupSchedules[0].RetentionPeriodInDays.Value == 0 {
+		if plan.BackupSchedules[0].State.ValueString() != "" && plan.BackupSchedules[0].RetentionPeriodInDays.ValueInt64() == 0 {
 			resp.Diagnostics.AddError("Could not create custom backup schedule", "Pass both state and retention period in days ")
 			return
 		}
-		if plan.BackupSchedules[0].State.Value == "" && plan.BackupSchedules[0].RetentionPeriodInDays.Value != 0 {
+		if plan.BackupSchedules[0].State.ValueString() == "" && plan.BackupSchedules[0].RetentionPeriodInDays.ValueInt64() != 0 {
 			resp.Diagnostics.AddError("Could not create custom backup schedule", "Pass both state and retention period in days ")
 			return
 		}
 
 		//Edit Backup Schedule
-		tflog.Info(ctx, fmt.Sprintf("User defined description '%v' default description '%v'", plan.BackupSchedules[0].BackupDescription.Value, description))
+		tflog.Info(ctx, fmt.Sprintf("User defined description '%v' default description '%v'", plan.BackupSchedules[0].BackupDescription.ValueString(), description))
 		newDescription := ""
-		if plan.BackupSchedules[0].BackupDescription.Value == "" {
+		if plan.BackupSchedules[0].BackupDescription.ValueString() == "" {
 			newDescription = description
 		} else {
-			newDescription = plan.BackupSchedules[0].BackupDescription.Value
+			newDescription = plan.BackupSchedules[0].BackupDescription.ValueString()
 		}
 		err = EditBackupSchedule(ctx, plan.BackupSchedules[0], scheduleId, newDescription, accountId, projectId, clusterId, apiClient)
 		if err != nil {
@@ -1988,7 +1896,7 @@ func (r resourceCluster) Create(ctx context.Context, req tfsdk.CreateResourceReq
 		}
 
 		backupScheduleStruct := BackupScheduleInfo{
-			ScheduleID: types.String{Value: scheduleId},
+			ScheduleID: types.StringValue(scheduleId),
 		}
 		backUpSchedules = append(backUpSchedules, backupScheduleStruct)
 	}
@@ -2002,7 +1910,7 @@ func (r resourceCluster) Create(ctx context.Context, req tfsdk.CreateResourceReq
 	allowListProvided := false
 	if plan.ClusterAllowListIDs != nil {
 		for i := range plan.ClusterAllowListIDs {
-			allowListIDs = append(allowListIDs, plan.ClusterAllowListIDs[i].Value)
+			allowListIDs = append(allowListIDs, plan.ClusterAllowListIDs[i].ValueString())
 		}
 
 		tflog.Debug(ctx, fmt.Sprintf("Updating cluster with cluster ID %v with allow lists %v", clusterId, allowListIDs))
@@ -2019,7 +1927,7 @@ func (r resourceCluster) Create(ctx context.Context, req tfsdk.CreateResourceReq
 	restoreRequired := false
 	if shouldUseRestoreBackupID(plan.RestoreBackupID) {
 		restoreRequired = true
-		backupId = plan.RestoreBackupID.Value
+		backupId = plan.RestoreBackupID.ValueString()
 		tflog.Warn(ctx, "restore_backup_id on ybm_cluster is deprecated; use ybm_backup_restore resource instead")
 		resp.Diagnostics.AddWarning(
 			"restore_backup_id is deprecated",
@@ -2044,11 +1952,11 @@ func (r resourceCluster) Create(ctx context.Context, req tfsdk.CreateResourceReq
 
 	var regions []string
 	for _, regionInfo := range plan.ClusterRegionInfo {
-		regions = append(regions, regionInfo.Region.Value)
+		regions = append(regions, regionInfo.Region.ValueString())
 	}
 
 	// Pause the cluster if the desired state is set to 'Paused'
-	if !plan.DesiredState.Unknown && strings.EqualFold(plan.DesiredState.Value, "Paused") {
+	if !plan.DesiredState.IsUnknown() && strings.EqualFold(plan.DesiredState.ValueString(), "Paused") {
 		err := pauseCluster(ctx, apiClient, accountId, projectId, clusterId)
 		if err != nil {
 			resp.Diagnostics.AddError("Pausing the cluster Failed: ", err.Error())
@@ -2063,23 +1971,23 @@ func (r resourceCluster) Create(ctx context.Context, req tfsdk.CreateResourceReq
 
 	// Update the State file with the unmasked creds for AWS (secret key,access) and GCP (client id,private key)
 	if plan.CMKSpec != nil {
-		providerType := cluster.CMKSpec.ProviderType.Value
+		providerType := cluster.CMKSpec.ProviderType.ValueString()
 		switch providerType {
 		case "AWS":
-			cluster.CMKSpec.AWSCMKSpec.SecretKey = types.String{Value: cmkSpec.GetAwsCmkSpec().SecretKey}
-			cluster.CMKSpec.AWSCMKSpec.AccessKey = types.String{Value: cmkSpec.GetAwsCmkSpec().AccessKey}
+			cluster.CMKSpec.AWSCMKSpec.SecretKey = types.StringValue(cmkSpec.GetAwsCmkSpec().SecretKey)
+			cluster.CMKSpec.AWSCMKSpec.AccessKey = types.StringValue(cmkSpec.GetAwsCmkSpec().AccessKey)
 		case "GCP":
 			if cmkSpec.GetGcpCmkSpec().GcpServiceAccount.IsSet() {
 				gcpServiceAccountData := cmkSpec.GetGcpCmkSpec().GcpServiceAccount.Get()
-				cluster.CMKSpec.GCPCMKSpec.GcpServiceAccount.ClientId = types.String{Value: gcpServiceAccountData.ClientId}
+				cluster.CMKSpec.GCPCMKSpec.GcpServiceAccount.ClientId = types.StringValue(gcpServiceAccountData.ClientId)
 				if gcpServiceAccountData.GetPrivateKey() != "" {
-					cluster.CMKSpec.GCPCMKSpec.GcpServiceAccount.PrivateKey = types.String{Value: gcpServiceAccountData.GetPrivateKey()}
+					cluster.CMKSpec.GCPCMKSpec.GcpServiceAccount.PrivateKey = types.StringValue(gcpServiceAccountData.GetPrivateKey())
 				} else {
-					cluster.CMKSpec.GCPCMKSpec.GcpServiceAccount.PrivateKey.Null = true
+					cluster.CMKSpec.GCPCMKSpec.GcpServiceAccount.PrivateKey = types.StringNull()
 				}
 			}
 		case "AZURE":
-			cluster.CMKSpec.AzureCMKSpec.ClientSecret = types.String{Value: cmkSpec.GetAzureCmkSpec().ClientSecret}
+			cluster.CMKSpec.AzureCMKSpec.ClientSecret = types.StringValue(cmkSpec.GetAzureCmkSpec().ClientSecret)
 		}
 	}
 
@@ -2091,45 +1999,45 @@ func (r resourceCluster) Create(ctx context.Context, req tfsdk.CreateResourceReq
 	// Workaround: the read API currently always returns is_multi_cloud=false.
 	// Until that bug is fixed (tracked separately), trust the plan value: true if
 	// the plan set it to true, false otherwise.
-	cluster.IsMultiCloud = types.Bool{Value: plan.IsMultiCloud.Value}
+	cluster.IsMultiCloud = types.BoolValue(plan.IsMultiCloud.ValueBool())
 
 	// set credentials for cluster (not returned by read api)
 	clusterCreds := *(plan.Credentials)
 	if clusterCreds.Username.IsNull() {
 		cluster.Credentials = &Credentials{
-			YSQLUsername: types.String{Value: clusterCreds.YSQLUsername.Value},
-			YSQLPassword: types.String{Value: clusterCreds.YSQLPassword.Value},
-			YCQLUsername: types.String{Value: clusterCreds.YCQLUsername.Value},
-			YCQLPassword: types.String{Value: clusterCreds.YCQLPassword.Value},
-			Username:     types.String{Null: true},
-			Password:     types.String{Null: true},
+			YSQLUsername: types.StringValue(clusterCreds.YSQLUsername.ValueString()),
+			YSQLPassword: types.StringValue(clusterCreds.YSQLPassword.ValueString()),
+			YCQLUsername: types.StringValue(clusterCreds.YCQLUsername.ValueString()),
+			YCQLPassword: types.StringValue(clusterCreds.YCQLPassword.ValueString()),
+			Username:     types.StringNull(),
+			Password:     types.StringNull(),
 		}
 	} else {
 		// common credentials have been used
 		cluster.Credentials = &Credentials{
-			Username:     types.String{Value: clusterCreds.Username.Value},
-			Password:     types.String{Value: clusterCreds.Password.Value},
-			YSQLUsername: types.String{Null: true},
-			YSQLPassword: types.String{Null: true},
-			YCQLUsername: types.String{Null: true},
-			YCQLPassword: types.String{Null: true},
+			Username:     types.StringValue(clusterCreds.Username.ValueString()),
+			Password:     types.StringValue(clusterCreds.Password.ValueString()),
+			YSQLUsername: types.StringNull(),
+			YSQLPassword: types.StringNull(),
+			YCQLUsername: types.StringNull(),
+			YCQLPassword: types.StringNull(),
 		}
 	}
 
 	// set restore backup id for cluster (not returned by read api)
 	if shouldUseRestoreBackupID(plan.RestoreBackupID) {
-		cluster.RestoreBackupID = types.String{Value: plan.RestoreBackupID.Value}
+		cluster.RestoreBackupID = types.StringValue(plan.RestoreBackupID.ValueString())
 	} else {
-		cluster.RestoreBackupID = types.String{Null: true}
+		cluster.RestoreBackupID = types.StringNull()
 	}
 
-	if strings.EqualFold(plan.DesiredConnectionPoolingState.Value, "Enabled") || strings.EqualFold(plan.DesiredConnectionPoolingState.Value, "Disabled") {
-		cluster.DesiredConnectionPoolingState.Value = plan.DesiredConnectionPoolingState.Value
+	if strings.EqualFold(plan.DesiredConnectionPoolingState.ValueString(), "Enabled") || strings.EqualFold(plan.DesiredConnectionPoolingState.ValueString(), "Disabled") {
+		cluster.DesiredConnectionPoolingState = types.StringValue(plan.DesiredConnectionPoolingState.ValueString())
 	}
 
 	// Update the state file with backup replication enabled parameter as provided by the user
 	if plan.BackupReplicationSpec != nil && plan.BackupReplicationSpec.GCPSpec != nil {
-		cluster.BackupReplicationSpec.GCPSpec.Enabled.Value = plan.BackupReplicationSpec.GCPSpec.Enabled.Value
+		cluster.BackupReplicationSpec.GCPSpec.Enabled = types.BoolValue(plan.BackupReplicationSpec.GCPSpec.Enabled.ValueBool())
 	}
 
 	// We need to make sure the region order is preserved to avoid terraform treating re-order as state mismatch
@@ -2370,7 +2278,7 @@ func getRestoreState(ctx context.Context, accountId string, projectId string, cl
 }
 
 // Read resource information
-func (r resourceCluster) Read(ctx context.Context, req tfsdk.ReadResourceRequest, resp *tfsdk.ReadResourceResponse) {
+func (r resourceCluster) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
 	var state Cluster
 	getIDsFromState(ctx, req.State, &state)
 
@@ -2379,13 +2287,13 @@ func (r resourceCluster) Read(ctx context.Context, req tfsdk.ReadResourceRequest
 	if state.ClusterAllowListIDs != nil {
 		allowListProvided = true
 		for i := range state.ClusterAllowListIDs {
-			allowListIDs = append(allowListIDs, state.ClusterAllowListIDs[i].Value)
+			allowListIDs = append(allowListIDs, state.ClusterAllowListIDs[i].ValueString())
 		}
 	}
 
 	var regions []string
 	for _, regionInfo := range state.ClusterRegionInfo {
-		regions = append(regions, regionInfo.Region.Value)
+		regions = append(regions, regionInfo.Region.ValueString())
 	}
 
 	var backUpSchedules []BackupScheduleInfo
@@ -2394,7 +2302,7 @@ func (r resourceCluster) Read(ctx context.Context, req tfsdk.ReadResourceRequest
 	}
 
 	priorDatabaseTrack := databaseTrackPriorValue(state.DatabaseTrack)
-	cluster, readOK, message := resourceClusterRead(ctx, state.ClusterID.Value, backUpSchedules, regions, allowListProvided, allowListIDs, true, priorDatabaseTrack, r.p.client)
+	cluster, readOK, message := resourceClusterRead(ctx, state.ClusterID.ValueString(), backUpSchedules, regions, allowListProvided, allowListIDs, true, priorDatabaseTrack, r.p.client)
 	tflog.Debug(ctx, "Cluster Read: Allow List IDs read from API server", map[string]interface{}{
 		"Allow List IDs": cluster.ClusterAllowListIDs})
 	// Fetch the cmkSpec information from State (to get unmasked creds)
@@ -2403,21 +2311,21 @@ func (r resourceCluster) Read(ctx context.Context, req tfsdk.ReadResourceRequest
 
 	if cluster.CMKSpec != nil {
 		// Unmask the creds to store in the State file
-		providerType := cluster.CMKSpec.ProviderType.Value
+		providerType := cluster.CMKSpec.ProviderType.ValueString()
 		switch providerType {
 		case "AWS":
 			if cmkSpec.AWSCMKSpec != nil { // cmkSpec.AWSCMKSpec is nil at the time of import
-				cluster.CMKSpec.AWSCMKSpec.SecretKey.Value = cmkSpec.AWSCMKSpec.SecretKey.Value
-				cluster.CMKSpec.AWSCMKSpec.AccessKey.Value = cmkSpec.AWSCMKSpec.AccessKey.Value
+				cluster.CMKSpec.AWSCMKSpec.SecretKey = types.StringValue(cmkSpec.AWSCMKSpec.SecretKey.ValueString())
+				cluster.CMKSpec.AWSCMKSpec.AccessKey = types.StringValue(cmkSpec.AWSCMKSpec.AccessKey.ValueString())
 			}
 		case "GCP":
 			if cmkSpec.GCPCMKSpec != nil {
-				cluster.CMKSpec.GCPCMKSpec.GcpServiceAccount.ClientId.Value = cmkSpec.GCPCMKSpec.GcpServiceAccount.ClientId.Value
-				cluster.CMKSpec.GCPCMKSpec.GcpServiceAccount.PrivateKey.Value = cmkSpec.GCPCMKSpec.GcpServiceAccount.PrivateKey.Value
+				cluster.CMKSpec.GCPCMKSpec.GcpServiceAccount.ClientId = types.StringValue(cmkSpec.GCPCMKSpec.GcpServiceAccount.ClientId.ValueString())
+				cluster.CMKSpec.GCPCMKSpec.GcpServiceAccount.PrivateKey = types.StringValue(cmkSpec.GCPCMKSpec.GcpServiceAccount.PrivateKey.ValueString())
 			}
 		case "AZURE":
 			if cmkSpec.AzureCMKSpec != nil {
-				cluster.CMKSpec.AzureCMKSpec.ClientSecret = types.String{Value: cmkSpec.AzureCMKSpec.ClientSecret.Value}
+				cluster.CMKSpec.AzureCMKSpec.ClientSecret = types.StringValue(cmkSpec.AzureCMKSpec.ClientSecret.ValueString())
 			}
 		}
 	}
@@ -2476,22 +2384,22 @@ func readBackupScheduleInfoV2(ctx context.Context, apiClient *openapiclient.APIC
 	backupScheduleInfo := make([]BackupScheduleInfo, 1)
 	backupScheduleStruct := BackupScheduleInfo{
 
-		State:                     types.String{Value: string(spec.GetState())},
-		CronExpression:            types.String{Value: spec.GetCronExpression()},
-		BackupDescription:         types.String{Value: spec.GetDescription()},
-		RetentionPeriodInDays:     types.Int64{Value: int64(spec.GetRetentionPeriodInDays())},
-		TimeIntervalInDays:        types.Int64{Value: int64(spec.GetTimeIntervalInDays())},
-		IncrementalIntervalInMins: types.Int64{Value: int64(spec.GetIncrementalIntervalInMinutes())},
-		ScheduleID:                types.String{Value: scheduleId},
+		State:                     types.StringValue(string(spec.GetState())),
+		CronExpression:            types.StringValue(spec.GetCronExpression()),
+		BackupDescription:         types.StringValue(spec.GetDescription()),
+		RetentionPeriodInDays:     types.Int64Value(int64(spec.GetRetentionPeriodInDays())),
+		TimeIntervalInDays:        types.Int64Value(int64(spec.GetTimeIntervalInDays())),
+		IncrementalIntervalInMins: types.Int64Value(int64(spec.GetIncrementalIntervalInMinutes())),
+		ScheduleID:                types.StringValue(scheduleId),
 	}
-	if backupScheduleStruct.IncrementalIntervalInMins.Value == 0 {
-		backupScheduleStruct.IncrementalIntervalInMins.Null = true
+	if backupScheduleStruct.IncrementalIntervalInMins.ValueInt64() == 0 {
+		backupScheduleStruct.IncrementalIntervalInMins = types.Int64Null()
 	}
 	// Read use_roles from response (defaults to false if not present)
 	if spec.HasUseRoles() {
-		backupScheduleStruct.UseRoles = types.Bool{Value: spec.GetUseRoles()}
+		backupScheduleStruct.UseRoles = types.BoolValue(spec.GetUseRoles())
 	} else {
-		backupScheduleStruct.UseRoles = types.Bool{Value: false}
+		backupScheduleStruct.UseRoles = types.BoolValue(false)
 	}
 	backupScheduleInfo[0] = backupScheduleStruct
 
@@ -2512,8 +2420,8 @@ func resourceClusterRead(ctx context.Context, clusterId string, backUpSchedules 
 		return cluster, false, fmt.Sprintf("unable to get project ID %s", message)
 	}
 
-	cluster.AccountID.Value = accountId
-	cluster.ProjectID.Value = projectId
+	cluster.AccountID = types.StringValue(accountId)
+	cluster.ProjectID = types.StringValue(projectId)
 
 	clusterResp, response, err := apiClient.ClusterApi.GetCluster(context.Background(), accountId, projectId, clusterId).Execute()
 	if err != nil {
@@ -2523,12 +2431,12 @@ func resourceClusterRead(ctx context.Context, clusterId string, backUpSchedules 
 
 	if len(backUpSchedules) > 0 {
 		//Below if is used for handling empty array edge case
-		if backUpSchedules[0].ScheduleID.Value == "" {
+		if backUpSchedules[0].ScheduleID.ValueString() == "" {
 			backupScheduleInfo := make([]BackupScheduleInfo, 0)
 			cluster.BackupSchedules = backupScheduleInfo
 		}
-		if backUpSchedules[0].ScheduleID.Value != "" {
-			scheduleId := backUpSchedules[0].ScheduleID.Value
+		if backUpSchedules[0].ScheduleID.ValueString() != "" {
+			scheduleId := backUpSchedules[0].ScheduleID.ValueString()
 			var backupScheduleInfo []BackupScheduleInfo
 			var res *http.Response
 			var err error
@@ -2550,64 +2458,64 @@ func resourceClusterRead(ctx context.Context, clusterId string, backUpSchedules 
 		cmkSpec := CMKSpec{}
 		cmkDataSpec := cmkResp.GetData().Spec.Get()
 
-		cmkSpec.ProviderType = types.String{Value: string(cmkDataSpec.GetProviderType())}
-		cmkSpec.IsEnabled = types.Bool{Value: cmkDataSpec.GetIsEnabled()}
+		cmkSpec.ProviderType = types.StringValue(string(cmkDataSpec.GetProviderType()))
+		cmkSpec.IsEnabled = types.BoolValue(cmkDataSpec.GetIsEnabled())
 
-		switch cmkSpec.ProviderType.Value {
+		switch cmkSpec.ProviderType.ValueString() {
 		case "AWS":
 			awsCMKSpec := AWSCMKSpec{
-				AccessKey: types.String{Value: cmkDataSpec.GetAwsCmkSpec().AccessKey},
-				SecretKey: types.String{Value: cmkDataSpec.GetAwsCmkSpec().SecretKey},
+				AccessKey: types.StringValue(cmkDataSpec.GetAwsCmkSpec().AccessKey),
+				SecretKey: types.StringValue(cmkDataSpec.GetAwsCmkSpec().SecretKey),
 				ARNList:   []types.String{},
 			}
 			cmkSpec.AWSCMKSpec = &awsCMKSpec
 
 			for _, arn := range cmkDataSpec.GetAwsCmkSpec().ArnList {
-				cmkSpec.AWSCMKSpec.ARNList = append(cmkSpec.AWSCMKSpec.ARNList, types.String{Value: arn})
+				cmkSpec.AWSCMKSpec.ARNList = append(cmkSpec.AWSCMKSpec.ARNList, types.StringValue(arn))
 			}
 			cluster.CMKSpec = &cmkSpec
 
 		case "GCP":
 			gcpCMKSpec := GCPCMKSpec{
-				KeyRingName:     types.String{Value: cmkDataSpec.GetGcpCmkSpec().KeyRingName},
-				KeyName:         types.String{Value: cmkDataSpec.GetGcpCmkSpec().KeyName},
-				Location:        types.String{Value: cmkDataSpec.GetGcpCmkSpec().Location},
-				ProtectionLevel: types.String{Value: cmkDataSpec.GetGcpCmkSpec().ProtectionLevel},
+				KeyRingName:     types.StringValue(cmkDataSpec.GetGcpCmkSpec().KeyRingName),
+				KeyName:         types.StringValue(cmkDataSpec.GetGcpCmkSpec().KeyName),
+				Location:        types.StringValue(cmkDataSpec.GetGcpCmkSpec().Location),
+				ProtectionLevel: types.StringValue(cmkDataSpec.GetGcpCmkSpec().ProtectionLevel),
 			}
 
 			if cmkDataSpec.GetGcpCmkSpec().GcpServiceAccount.IsSet() {
 				gcpServiceAccountData := cmkDataSpec.GetGcpCmkSpec().GcpServiceAccount.Get()
 				gcpServiceAccount := GCPServiceAccount{
-					Type:                    types.String{Value: gcpServiceAccountData.Type},
-					ProjectId:               types.String{Value: gcpServiceAccountData.ProjectId},
-					PrivateKeyId:            types.String{Value: gcpServiceAccountData.PrivateKeyId},
-					ClientEmail:             types.String{Value: gcpServiceAccountData.ClientEmail},
-					ClientId:                types.String{Value: gcpServiceAccountData.ClientId},
-					AuthUri:                 types.String{Value: gcpServiceAccountData.AuthUri},
-					TokenUri:                types.String{Value: gcpServiceAccountData.TokenUri},
-					AuthProviderX509CertUrl: types.String{Value: gcpServiceAccountData.AuthProviderX509CertUrl},
-					ClientX509CertUrl:       types.String{Value: gcpServiceAccountData.ClientX509CertUrl},
+					Type:                    types.StringValue(gcpServiceAccountData.Type),
+					ProjectId:               types.StringValue(gcpServiceAccountData.ProjectId),
+					PrivateKeyId:            types.StringValue(gcpServiceAccountData.PrivateKeyId),
+					ClientEmail:             types.StringValue(gcpServiceAccountData.ClientEmail),
+					ClientId:                types.StringValue(gcpServiceAccountData.ClientId),
+					AuthUri:                 types.StringValue(gcpServiceAccountData.AuthUri),
+					TokenUri:                types.StringValue(gcpServiceAccountData.TokenUri),
+					AuthProviderX509CertUrl: types.StringValue(gcpServiceAccountData.AuthProviderX509CertUrl),
+					ClientX509CertUrl:       types.StringValue(gcpServiceAccountData.ClientX509CertUrl),
 				}
-				if gcpServiceAccountData.GetPrivateKey() != "" {
-					gcpServiceAccount.PrivateKey = types.String{Value: gcpServiceAccountData.GetPrivateKey()}
-				}
+				gcpServiceAccount.PrivateKey = types.StringValue(gcpServiceAccountData.GetPrivateKey())
 				if gcpServiceAccountData.GetUniverseDomain() != "" {
-					gcpServiceAccount.UniverseDomain = types.String{Value: gcpServiceAccountData.GetUniverseDomain()}
+					gcpServiceAccount.UniverseDomain = types.StringValue(gcpServiceAccountData.GetUniverseDomain())
 				} else {
-					gcpServiceAccount.UniverseDomain.Null = true
+					gcpServiceAccount.UniverseDomain = types.StringNull()
 				}
 				gcpCMKSpec.GcpServiceAccount = gcpServiceAccount
+			} else {
+				gcpCMKSpec.GcpServiceAccount = emptyGCPServiceAccount()
 			}
 
 			cmkSpec.GCPCMKSpec = &gcpCMKSpec
 			cluster.CMKSpec = &cmkSpec
 		case "AZURE":
 			azureCMKSpec := AzureCMKSpec{
-				ClientID:     types.String{Value: cmkDataSpec.GetAzureCmkSpec().ClientId},
-				ClientSecret: types.String{Value: cmkDataSpec.GetAzureCmkSpec().ClientSecret},
-				TenantID:     types.String{Value: cmkDataSpec.GetAzureCmkSpec().TenantId},
-				KeyVaultUri:  types.String{Value: cmkDataSpec.GetAzureCmkSpec().KeyVaultUri},
-				KeyName:      types.String{Value: cmkDataSpec.GetAzureCmkSpec().KeyName},
+				ClientID:     types.StringValue(cmkDataSpec.GetAzureCmkSpec().ClientId),
+				ClientSecret: types.StringValue(cmkDataSpec.GetAzureCmkSpec().ClientSecret),
+				TenantID:     types.StringValue(cmkDataSpec.GetAzureCmkSpec().TenantId),
+				KeyVaultUri:  types.StringValue(cmkDataSpec.GetAzureCmkSpec().KeyVaultUri),
+				KeyName:      types.StringValue(cmkDataSpec.GetAzureCmkSpec().KeyName),
 			}
 
 			cmkSpec.AzureCMKSpec = &azureCMKSpec
@@ -2616,25 +2524,25 @@ func resourceClusterRead(ctx context.Context, clusterId string, backUpSchedules 
 	}
 
 	// fill with all fields of schema except credentials - credentials are not returned by api call
-	cluster.AccountID.Value = accountId
-	cluster.ProjectID.Value = projectId
-	cluster.ClusterID.Value = clusterId
-	cluster.ClusterName.Value = clusterResp.Data.Spec.Name
+	cluster.AccountID = types.StringValue(accountId)
+	cluster.ProjectID = types.StringValue(projectId)
+	cluster.ClusterID = types.StringValue(clusterId)
+	cluster.ClusterName = types.StringValue(clusterResp.Data.Spec.Name)
 	desiredState := "Active"
 	if strings.EqualFold("Paused", string(clusterResp.Data.Info.GetState())) {
 		desiredState = "Paused"
 	}
-	cluster.DesiredState.Value = desiredState
+	cluster.DesiredState = types.StringValue(desiredState)
 
 	if clusterResp.Data.Info.GetIsConnectionPoolingEnabled() {
-		cluster.DesiredConnectionPoolingState.Value = "Enabled"
+		cluster.DesiredConnectionPoolingState = types.StringValue("Enabled")
 	} else {
-		cluster.DesiredConnectionPoolingState.Value = "Disabled"
+		cluster.DesiredConnectionPoolingState = types.StringValue("Disabled")
 	}
 
-	cluster.ClusterType.Value = string(*clusterResp.Data.Spec.ClusterInfo.ClusterType)
-	cluster.ClusterTier.Value = string(clusterResp.Data.Spec.ClusterInfo.ClusterTier)
-	cluster.ClusterVersion.Value = strconv.Itoa(int(clusterResp.Data.Spec.ClusterInfo.GetVersion()))
+	cluster.ClusterType = types.StringValue(string(*clusterResp.Data.Spec.ClusterInfo.ClusterType))
+	cluster.ClusterTier = types.StringValue(string(clusterResp.Data.Spec.ClusterInfo.ClusterTier))
+	cluster.ClusterVersion = types.StringValue(strconv.Itoa(int(clusterResp.Data.Spec.ClusterInfo.GetVersion())))
 
 	// set database track name (preserve deprecated alias from config/state when semantically equal)
 	trackId := clusterResp.Data.Spec.SoftwareInfo.GetTrackId()
@@ -2642,43 +2550,42 @@ func resourceClusterRead(ctx context.Context, clusterId string, backUpSchedules 
 	if !trackNameOK {
 		return cluster, false, message
 	}
-	cluster.DatabaseTrack.Value = trackName
+	cluster.DatabaseTrack = types.StringValue(trackName)
 
-	cluster.FaultTolerance.Value = string(clusterResp.Data.Spec.ClusterInfo.FaultTolerance)
-	cluster.NumFaultsToTolerate.Value = int64(*clusterResp.Data.Spec.ClusterInfo.NumFaultsToTolerate.Get())
-	cluster.IsMultiCloud.Value = clusterResp.Data.Spec.ClusterInfo.GetIsMultiCloud()
-	cluster.EnterpriseSecurity.Value = clusterResp.Data.Spec.ClusterInfo.GetEnterpriseSecurity()
+	cluster.FaultTolerance = types.StringValue(string(clusterResp.Data.Spec.ClusterInfo.FaultTolerance))
+	cluster.NumFaultsToTolerate = types.Int64Value(int64(*clusterResp.Data.Spec.ClusterInfo.NumFaultsToTolerate.Get()))
+	cluster.IsMultiCloud = types.BoolValue(clusterResp.Data.Spec.ClusterInfo.GetIsMultiCloud())
+	cluster.EnterpriseSecurity = types.BoolValue(clusterResp.Data.Spec.ClusterInfo.GetEnterpriseSecurity())
 	nodeInfo := clusterResp.Data.Spec.ClusterInfo.NodeInfo.Get()
 	if nodeInfo != nil {
 		if cluster.NodeConfig == nil {
 			cluster.NodeConfig = &NodeConfig{
-				NumCores:   types.Int64{Value: int64((*nodeInfo).NumCores)},
-				DiskSizeGb: types.Int64{Value: int64((*nodeInfo).DiskSizeGb)},
+				NumCores:   types.Int64Value(int64((*nodeInfo).NumCores)),
+				DiskSizeGb: types.Int64Value(int64((*nodeInfo).DiskSizeGb)),
+				DiskIops:   types.Int64Value(0),
 			}
 		} else {
-			cluster.NodeConfig.NumCores.Value = int64((*nodeInfo).NumCores)
-			cluster.NodeConfig.DiskSizeGb.Value = int64((*nodeInfo).DiskSizeGb)
+			cluster.NodeConfig.NumCores = types.Int64Value(int64((*nodeInfo).NumCores))
+			cluster.NodeConfig.DiskSizeGb = types.Int64Value(int64((*nodeInfo).DiskSizeGb))
 		}
 
 		iopsPtr := (*nodeInfo).DiskIops.Get()
 		if iopsPtr != nil {
-			cluster.NodeConfig.DiskIops.Value = int64(*iopsPtr)
+			cluster.NodeConfig.DiskIops = types.Int64Value(int64(*iopsPtr))
 		}
 	}
 
-	cluster.ClusterInfo.State.Value = string(clusterResp.Data.Info.GetState())
-	cluster.ClusterInfo.SoftwareVersion.Value = clusterResp.Data.Info.GetSoftwareVersion()
-	cluster.ClusterInfo.CreatedTime.Value = clusterResp.Data.Info.Metadata.Get().GetCreatedOn()
-	cluster.ClusterInfo.UpdatedTime.Value = clusterResp.Data.Info.Metadata.Get().GetUpdatedOn()
+	cluster.ClusterInfo.State = types.StringValue(string(clusterResp.Data.Info.GetState()))
+	cluster.ClusterInfo.SoftwareVersion = types.StringValue(clusterResp.Data.Info.GetSoftwareVersion())
+	cluster.ClusterInfo.CreatedTime = types.StringValue(clusterResp.Data.Info.Metadata.Get().GetCreatedOn())
+	cluster.ClusterInfo.UpdatedTime = types.StringValue(clusterResp.Data.Info.Metadata.Get().GetUpdatedOn())
 
 	// Cluster endpoints
-	clusterEndpoints := types.Map{}
-	clusterEndpoints.Elems = make(map[string]attr.Value)
-	clusterEndpoints.ElemType = types.StringType
+	clusterEndpoints := make(map[string]attr.Value)
 	for key, val := range clusterResp.Data.Info.Endpoints {
-		clusterEndpoints.Elems[key] = types.String{Value: val}
+		clusterEndpoints[key] = types.StringValue(val)
 	}
-	cluster.ClusterEndpoints = clusterEndpoints
+	cluster.ClusterEndpoints = types.MapValueMust(types.StringType, clusterEndpoints)
 
 	// Cluster endpoints v2
 	var clusterEndpointsV2 []ClusterEndpoint
@@ -2687,9 +2594,9 @@ func resourceClusterRead(ctx context.Context, clusterId string, backUpSchedules 
 		tflog.Debug(ctx, fmt.Sprintf("Cluster Endpoint %v %v %v", val.GetAccessibilityType(), val.GetHost(), val.Region))
 
 		clusterEndpoint := ClusterEndpoint{
-			AccessibilityType: types.String{Value: string(val.GetAccessibilityType())},
-			Host:              types.String{Value: val.GetHost()},
-			Region:            types.String{Value: val.Region},
+			AccessibilityType: types.StringValue(string(val.GetAccessibilityType())),
+			Host:              types.StringValue(val.GetHost()),
+			Region:            types.StringValue(val.Region),
 		}
 		clusterEndpointsV2 = append(clusterEndpointsV2, clusterEndpoint)
 	}
@@ -2701,7 +2608,7 @@ func resourceClusterRead(ctx context.Context, clusterId string, backUpSchedules 
 		errMsg := getErrorMessage(certHttpResp, err)
 		return cluster, false, errMsg
 	}
-	cluster.ClusterCertificate.Value = *certResponse.Data
+	cluster.ClusterCertificate = types.StringValue(*certResponse.Data)
 
 	// This is being done to preserve order in the region list since an order mismatch is treated as state mismatch by Terraform
 	regionIndexMap := map[string]int{}
@@ -2711,6 +2618,10 @@ func resourceClusterRead(ctx context.Context, clusterId string, backUpSchedules 
 
 	respClusterRegionInfo := clusterResp.Data.Spec.ClusterRegionInfo
 	clusterRegionInfo := make([]RegionInfo, len(respClusterRegionInfo))
+	// A slot no region maps to keeps v0.10's known zero values rather than v1's nulls.
+	for i := range clusterRegionInfo {
+		clusterRegionInfo[i] = zeroRegionInfo()
+	}
 	for localIndex, info := range respClusterRegionInfo {
 		region := info.PlacementInfo.CloudInfo.GetRegion()
 		destIndex := getClusterRegionIndex(region, regionIndexMap, localIndex)
@@ -2738,51 +2649,52 @@ func resourceClusterRead(ctx context.Context, clusterId string, backUpSchedules 
 
 			var backupReplicationGCPTarget types.String
 			if info.HasBackupReplicationGcpTarget() && len(info.GetBackupReplicationGcpTarget()) > 0 {
-				backupReplicationGCPTarget = types.String{Value: info.GetBackupReplicationGcpTarget()}
+				backupReplicationGCPTarget = types.StringValue(info.GetBackupReplicationGcpTarget())
 			} else {
-				backupReplicationGCPTarget = types.String{Null: true}
+				backupReplicationGCPTarget = types.StringNull()
 			}
 
 			// Handle backup region - get from cluster_region_info_details
-			backupRegion := types.Bool{Value: false}
+			backupRegion := types.BoolValue(false)
 			// Find the corresponding region info details to get backup_region
 			for _, regionDetail := range clusterResp.Data.Info.ClusterRegionInfoDetails {
 				if regionDetail.Region == region {
-					backupRegion = types.Bool{Value: regionDetail.BackupRegion}
+					backupRegion = types.BoolValue(regionDetail.BackupRegion)
 					break
 				}
 			}
 
 			var numZones types.Int64
 			if fflags.IsFeatureFlagEnabled(fflags.MultiZoneSupport) && info.PlacementInfo.HasNumZones() {
-				numZones = types.Int64{Value: int64(info.PlacementInfo.GetNumZones())}
+				numZones = types.Int64Value(int64(info.PlacementInfo.GetNumZones()))
 			} else {
-				numZones = types.Int64{Null: true}
+				numZones = types.Int64Null()
 			}
 
 			regionInfo := RegionInfo{
-				Region:                     types.String{Value: region},
-				NumNodes:                   types.Int64{Value: int64(info.PlacementInfo.GetNumNodes())},
+				Region:                     types.StringValue(region),
+				NumNodes:                   types.Int64Value(int64(info.PlacementInfo.GetNumNodes())),
 				NumZones:                   numZones,
-				NumCores:                   types.Int64{Value: int64(info.NodeInfo.Get().GetNumCores())},
-				DiskSizeGb:                 types.Int64{Value: int64(info.NodeInfo.Get().GetDiskSizeGb())},
-				DiskIops:                   types.Int64{Value: int64(info.NodeInfo.Get().GetDiskIops())},
-				VPCID:                      types.String{Value: vpcID},
-				VPCName:                    types.String{Value: vpcName},
-				PublicAccess:               types.Bool{Value: publicAccess},
-				IsPreferred:                types.Bool{Value: info.GetIsAffinitized()},
-				IsDefault:                  types.Bool{Value: info.GetIsDefault()},
+				NumCores:                   types.Int64Value(int64(info.NodeInfo.Get().GetNumCores())),
+				DiskSizeGb:                 types.Int64Value(int64(info.NodeInfo.Get().GetDiskSizeGb())),
+				DiskIops:                   types.Int64Value(int64(info.NodeInfo.Get().GetDiskIops())),
+				VPCID:                      types.StringValue(vpcID),
+				VPCName:                    types.StringValue(vpcName),
+				PublicAccess:               types.BoolValue(publicAccess),
+				IsPreferred:                types.BoolValue(info.GetIsAffinitized()),
+				IsDefault:                  types.BoolValue(info.GetIsDefault()),
 				BackupReplicationGCPTarget: backupReplicationGCPTarget,
 				BackupRegion:               backupRegion,
+				IgnoreNumNodesChanges:      types.BoolValue(false),
 			}
 			clusterRegionInfo[destIndex] = regionInfo
 		}
 	}
 	cluster.ClusterRegionInfo = clusterRegionInfo
-	cluster.CloudType.Value = string(respClusterRegionInfo[0].PlacementInfo.CloudInfo.GetCode())
+	cluster.CloudType = types.StringValue(string(respClusterRegionInfo[0].PlacementInfo.CloudInfo.GetCode()))
 
-	if cluster.CloudType.Value == "GCP" && cluster.ClusterTier.Value == "PAID" {
-		backupSpec, err := readGcpBackupReplicationState(ctx, apiClient, accountId, projectId, clusterId, cluster.ClusterType.Value)
+	if cluster.CloudType.ValueString() == "GCP" && cluster.ClusterTier.ValueString() == "PAID" {
+		backupSpec, err := readGcpBackupReplicationState(ctx, apiClient, accountId, projectId, clusterId, cluster.ClusterType.ValueString())
 		if err != nil {
 			return cluster, false, err.Error()
 		}
@@ -2816,7 +2728,7 @@ func resourceClusterRead(ctx context.Context, clusterId string, backUpSchedules 
 				//added len(inputAllowListIDs)==0 in if condition so that we can reuse the func resourceClusterRead in data_source_cluster_name.go.
 				if util.AreListsEqual(allowListStrings, inputAllowListIDs) || len(inputAllowListIDs) == 0 {
 					for _, elem := range allowListStrings {
-						allowListIDs = append(allowListIDs, types.String{Value: elem})
+						allowListIDs = append(allowListIDs, types.StringValue(elem))
 					}
 					cluster.ClusterAllowListIDs = allowListIDs
 					return cluster, true, ""
@@ -2828,7 +2740,7 @@ func resourceClusterRead(ctx context.Context, clusterId string, backUpSchedules 
 				}
 				if len(inputAllowListIDs) != 0 {
 					for _, elem := range allowListStrings {
-						allowListIDs = append(allowListIDs, types.String{Value: elem})
+						allowListIDs = append(allowListIDs, types.StringValue(elem))
 					}
 					cluster.ClusterAllowListIDs = allowListIDs
 				}
@@ -2895,7 +2807,7 @@ func handleRestore(ctx context.Context, accountId string, projectId string, clus
 }
 
 // Update resource
-func (r resourceCluster) Update(ctx context.Context, req tfsdk.UpdateResourceRequest, resp *tfsdk.UpdateResourceResponse) {
+func (r resourceCluster) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
 	var plan Cluster
 	resp.Diagnostics.Append(getPlan(ctx, req.Plan, &plan)...)
 	if resp.Diagnostics.HasError() {
@@ -2913,13 +2825,13 @@ func (r resourceCluster) Update(ctx context.Context, req tfsdk.UpdateResourceReq
 		}
 	}
 
-	if plan.NodeConfig != nil && !plan.NodeConfig.DiskSizeGb.IsUnknown() && !util.IsDiskSizeValid(plan.ClusterTier.Value, plan.NodeConfig.DiskSizeGb.Value) {
+	if plan.NodeConfig != nil && !plan.NodeConfig.DiskSizeGb.IsUnknown() && !util.IsDiskSizeValid(plan.ClusterTier.ValueString(), plan.NodeConfig.DiskSizeGb.ValueInt64()) {
 		resp.Diagnostics.AddError("Invalid disk size", "The disk size for a paid cluster must be at least 50 GB.")
 		return
 	}
 
 	if plan.NodeConfig != nil && !plan.NodeConfig.DiskIops.IsNull() && !plan.NodeConfig.DiskIops.IsUnknown() {
-		isValid, err := util.IsDiskIopsValid(plan.CloudType.Value, plan.ClusterTier.Value, plan.NodeConfig.DiskIops.Value)
+		isValid, err := util.IsDiskIopsValid(plan.CloudType.ValueString(), plan.ClusterTier.ValueString(), plan.NodeConfig.DiskIops.ValueInt64())
 		if !isValid {
 			resp.Diagnostics.AddError("Invalid disk IOPS", err)
 			return
@@ -2929,9 +2841,9 @@ func (r resourceCluster) Update(ctx context.Context, req tfsdk.UpdateResourceReq
 	apiClient := r.p.client
 	var state Cluster
 	getIDsFromState(ctx, req.State, &state)
-	accountId := state.AccountID.Value
-	projectId := state.ProjectID.Value
-	clusterId := state.ClusterID.Value
+	accountId := state.AccountID.ValueString()
+	projectId := state.ProjectID.ValueString()
+	clusterId := state.ClusterID.ValueString()
 
 	// Credentials can not be modified after creation.
 	if plan.Credentials != nil {
@@ -2948,7 +2860,7 @@ func (r resourceCluster) Update(ctx context.Context, req tfsdk.UpdateResourceReq
 	req.State.GetAttribute(ctx, path.Root("is_multi_cloud"), &stateIsMultiCloud)
 	if !stateIsMultiCloud.IsNull() && !stateIsMultiCloud.IsUnknown() &&
 		!plan.IsMultiCloud.IsNull() && !plan.IsMultiCloud.IsUnknown() &&
-		stateIsMultiCloud.Value != plan.IsMultiCloud.Value {
+		stateIsMultiCloud.ValueBool() != plan.IsMultiCloud.ValueBool() {
 		resp.Diagnostics.AddError(
 			"is_multi_cloud cannot be modified after creation",
 			"The 'is_multi_cloud' field can be set only at the time of creation and cannot be modified after creation.")
@@ -2960,7 +2872,7 @@ func (r resourceCluster) Update(ctx context.Context, req tfsdk.UpdateResourceReq
 	req.State.GetAttribute(ctx, path.Root("enterprise_security"), &stateEnterpriseSecurity)
 	if !stateEnterpriseSecurity.IsNull() && !stateEnterpriseSecurity.IsUnknown() &&
 		!plan.EnterpriseSecurity.IsNull() && !plan.EnterpriseSecurity.IsUnknown() &&
-		stateEnterpriseSecurity.Value != plan.EnterpriseSecurity.Value {
+		stateEnterpriseSecurity.ValueBool() != plan.EnterpriseSecurity.ValueBool() {
 		resp.Diagnostics.AddError(
 			"enterprise_security cannot be modified after creation",
 			"The 'enterprise_security' field can be set only at the time of creation and cannot be modified after creation.")
@@ -2968,7 +2880,7 @@ func (r resourceCluster) Update(ctx context.Context, req tfsdk.UpdateResourceReq
 	}
 
 	// Resume the cluster if the desired state is set to 'Active' and it is paused currently
-	if strings.EqualFold(state.DesiredState.Value, "Paused") && (plan.DesiredState.Unknown || strings.EqualFold(plan.DesiredState.Value, "Active")) {
+	if strings.EqualFold(state.DesiredState.ValueString(), "Paused") && (plan.DesiredState.IsUnknown() || strings.EqualFold(plan.DesiredState.ValueString(), "Active")) {
 		// Resume the cluster
 		tflog.Debug(ctx, "The cluster has been resumed successfully")
 		err := resumeCluster(ctx, apiClient, accountId, projectId, clusterId)
@@ -2981,13 +2893,13 @@ func (r resourceCluster) Update(ctx context.Context, req tfsdk.UpdateResourceReq
 	// Calculate total number of nodes across all regions for connection pooling timeout
 	totalNodes := 0
 	for _, regionInfo := range plan.ClusterRegionInfo {
-		totalNodes += int(regionInfo.NumNodes.Value)
+		totalNodes += int(regionInfo.NumNodes.ValueInt64())
 	}
 
 	// Disable Connection Pooling if the desired state is set to 'Disabled' and it is enabled currently
-	if !plan.DesiredConnectionPoolingState.Unknown && !state.DesiredConnectionPoolingState.Unknown && strings.EqualFold(state.DesiredConnectionPoolingState.Value, "Enabled") && strings.EqualFold(plan.DesiredConnectionPoolingState.Value, "Disabled") {
+	if !plan.DesiredConnectionPoolingState.IsUnknown() && !state.DesiredConnectionPoolingState.IsUnknown() && strings.EqualFold(state.DesiredConnectionPoolingState.ValueString(), "Enabled") && strings.EqualFold(plan.DesiredConnectionPoolingState.ValueString(), "Disabled") {
 		// Disable Connection Pooling
-		tflog.Info(ctx, fmt.Sprintf("Existing Desired Connection Pooling State in State is %v", state.DesiredConnectionPoolingState.Value))
+		tflog.Info(ctx, fmt.Sprintf("Existing Desired Connection Pooling State in State is %v", state.DesiredConnectionPoolingState.ValueString()))
 		err := disableConnectionPooling(ctx, apiClient, accountId, projectId, clusterId, totalNodes)
 		if err != nil {
 			resp.Diagnostics.AddError("Disable connection pooling failed: ", err.Error())
@@ -2996,15 +2908,15 @@ func (r resourceCluster) Update(ctx context.Context, req tfsdk.UpdateResourceReq
 	}
 
 	for _, regionInfo := range plan.ClusterRegionInfo {
-		if !regionInfo.DiskSizeGb.IsUnknown() && !util.IsDiskSizeValid(plan.ClusterTier.Value, regionInfo.DiskSizeGb.Value) {
-			resp.Diagnostics.AddError("Invalid disk size in "+regionInfo.Region.Value, "The disk size for a paid cluster must be at least 50 GB.")
+		if !regionInfo.DiskSizeGb.IsUnknown() && !util.IsDiskSizeValid(plan.ClusterTier.ValueString(), regionInfo.DiskSizeGb.ValueInt64()) {
+			resp.Diagnostics.AddError("Invalid disk size in "+regionInfo.Region.ValueString(), "The disk size for a paid cluster must be at least 50 GB.")
 			return
 		}
 
 		if !(regionInfo.DiskIops.IsUnknown() || regionInfo.DiskIops.IsNull()) {
-			isValid, err := util.IsDiskIopsValid(plan.CloudType.Value, plan.ClusterTier.Value, regionInfo.DiskIops.Value)
+			isValid, err := util.IsDiskIopsValid(plan.CloudType.ValueString(), plan.ClusterTier.ValueString(), regionInfo.DiskIops.ValueInt64())
 			if !isValid {
-				resp.Diagnostics.AddError("Invalid disk IOPS in "+regionInfo.Region.Value, err)
+				resp.Diagnostics.AddError("Invalid disk IOPS in "+regionInfo.Region.ValueString(), err)
 				return
 			}
 		}
@@ -3156,21 +3068,21 @@ func (r resourceCluster) Update(ctx context.Context, req tfsdk.UpdateResourceReq
 			resp.Diagnostics.AddError("Could not create custom backup schedule", "More than one schedules were passed")
 			return
 		}
-		if plan.BackupSchedules[0].State.Value != "" && plan.BackupSchedules[0].RetentionPeriodInDays.Value == 0 {
+		if plan.BackupSchedules[0].State.ValueString() != "" && plan.BackupSchedules[0].RetentionPeriodInDays.ValueInt64() == 0 {
 			resp.Diagnostics.AddError("Unable to modify backup schedule", "You must provide both state and retention period in days.")
 			return
 		}
-		if plan.BackupSchedules[0].State.Value == "" && plan.BackupSchedules[0].RetentionPeriodInDays.Value != 0 {
+		if plan.BackupSchedules[0].State.ValueString() == "" && plan.BackupSchedules[0].RetentionPeriodInDays.ValueInt64() != 0 {
 			resp.Diagnostics.AddError("Unable to modify backup schedule", "You must provide both state and retention period in days.")
 			return
 		}
-		tflog.Info(ctx, fmt.Sprintf("User defined description '%v' default description '%v'", plan.BackupSchedules[0].BackupDescription.Value, backupDescription))
+		tflog.Info(ctx, fmt.Sprintf("User defined description '%v' default description '%v'", plan.BackupSchedules[0].BackupDescription.ValueString(), backupDescription))
 		newDescription := ""
 
-		if plan.BackupSchedules[0].BackupDescription.Value == "" {
+		if plan.BackupSchedules[0].BackupDescription.ValueString() == "" {
 			newDescription = backupDescription
 		} else {
-			newDescription = plan.BackupSchedules[0].BackupDescription.Value
+			newDescription = plan.BackupSchedules[0].BackupDescription.ValueString()
 		}
 		err = EditBackupSchedule(ctx, plan.BackupSchedules[0], scheduleId, newDescription, accountId, projectId, clusterId, apiClient)
 		if err != nil {
@@ -3179,7 +3091,7 @@ func (r resourceCluster) Update(ctx context.Context, req tfsdk.UpdateResourceReq
 		}
 
 		backupScheduleStruct := BackupScheduleInfo{
-			ScheduleID: types.String{Value: scheduleId},
+			ScheduleID: types.StringValue(scheduleId),
 		}
 		backUpSchedules = append(backUpSchedules, backupScheduleStruct)
 	}
@@ -3209,7 +3121,7 @@ func (r resourceCluster) Update(ctx context.Context, req tfsdk.UpdateResourceReq
 
 	if plan.ClusterAllowListIDs != nil {
 		for i := range plan.ClusterAllowListIDs {
-			allowListIDs = append(allowListIDs, plan.ClusterAllowListIDs[i].Value)
+			allowListIDs = append(allowListIDs, plan.ClusterAllowListIDs[i].ValueString())
 		}
 
 		_, response, err := apiClient.ClusterApi.EditClusterNetworkAllowLists(context.Background(), accountId, projectId, clusterId).RequestBody(allowListIDs).Execute()
@@ -3234,10 +3146,10 @@ func (r resourceCluster) Update(ctx context.Context, req tfsdk.UpdateResourceReq
 			"restore_backup_id is deprecated",
 			"Restore via ybm_cluster restore_backup_id is deprecated. Use the ybm_backup_restore resource instead. restore_backup_id on ybm_cluster will be removed in a future release.",
 		)
-		if state.RestoreBackupID.Null || state.RestoreBackupID.Value != plan.RestoreBackupID.Value {
+		if state.RestoreBackupID.IsNull() || state.RestoreBackupID.ValueString() != plan.RestoreBackupID.ValueString() {
 			restoreRequired = true
 		}
-		backupId = plan.RestoreBackupID.Value
+		backupId = plan.RestoreBackupID.ValueString()
 	}
 	if restoreRequired {
 		err = handleRestore(ctx, accountId, projectId, clusterId, backupId, apiClient)
@@ -3248,7 +3160,7 @@ func (r resourceCluster) Update(ctx context.Context, req tfsdk.UpdateResourceReq
 	}
 
 	// Pause the cluster if the desired state is set to 'Paused' and it is active currently
-	if strings.EqualFold(state.DesiredState.Value, "Active") && (!plan.DesiredState.Unknown && strings.EqualFold(plan.DesiredState.Value, "Paused")) {
+	if strings.EqualFold(state.DesiredState.ValueString(), "Active") && (!plan.DesiredState.IsUnknown() && strings.EqualFold(plan.DesiredState.ValueString(), "Paused")) {
 		// Pause the cluster
 		err := pauseCluster(ctx, apiClient, accountId, projectId, clusterId)
 		if err != nil {
@@ -3258,7 +3170,7 @@ func (r resourceCluster) Update(ctx context.Context, req tfsdk.UpdateResourceReq
 	}
 
 	// Enable connection pooling if the desired state is set to 'Enabled' and it is not already enabled
-	if !plan.DesiredConnectionPoolingState.Unknown && !state.DesiredConnectionPoolingState.Unknown && strings.EqualFold(state.DesiredConnectionPoolingState.Value, "Disabled") && strings.EqualFold(plan.DesiredConnectionPoolingState.Value, "Enabled") {
+	if !plan.DesiredConnectionPoolingState.IsUnknown() && !state.DesiredConnectionPoolingState.IsUnknown() && strings.EqualFold(state.DesiredConnectionPoolingState.ValueString(), "Disabled") && strings.EqualFold(plan.DesiredConnectionPoolingState.ValueString(), "Enabled") {
 		err := enableConnectionPooling(ctx, apiClient, accountId, projectId, clusterId, totalNodes)
 		if err != nil {
 			resp.Diagnostics.AddError("Enabling connection pooling Failed: ", err.Error())
@@ -3267,7 +3179,7 @@ func (r resourceCluster) Update(ctx context.Context, req tfsdk.UpdateResourceReq
 
 	var regions []string
 	for _, regionInfo := range plan.ClusterRegionInfo {
-		regions = append(regions, regionInfo.Region.Value)
+		regions = append(regions, regionInfo.Region.ValueString())
 	}
 
 	priorDatabaseTrack := databaseTrackPriorValue(plan.DatabaseTrack)
@@ -3285,12 +3197,12 @@ func (r resourceCluster) Update(ctx context.Context, req tfsdk.UpdateResourceReq
 	// Workaround: the read API currently always returns is_multi_cloud=false.
 	// Until that bug is fixed (tracked separately), trust the plan value: true if
 	// the plan set it to true, false otherwise.
-	cluster.IsMultiCloud = types.Bool{Value: plan.IsMultiCloud.Value}
+	cluster.IsMultiCloud = types.BoolValue(plan.IsMultiCloud.ValueBool())
 
 	// Update the State file with the unmasked creds for AWS (Secret Key, Access Key), GCP (Client ID, Private Key)
 	// and Azure (client ID, client Secret, tenant ID)
 	if plan.CMKSpec != nil {
-		providerType := cluster.CMKSpec.ProviderType.Value
+		providerType := cluster.CMKSpec.ProviderType.ValueString()
 		switch providerType {
 		case "AWS":
 			cluster.CMKSpec.AWSCMKSpec.SecretKey = plan.CMKSpec.AWSCMKSpec.SecretKey
@@ -3314,15 +3226,15 @@ func (r resourceCluster) Update(ctx context.Context, req tfsdk.UpdateResourceReq
 
 	// set restore backup id for cluster (not returned by read api)
 	if planHasRestoreBackupID {
-		cluster.RestoreBackupID = types.String{Value: plan.RestoreBackupID.Value}
-	} else if plan.RestoreBackupID.Unknown {
+		cluster.RestoreBackupID = types.StringValue(plan.RestoreBackupID.ValueString())
+	} else if plan.RestoreBackupID.IsUnknown() {
 		cluster.RestoreBackupID = state.RestoreBackupID
 	} else {
-		cluster.RestoreBackupID = types.String{Null: true}
+		cluster.RestoreBackupID = types.StringNull()
 	}
 
-	if strings.EqualFold(plan.DesiredConnectionPoolingState.Value, "Enabled") || strings.EqualFold(plan.DesiredConnectionPoolingState.Value, "Disabled") {
-		cluster.DesiredConnectionPoolingState.Value = plan.DesiredConnectionPoolingState.Value
+	if strings.EqualFold(plan.DesiredConnectionPoolingState.ValueString(), "Enabled") || strings.EqualFold(plan.DesiredConnectionPoolingState.ValueString(), "Disabled") {
+		cluster.DesiredConnectionPoolingState = types.StringValue(plan.DesiredConnectionPoolingState.ValueString())
 	}
 
 	// We need to make sure the region order is preserved to avoid terraform treating re-order as state mismatch
@@ -3338,12 +3250,12 @@ func (r resourceCluster) Update(ctx context.Context, req tfsdk.UpdateResourceReq
 }
 
 // Delete resource
-func (r resourceCluster) Delete(ctx context.Context, req tfsdk.DeleteResourceRequest, resp *tfsdk.DeleteResourceResponse) {
+func (r resourceCluster) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
 	var state Cluster
 	getIDsFromState(ctx, req.State, &state)
-	accountId := state.AccountID.Value
-	projectId := state.ProjectID.Value
-	clusterId := state.ClusterID.Value
+	accountId := state.AccountID.ValueString()
+	projectId := state.ProjectID.ValueString()
+	clusterId := state.ClusterID.ValueString()
 
 	apiClient := r.p.client
 
@@ -3386,9 +3298,9 @@ func (r resourceCluster) Delete(ctx context.Context, req tfsdk.DeleteResourceReq
 }
 
 // ImportState Import resource
-func (r resourceCluster) ImportState(ctx context.Context, req tfsdk.ImportResourceStateRequest, resp *tfsdk.ImportResourceStateResponse) {
+func (r resourceCluster) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
 	// Save the import identifier in the cluster_id attribute
-	tfsdk.ResourceImportStatePassthroughID(ctx, path.Root("cluster_id"), req, resp)
+	resource.ImportStatePassthroughID(ctx, path.Root("cluster_id"), req, resp)
 }
 
 func validateMultiZoneSupport(clusterRegionInfo []RegionInfo) error {
@@ -3403,7 +3315,7 @@ func validateMultiZoneSupport(clusterRegionInfo []RegionInfo) error {
 }
 
 func validateMultiCloudSupport(isMultiCloud types.Bool) error {
-	if !isMultiCloud.IsNull() && !isMultiCloud.IsUnknown() && isMultiCloud.Value &&
+	if !isMultiCloud.IsNull() && !isMultiCloud.IsUnknown() && isMultiCloud.ValueBool() &&
 		!fflags.IsFeatureFlagEnabled(fflags.MultiCloudSupport) {
 		return fmt.Errorf(
 			"Multi-cloud support feature disabled: The 'is_multi_cloud' field is set to true, but the MULTI_CLOUD_SUPPORT feature flag is disabled. Set YBM_FF_MULTI_CLOUD_SUPPORT=true to enable it.",
@@ -3425,11 +3337,11 @@ func validateGcpBackupReplicationPlan(plan Cluster) error {
 		return nil
 	}
 
-	if plan.CloudType.Value != "GCP" {
+	if plan.CloudType.ValueString() != "GCP" {
 		return fmt.Errorf("backup_replication_spec is supported only for GCP clusters")
 	}
 
-	if strings.EqualFold(plan.ClusterTier.Value, "FREE") {
+	if strings.EqualFold(plan.ClusterTier.ValueString(), "FREE") {
 		return fmt.Errorf("backup_replication_spec is not supported for free tier clusters")
 	}
 
@@ -3438,7 +3350,7 @@ func validateGcpBackupReplicationPlan(plan Cluster) error {
 	geoSpec := gcpSpec.GeoPartitionedClusterSpec
 
 	if boolValue(gcpSpec.Enabled) {
-		switch plan.ClusterType.Value {
+		switch plan.ClusterType.ValueString() {
 		case "SYNCHRONOUS":
 			if syncSpec == nil || syncSpec.ReplicationConfig == nil {
 				return fmt.Errorf("sync_cluster_spec.replication_config must be provided for synchronous clusters")
@@ -3464,7 +3376,7 @@ func validateGcpBackupReplicationPlan(plan Cluster) error {
 				}
 			}
 		default:
-			return fmt.Errorf("backup_replication_spec is not supported for cluster type %s", plan.ClusterType.Value)
+			return fmt.Errorf("backup_replication_spec is not supported for cluster type %s", plan.ClusterType.ValueString())
 		}
 	} else {
 		if syncSpec != nil || geoSpec != nil {
@@ -3498,7 +3410,7 @@ func expandPlanToGcpSpec(ctx context.Context, apiClient *openapiclient.APIClient
 		return &openapiclient.GcpBackupReplicationSpec{}, true, nil
 	}
 
-	switch plan.ClusterType.Value {
+	switch plan.ClusterType.ValueString() {
 	case "SYNCHRONOUS":
 		config := gcpSpec.SyncClusterSpec
 		target := strings.TrimSpace(typesStringValue(config.ReplicationConfig.Target))
@@ -3530,7 +3442,7 @@ func expandPlanToGcpSpec(ctx context.Context, apiClient *openapiclient.APIClient
 		}
 		return openapiclient.NewGcpBackupReplicationSpec(targets), true, nil
 	default:
-		return nil, false, fmt.Errorf("backup_replication_spec is not supported for cluster type %s", plan.ClusterType.Value)
+		return nil, false, fmt.Errorf("backup_replication_spec is not supported for cluster type %s", plan.ClusterType.ValueString())
 	}
 }
 
@@ -3595,7 +3507,7 @@ func flattenGcpBackupReplicationResponse(resp openapiclient.GCPBackupReplication
 	enabled := info.GetState() != openapiclient.CLUSTERBACKUPREPLICATIONSTATEENUM_DISABLED
 	result := &BackupReplicationSpec{
 		GCPSpec: &GcpBackupReplicationSpec{
-			Enabled: types.Bool{Value: enabled},
+			Enabled: types.BoolValue(enabled),
 		},
 	}
 
@@ -3610,7 +3522,7 @@ func flattenGcpBackupReplicationResponse(resp openapiclient.GCPBackupReplication
 	for _, regionConfig := range regionConfigs {
 		for _, report := range regionConfig.Reports {
 			expiry := extractBackupReplicationExpiry(report)
-			if expiry.Null {
+			if expiry.IsNull() {
 				switch clusterType {
 				case "GEO_PARTITIONED":
 					geoConfigs = append(geoConfigs, buildGeoBackupReplicationConfig(regionConfig.Region, report, expiry))
@@ -3652,19 +3564,19 @@ func alignGeoGcpReplicationOrder(target *GeoClusterGcpBackupReplicationSpec, ref
 	// If no reference ordering is available, sort alphabetically for determinism.
 	if len(reference) == 0 {
 		sort.SliceStable(target.ReplicationConfigs, func(i, j int) bool {
-			return target.ReplicationConfigs[i].DesiredRegion.Value < target.ReplicationConfigs[j].DesiredRegion.Value
+			return target.ReplicationConfigs[i].DesiredRegion.ValueString() < target.ReplicationConfigs[j].DesiredRegion.ValueString()
 		})
 		return
 	}
 
 	configByRegion := make(map[string]GeoClusterGcpReplicationConfig, len(target.ReplicationConfigs))
 	for _, cfg := range target.ReplicationConfigs {
-		configByRegion[cfg.DesiredRegion.Value] = cfg
+		configByRegion[cfg.DesiredRegion.ValueString()] = cfg
 	}
 
 	var ordered []GeoClusterGcpReplicationConfig
 	for _, ref := range reference {
-		region := ref.DesiredRegion.Value
+		region := ref.DesiredRegion.ValueString()
 		if cfg, ok := configByRegion[region]; ok {
 			ordered = append(ordered, cfg)
 			delete(configByRegion, region)
@@ -3677,7 +3589,7 @@ func alignGeoGcpReplicationOrder(target *GeoClusterGcpBackupReplicationSpec, ref
 			remaining = append(remaining, cfg)
 		}
 		sort.SliceStable(remaining, func(i, j int) bool {
-			return remaining[i].DesiredRegion.Value < remaining[j].DesiredRegion.Value
+			return remaining[i].DesiredRegion.ValueString() < remaining[j].DesiredRegion.ValueString()
 		})
 		ordered = append(ordered, remaining...)
 	}
@@ -3760,13 +3672,13 @@ func extractBackupReplicationExpiry(report openapiclient.GcpBackupReplicationReg
 			return nullableStringToTypesString(meta.ExpiryOn)
 		}
 	}
-	return types.String{Null: true}
+	return types.StringNull()
 }
 
 func extractNextTransferOperationTime(report openapiclient.GcpBackupReplicationRegionReport) types.String {
 	job, ok := report.GetTransferJobDetailsOk()
 	if !ok || job == nil {
-		return types.String{Null: true}
+		return types.StringNull()
 	}
 	return timeToTypesString(job.GetNextTransferOperationTime())
 }
@@ -3788,36 +3700,36 @@ func buildLatestTransferDetails(report openapiclient.GcpBackupReplicationRegionR
 
 func nullableStringToTypesString(value openapiclient.NullableString) types.String {
 	if !value.IsSet() {
-		return types.String{Null: true}
+		return types.StringNull()
 	}
 	val := value.Get()
 	if val == nil {
-		return types.String{Null: true}
+		return types.StringNull()
 	}
 	return stringValueOrNull(*val)
 }
 
 func stringValueOrNull(val string) types.String {
 	if strings.TrimSpace(val) == "" {
-		return types.String{Null: true}
+		return types.StringNull()
 	}
-	return types.String{Value: val}
+	return types.StringValue(val)
 }
 
 func timeToTypesString(t time.Time) types.String {
 	if t.IsZero() {
-		return types.String{Null: true}
+		return types.StringNull()
 	}
-	return types.String{Value: t.UTC().Format(time.RFC3339)}
+	return types.StringValue(t.UTC().Format(time.RFC3339))
 }
 
 func boolValue(val types.Bool) bool {
-	return !(val.Unknown || val.Null) && val.Value
+	return !(val.IsUnknown() || val.IsNull()) && val.ValueBool()
 }
 
 func typesStringValue(val types.String) string {
-	if val.Unknown || val.Null {
+	if val.IsUnknown() || val.IsNull() {
 		return ""
 	}
-	return val.Value
+	return val.ValueString()
 }

@@ -11,6 +11,8 @@ import (
 
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/path"
+	"github.com/hashicorp/terraform-plugin-framework/resource"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 
@@ -19,68 +21,63 @@ import (
 	openapiclient "github.com/yugabyte/yugabytedb-managed-go-client-internal"
 )
 
-type resourceBackupType struct{}
-
-func (r resourceBackupType) GetSchema(_ context.Context) (tfsdk.Schema, diag.Diagnostics) {
-	return tfsdk.Schema{
+func (r *resourceBackup) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
+	resp.Schema = schema.Schema{
 		Description: `The resource to create a manual backup of tables in a particular cluster. 
 		Ensure that the cluster for which the backup is being taken has data.`,
-		Attributes: map[string]tfsdk.Attribute{
-			"account_id": {
+		Attributes: map[string]schema.Attribute{
+			"account_id": schema.StringAttribute{
 				Description: "The ID of the account this backup belongs to.",
-				Type:        types.StringType,
 				Computed:    true,
 			},
-			"cluster_id": {
+			"cluster_id": schema.StringAttribute{
 				Description: "The ID of the cluster to be backed up.",
-				Type:        types.StringType,
 				Required:    true,
 			},
-			"project_id": {
+			"project_id": schema.StringAttribute{
 				Description: "The ID of the project this backup belongs to.",
-				Type:        types.StringType,
 				Computed:    true,
 			},
-			"backup_id": {
+			"backup_id": schema.StringAttribute{
 				Description: "The ID of the backup. Created automatically when the backup is created. Used to get a specific backup.",
-				Type:        types.StringType,
 				Computed:    true,
 				Optional:    true,
 			},
-			"backup_description": {
+			"backup_description": schema.StringAttribute{
 				Description: "The description of the backup.",
-				Type:        types.StringType,
 				Required:    true,
 			},
-			"retention_period_in_days": {
+			"retention_period_in_days": schema.Int64Attribute{
 				Description: "The retention period of the backup.",
-				Type:        types.Int64Type,
 				Required:    true,
 			},
-			"most_recent": {
+			"most_recent": schema.BoolAttribute{
 				Description: "Set to true to fetch the most recent backup.",
-				Type:        types.BoolType,
 				Optional:    true,
 			},
-			"timestamp": {
+			"timestamp": schema.StringAttribute{
 				Description: "The timestamp of the backup to be fetched",
-				Type:        types.StringType,
 				Optional:    true,
 			},
-			"use_roles": {
+			"use_roles": schema.BoolAttribute{
 				Description: "Backup global YSQL roles. Defaults to false.",
-				Type:        types.BoolType,
 				Optional:    true,
 				Computed:    true,
 			},
 		},
-	}, nil
+	}
 }
 
-func (r resourceBackupType) NewResource(_ context.Context, p tfsdk.Provider) (tfsdk.Resource, diag.Diagnostics) {
-	return resourceBackup{
-		p: *(p.(*provider)),
-	}, nil
+func newResourceBackup() resource.Resource {
+	return &resourceBackup{}
+}
+
+func (r *resourceBackup) Metadata(_ context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
+	resp.TypeName = req.ProviderTypeName + "_backup"
+}
+
+func (r *resourceBackup) Configure(_ context.Context, req resource.ConfigureRequest, _ *resource.ConfigureResponse) {
+	r.p = configuredProvider(req.ProviderData)
 }
 
 type resourceBackup struct {
@@ -104,7 +101,7 @@ func getBackupPlan(ctx context.Context, plan tfsdk.Plan, backup *Backup) diag.Di
 }
 
 // Create backup
-func (r resourceBackup) Create(ctx context.Context, req tfsdk.CreateResourceRequest, resp *tfsdk.CreateResourceResponse) {
+func (r resourceBackup) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
 
 	if !r.p.configured {
 		resp.Diagnostics.AddError(
@@ -132,7 +129,7 @@ func (r resourceBackup) Create(ctx context.Context, req tfsdk.CreateResourceRequ
 		return
 	}
 
-	if (!plan.BackupID.Unknown && !plan.BackupID.Null) || plan.BackupID.Value != "" {
+	if (!plan.BackupID.IsUnknown() && !plan.BackupID.IsNull()) || plan.BackupID.ValueString() != "" {
 		resp.Diagnostics.AddError(
 			"Backup ID provided for new backup",
 			"The backup_id was provided even though a new backup is being created. Do not include this field in the provider when creating a backup.",
@@ -146,16 +143,16 @@ func (r resourceBackup) Create(ctx context.Context, req tfsdk.CreateResourceRequ
 		return
 	}
 
-	clusterId := plan.ClusterID.Value
-	backupDescription := plan.BackupDescription.Value
-	backupRetentionPeriodInDays := int32(plan.RetentionPeriodInDays.Value)
+	clusterId := plan.ClusterID.ValueString()
+	backupDescription := plan.BackupDescription.ValueString()
+	backupRetentionPeriodInDays := int32(plan.RetentionPeriodInDays.ValueInt64())
 
 	backupSpec := *openapiclient.NewBackupSpec(clusterId)
 	backupSpec.SetDescription(backupDescription)
 	backupSpec.RetentionPeriodInDays = &backupRetentionPeriodInDays
 
 	if !plan.UseRoles.IsNull() && !plan.UseRoles.IsUnknown() {
-		backupSpec.SetUseRoles(plan.UseRoles.Value)
+		backupSpec.SetUseRoles(plan.UseRoles.ValueBool())
 	}
 
 	backupResp, response, err := apiClient.BackupApi.CreateBackup(context.Background(), accountId, projectId).BackupSpec(backupSpec).Execute()
@@ -209,32 +206,32 @@ func resourceBackupRead(accountId string, projectId string, backupId string, api
 		return backup, false, errMsg
 	}
 
-	backup.AccountID.Value = accountId
-	backup.ProjectID.Value = projectId
-	backup.BackupID.Value = backupId
+	backup.AccountID = types.StringValue(accountId)
+	backup.ProjectID = types.StringValue(projectId)
+	backup.BackupID = types.StringValue(backupId)
 
-	backup.ClusterID.Value = backupResp.Data.Spec.ClusterId
-	backup.BackupDescription.Value = *(backupResp.Data.Spec.Description.Get())
-	backup.RetentionPeriodInDays.Value = int64(*backupResp.Data.Spec.RetentionPeriodInDays)
-	backup.MostRecent.Null = true
-	backup.Timestamp.Null = true
+	backup.ClusterID = types.StringValue(backupResp.Data.Spec.ClusterId)
+	backup.BackupDescription = types.StringValue(*(backupResp.Data.Spec.Description.Get()))
+	backup.RetentionPeriodInDays = types.Int64Value(int64(*backupResp.Data.Spec.RetentionPeriodInDays))
+	backup.MostRecent = types.BoolNull()
+	backup.Timestamp = types.StringNull()
 
 	// Read use_roles from response (defaults to false if not present)
 	if backupResp.Data.Spec.HasUseRoles() {
-		backup.UseRoles.Value = backupResp.Data.Spec.GetUseRoles()
+		backup.UseRoles = types.BoolValue(backupResp.Data.Spec.GetUseRoles())
 	} else {
-		backup.UseRoles.Value = false
+		backup.UseRoles = types.BoolValue(false)
 	}
 
 	return backup, true, ""
 }
 
 // Read backup
-func (r resourceBackup) Read(ctx context.Context, req tfsdk.ReadResourceRequest, resp *tfsdk.ReadResourceResponse) {
+func (r resourceBackup) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
 	var state Backup
 	getIDsFromBackupState(ctx, req.State, &state)
 
-	backup, readOK, message := resourceBackupRead(state.AccountID.Value, state.ProjectID.Value, state.BackupID.Value, r.p.client)
+	backup, readOK, message := resourceBackupRead(state.AccountID.ValueString(), state.ProjectID.ValueString(), state.BackupID.ValueString(), r.p.client)
 	if !readOK {
 		resp.Diagnostics.AddError("Unable to read the state of the backup ", message)
 		return
@@ -248,19 +245,19 @@ func (r resourceBackup) Read(ctx context.Context, req tfsdk.ReadResourceRequest,
 }
 
 // Update backup
-func (r resourceBackup) Update(ctx context.Context, req tfsdk.UpdateResourceRequest, resp *tfsdk.UpdateResourceResponse) {
+func (r resourceBackup) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
 
 	resp.Diagnostics.AddError("Unable to update backup.", "Updating backups is not currently supported. Delete and recreate the provider.")
 	return
 }
 
 // Delete backup
-func (r resourceBackup) Delete(ctx context.Context, req tfsdk.DeleteResourceRequest, resp *tfsdk.DeleteResourceResponse) {
+func (r resourceBackup) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
 	var state Backup
 	getIDsFromBackupState(ctx, req.State, &state)
-	accountId := state.AccountID.Value
-	projectId := state.ProjectID.Value
-	backupId := state.BackupID.Value
+	accountId := state.AccountID.ValueString()
+	projectId := state.ProjectID.ValueString()
+	backupId := state.BackupID.ValueString()
 
 	apiClient := r.p.client
 
@@ -293,7 +290,7 @@ func (r resourceBackup) Delete(ctx context.Context, req tfsdk.DeleteResourceRequ
 }
 
 // Import backup
-func (r resourceBackup) ImportState(ctx context.Context, req tfsdk.ImportResourceStateRequest, resp *tfsdk.ImportResourceStateResponse) {
+func (r resourceBackup) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
 	// Save the import identifier in the id attribute
-	tfsdk.ResourceImportStatePassthroughID(ctx, path.Root("id"), req, resp)
+	resource.ImportStatePassthroughID(ctx, path.Root("id"), req, resp)
 }

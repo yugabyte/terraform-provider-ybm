@@ -9,121 +9,112 @@ import (
 	"fmt"
 
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
-	"github.com/hashicorp/terraform-plugin-framework/diag"
-	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
+	"github.com/hashicorp/terraform-plugin-framework/datasource"
+	"github.com/hashicorp/terraform-plugin-framework/datasource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	//"github.com/hashicorp/terraform-plugin-log/tflog"
 )
 
-type dataSourceDbAuditLoggingType struct{}
-
-func (r dataSourceDbAuditLoggingType) GetSchema(_ context.Context) (tfsdk.Schema, diag.Diagnostics) {
-	return tfsdk.Schema{
+func (r *dataSourceDbAuditLogging) Schema(_ context.Context, _ datasource.SchemaRequest, resp *datasource.SchemaResponse) {
+	resp.Schema = schema.Schema{
 		Description: `The data source to fetch DB Audit log configuration for a cluster given cluster ID in YugabyteDB Aeon.`,
-		Attributes: map[string]tfsdk.Attribute{
-			"account_id": {
+		Attributes: map[string]schema.Attribute{
+			"account_id": schema.StringAttribute{
 				Description: "ID of the account this DB Audit log configuration belongs to.",
-				Type:        types.StringType,
 				Computed:    true,
 			},
-			"project_id": {
+			"project_id": schema.StringAttribute{
 				Description: "ID of the project this DB Audit log configuration belongs to.",
-				Type:        types.StringType,
 				Computed:    true,
 			},
-			"cluster_name": {
+			"cluster_name": schema.StringAttribute{
 				Description: "Name of the cluster from which DB Audit Logs will be exported",
-				Type:        types.StringType,
 				Computed:    true,
 			},
-			"cluster_id": {
+			"cluster_id": schema.StringAttribute{
 				Description: "ID of the cluster from which DB Audit Logs will be exported",
-				Type:        types.StringType,
 				Required:    true,
 			},
-			"integration_name": {
+			"integration_name": schema.StringAttribute{
 				Description: "Name of the integration to which the DB Audit Logs will be exported",
-				Type:        types.StringType,
 				Computed:    true,
 			},
-			"integration_id": {
+			"integration_id": schema.StringAttribute{
 				Description: "ID of the integration to which the DB Audit Logs will be exported",
-				Type:        types.StringType,
 				Computed:    true,
 			},
-			"config_id": {
+			"config_id": schema.StringAttribute{
 				Description: "ID of the DB Audit log configuration",
-				Type:        types.StringType,
 				Computed:    true,
 			},
-			"state": {
+			"state": schema.StringAttribute{
 				Description: "The status of DB Audit Logging on the cluster",
-				Type:        types.StringType,
 				Computed:    true,
 			},
-			"ysql_config": {
+			"ysql_config": schema.SingleNestedAttribute{
 				Description: "The specification for a DB Audit ysql export configuration",
 				Computed:    true,
-				Attributes: tfsdk.SingleNestedAttributes(map[string]tfsdk.Attribute{
-					"statement_classes": {
+				Attributes: map[string]schema.Attribute{
+					"statement_classes": schema.SetAttribute{
 						Description: "List of ysql statements",
-						Type:        types.SetType{ElemType: types.StringType},
+						ElementType: types.StringType,
 						Computed:    true,
 					},
-					"log_settings": {
+					"log_settings": schema.SingleNestedAttribute{
 						Description: "Db Audit Ysql Log Settings",
 						Computed:    true,
-						Attributes: tfsdk.SingleNestedAttributes(map[string]tfsdk.Attribute{
-							"log_catalog": {
+						Attributes: map[string]schema.Attribute{
+							"log_catalog": schema.BoolAttribute{
 								Description: "These system catalog tables record system (as opposed to user) activity, such as metadata lookups and from third-party tools performing lookups",
-								Type:        types.BoolType,
 								Computed:    true,
 							},
-							"log_client": {
+							"log_client": schema.BoolAttribute{
 								Description: "Enable this option to echo log messages directly to clients such as ysqlsh and psql",
-								Type:        types.BoolType,
 								Computed:    true,
 							},
-							"log_relation": {
+							"log_relation": schema.BoolAttribute{
 								Description: "Create separate log entries for each relation (TABLE, VIEW, and so on) referenced in a SELECT or DML statement",
-								Type:        types.BoolType,
 								Computed:    true,
 							},
-							"log_level": {
+							"log_level": schema.StringAttribute{
 								Description: "Sets the severity level of logs written to clients",
-								Type:        types.StringType,
 								Computed:    true,
-								Validators:  []tfsdk.AttributeValidator{stringvalidator.OneOf("NOTICE", "WARNING", "LOG")},
+								Validators:  []validator.String{stringvalidator.OneOf("NOTICE", "WARNING", "LOG")},
 							},
-							"log_statement_once": {
+							"log_statement_once": schema.BoolAttribute{
 								Description: "Enable this setting to only include statement text and parameters for the first entry for a statement or sub-statement combination",
-								Type:        types.BoolType,
 								Computed:    true,
 							},
-							"log_parameter": {
+							"log_parameter": schema.BoolAttribute{
 								Description: "Include the parameters that were passed with the statement in the logs",
-								Type:        types.BoolType,
 								Computed:    true,
 							},
-						}),
+						},
 					},
-				}),
+				},
 			},
 		},
-	}, nil
+	}
 }
 
-func (r dataSourceDbAuditLoggingType) NewDataSource(_ context.Context, p tfsdk.Provider) (tfsdk.DataSource, diag.Diagnostics) {
-	return dataSourceDbAuditLogging{
-		p: *(p.(*provider)),
-	}, nil
+func newDataSourceDbAuditLogging() datasource.DataSource {
+	return &dataSourceDbAuditLogging{}
+}
+
+func (r *dataSourceDbAuditLogging) Metadata(_ context.Context, req datasource.MetadataRequest, resp *datasource.MetadataResponse) {
+	resp.TypeName = req.ProviderTypeName + "_db_audit_logging"
+}
+
+func (r *dataSourceDbAuditLogging) Configure(_ context.Context, req datasource.ConfigureRequest, _ *datasource.ConfigureResponse) {
+	r.p = configuredProvider(req.ProviderData)
 }
 
 type dataSourceDbAuditLogging struct {
 	p provider
 }
 
-func (r dataSourceDbAuditLogging) Read(ctx context.Context, req tfsdk.ReadDataSourceRequest, resp *tfsdk.ReadDataSourceResponse) {
+func (r dataSourceDbAuditLogging) Read(ctx context.Context, req datasource.ReadRequest, resp *datasource.ReadResponse) {
 
 	if !r.p.configured {
 		resp.Diagnostics.AddError(
@@ -143,7 +134,7 @@ func (r dataSourceDbAuditLogging) Read(ctx context.Context, req tfsdk.ReadDataSo
 
 	apiClient := r.p.client
 
-	clusterId := dbAuditLoggingConfig.ClusterID.Value
+	clusterId := dbAuditLoggingConfig.ClusterID.ValueString()
 	dbAuditLoggingConfig, readOK, err := resourceDbAuditLoggingRead(ctx, clusterId, apiClient)
 	if !readOK {
 		resp.Diagnostics.AddError(fmt.Sprintf("Unable to read the state of Db Audit logging on cluster %s ", clusterId), err.Error())

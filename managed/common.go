@@ -37,7 +37,7 @@ func clusterRunningTaskOperationTimeout(numNodes int) time.Duration {
 func getClusterTotalNodeCount(ctx context.Context, accountId, projectId, clusterId string, apiClient *openapiclient.APIClient) (int, error) {
 	clusterResp, resp, err := apiClient.ClusterApi.GetCluster(ctx, accountId, projectId, clusterId).Execute()
 	if err != nil {
-		return 0, fmt.Errorf(getErrorMessage(resp, err))
+		return 0, errors.New(getErrorMessage(resp, err))
 	}
 	totalNodes := 0
 	for _, regionInfo := range clusterResp.Data.Spec.ClusterRegionInfo {
@@ -166,7 +166,7 @@ func databaseTrackPriorValue(track types.String) string {
 	if track.IsNull() || track.IsUnknown() {
 		return ""
 	}
-	return track.Value
+	return track.ValueString()
 }
 
 // databaseTrackNameForState returns the value to store in Terraform state for database_track.
@@ -233,7 +233,7 @@ func GetIntegrationDataByName(ctx context.Context, apiClient *openapiclient.APIC
 		Execute()
 
 	if err != nil {
-		return nil, fmt.Errorf(GetApiErrorDetails(err))
+		return nil, errors.New(GetApiErrorDetails(err))
 	}
 
 	if len(integrationConfig.GetData()) < 1 {
@@ -247,7 +247,7 @@ func GetIntegrationByID(accountId string, projectId string, integrationId string
 	resp, _, err := apiClient.TelemetryProviderApi.ListTelemetryProviders(context.Background(), accountId, projectId).Limit(100).Execute()
 
 	if err != nil {
-		return nil, fmt.Errorf(GetApiErrorDetails(err))
+		return nil, errors.New(GetApiErrorDetails(err))
 	}
 
 	for _, tpData := range resp.Data {
