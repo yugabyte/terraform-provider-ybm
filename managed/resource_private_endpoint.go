@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
@@ -242,6 +243,10 @@ func (r resourcePrivateEndpoint) Create(ctx context.Context, req resource.Create
 	}
 
 	pseID := psEps[0].Info.Id
+
+	if recordCreatedResource(ctx, req.Plan, resp, "Private service endpoint", pseID, map[string]attr.Value{"account_id": types.StringValue(accountId), "project_id": types.StringValue(projectId), "endpoint_id": types.StringValue(pseID), "cluster_id": types.StringValue(clusterId), "cluster_region_info_id": types.StringValue(desiredRegions[0].Id)}) {
+		defer warnIfCreateIncomplete(resp, "Private service endpoint", pseID)
+	}
 
 	retryPolicy := retry.NewConstant(10 * time.Second)
 	retryPolicy = retry.WithMaxDuration(2400*time.Second, retryPolicy)

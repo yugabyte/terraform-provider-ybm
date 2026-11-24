@@ -1768,6 +1768,13 @@ func (r resourceCluster) Create(ctx context.Context, req resource.CreateRequest,
 	}
 	createClusterRequest.SetEncryptedDbCredentials(*encryptedCredentials)
 
+	// Attach allow lists as part of the create call itself, so that a separate post-create
+	// call (which can fail after the cluster already exists) is normally not needed.
+	planAllowListIDs := allowListIDsFromPlan(plan)
+	if len(planAllowListIDs) > 0 {
+		createClusterRequest.SetAllowListInfo(planAllowListIDs)
+	}
+
 	// Connection Pooling
 	if !plan.DesiredConnectionPoolingState.IsUnknown() && strings.EqualFold(plan.DesiredConnectionPoolingState.ValueString(), "Enabled") {
 		features := []openapiclient.CreateClusterFeatureEnum{openapiclient.CREATECLUSTERFEATUREENUM_ENABLE_CONNECTION_POOLING}
@@ -1782,6 +1789,7 @@ func (r resourceCluster) Create(ctx context.Context, req resource.CreateRequest,
 			resp.Diagnostics.AddError(
 				"EAR will be enabled by default.", "Cluster creation with EAR disabled is not supported.",
 			)
+			return
 		}
 		var err error
 		cmkSpec, err = createCmkSpec(plan)
@@ -1806,6 +1814,20 @@ func (r resourceCluster) Create(ctx context.Context, req resource.CreateRequest,
 		return
 	}
 	clusterId := clusterResp.Data.Info.Id
+
+	// The cluster now exists. Record it in state immediately so that a failure in any later
+	// step (waiting, backup schedule, allow lists, restore, ...) does not orphan it. On such a
+	// failure Terraform keeps the cluster in state, marked as tainted.
+	// restore_backup_id starts out null and is recorded only once the restore has succeeded. The
+	// API does not return it, so if it were saved now and the restore then failed, a kept
+	// (untainted) cluster would show no diff and the restore would never be retried.
+	if recordCreatedResource(ctx, req.Plan, resp, "Cluster", clusterId, map[string]attr.Value{
+		"account_id": types.StringValue(accountId), "project_id": types.StringValue(projectId), "cluster_id": types.StringValue(clusterId),
+		"restore_backup_id": types.StringNull(),
+	}) {
+		defer warnIfCreateIncomplete(resp, "Cluster", clusterId)
+	}
+
 	readClusterRetries := 0
 	retryPolicy := retry.NewConstant(10 * time.Second)
 	retryPolicy = retry.WithMaxDuration(3600*time.Second, retryPolicy)
@@ -1840,8 +1862,11 @@ func (r resourceCluster) Create(ctx context.Context, req resource.CreateRequest,
 	err = retry.Do(ctx, retryPolicyA, func(ctx context.Context) error {
 		clusterState, readInfoOK, message := getClusterState(ctx, accountId, projectId, clusterId, apiClient)
 		if readInfoOK {
-			if strings.EqualFold(clusterState, "Active") || clusterState == "Create Failed" || clusterState == "CREATE_FAILED" {
+			if strings.EqualFold(clusterState, "Active") {
 				return nil
+			}
+			if isClusterCreateFailedState(clusterState) {
+				return ErrFailedTask
 			}
 		} else {
 			return handleReadFailureWithRetries(ctx, &readClusterRetries, 2, message)
@@ -1850,7 +1875,11 @@ func (r resourceCluster) Create(ctx context.Context, req resource.CreateRequest,
 	})
 
 	if err != nil {
-		resp.Diagnostics.AddError("Unable to create cluster ", "The operation timed out waiting for cluster creation.")
+		msg := "The operation timed out waiting for cluster creation."
+		if errors.Is(err, ErrFailedTask) {
+			msg = "The cluster is in a failed state after creation."
+		}
+		resp.Diagnostics.AddError("Unable to create cluster ", msg)
 		return
 	}
 
@@ -1861,7 +1890,7 @@ func (r resourceCluster) Create(ctx context.Context, req resource.CreateRequest,
 	scheduleId, description, r1, err = getBackupScheduleInfoV2(ctx, apiClient, accountId, projectId, clusterId)
 
 	if err != nil {
-		resp.Diagnostics.AddError("Unable to fetch the backup schedule for the cluster "+r1.Status, "Try again")
+		resp.Diagnostics.AddError("Unable to fetch the backup schedule for the cluster", getErrorMessage(r1, err))
 		return
 	}
 
@@ -1906,20 +1935,20 @@ func (r resourceCluster) Create(ctx context.Context, req resource.CreateRequest,
 
 	}
 
-	var allowListIDs []string
+	allowListIDs := planAllowListIDs
 	allowListProvided := false
 	if plan.ClusterAllowListIDs != nil {
-		for i := range plan.ClusterAllowListIDs {
-			allowListIDs = append(allowListIDs, plan.ClusterAllowListIDs[i].ValueString())
-		}
+		// The allow lists were sent in the create request. Only fall back to the edit call
+		// if the cluster does not already have exactly the planned allow lists.
+		if !clusterHasAllowLists(ctx, apiClient, accountId, projectId, clusterId, allowListIDs) {
+			tflog.Debug(ctx, fmt.Sprintf("Updating cluster with cluster ID %v with allow lists %v", clusterId, allowListIDs))
 
-		tflog.Debug(ctx, fmt.Sprintf("Updating cluster with cluster ID %v with allow lists %v", clusterId, allowListIDs))
-
-		_, response, err := apiClient.ClusterApi.EditClusterNetworkAllowLists(ctx, accountId, projectId, clusterId).RequestBody(allowListIDs).Execute()
-		if err != nil {
-			errMsg := getErrorMessage(response, err)
-			resp.Diagnostics.AddError("Unable to assign allow list to cluster", errMsg)
-			return
+			_, response, err := apiClient.ClusterApi.EditClusterNetworkAllowLists(ctx, accountId, projectId, clusterId).RequestBody(allowListIDs).Execute()
+			if err != nil {
+				errMsg := getErrorMessage(response, err)
+				resp.Diagnostics.AddError("Unable to assign allow list to cluster", errMsg)
+				return
+			}
 		}
 		allowListProvided = true
 	}
@@ -1940,6 +1969,9 @@ func (r resourceCluster) Create(ctx context.Context, req resource.CreateRequest,
 			resp.Diagnostics.AddError("Error during store: ", err.Error())
 			return
 		}
+		// The restore is done: record it, so that a failure in a later step does not make a
+		// kept cluster restore the same backup again.
+		resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("restore_backup_id"), backupId)...)
 	}
 
 	if isGcpBackupReplicationFeatureEnabled() && hasGcpBackupReplicationPlan(plan.BackupReplicationSpec) {
@@ -1968,9 +2000,13 @@ func (r resourceCluster) Create(ctx context.Context, req resource.CreateRequest,
 
 	priorDatabaseTrack := databaseTrackPriorValue(plan.DatabaseTrack)
 	cluster, readOK, message := resourceClusterRead(ctx, clusterId, backUpSchedules, regions, allowListProvided, allowListIDs, false, priorDatabaseTrack, apiClient)
+	if !readOK {
+		resp.Diagnostics.AddError("Unable to read the state of the cluster ", message)
+		return
+	}
 
 	// Update the State file with the unmasked creds for AWS (secret key,access) and GCP (client id,private key)
-	if plan.CMKSpec != nil {
+	if plan.CMKSpec != nil && cluster.CMKSpec != nil {
 		providerType := cluster.CMKSpec.ProviderType.ValueString()
 		switch providerType {
 		case "AWS":
@@ -1989,11 +2025,6 @@ func (r resourceCluster) Create(ctx context.Context, req resource.CreateRequest,
 		case "AZURE":
 			cluster.CMKSpec.AzureCMKSpec.ClientSecret = types.StringValue(cmkSpec.GetAzureCmkSpec().ClientSecret)
 		}
-	}
-
-	if !readOK {
-		resp.Diagnostics.AddError("Unable to read the state of the cluster ", message)
-		return
 	}
 
 	// Workaround: the read API currently always returns is_multi_cloud=false.
@@ -2050,6 +2081,38 @@ func (r resourceCluster) Create(ctx context.Context, req resource.CreateRequest,
 	if resp.Diagnostics.HasError() {
 		return
 	}
+}
+
+// isClusterCreateFailedState reports whether a cluster state means its creation failed, in either
+// of the two spellings this provider has always accepted.
+func isClusterCreateFailedState(state string) bool {
+	return state == "Create Failed" || state == "CREATE_FAILED"
+}
+
+func allowListIDsFromPlan(plan Cluster) []string {
+	var ids []string
+	for _, id := range plan.ClusterAllowListIDs {
+		ids = append(ids, id.ValueString())
+	}
+	return ids
+}
+
+// clusterHasAllowLists reports whether the cluster is attached to exactly the desired allow
+// lists. An error while listing them counts as "no", so the caller sets them explicitly.
+func clusterHasAllowLists(ctx context.Context, apiClient *openapiclient.APIClient, accountId string, projectId string, clusterId string, desired []string) bool {
+	listResp, response, err := apiClient.ClusterApi.ListClusterNetworkAllowLists(ctx, accountId, projectId, clusterId).Execute()
+	if err != nil {
+		tflog.Debug(ctx, "Unable to list the cluster allow lists: "+getErrorMessage(response, err))
+		return false
+	}
+	var actual []string
+	for _, elem := range listResp.Data {
+		actual = append(actual, elem.Info.Id)
+	}
+	wanted := slices.Clone(desired)
+	slices.Sort(actual)
+	slices.Sort(wanted)
+	return slices.Equal(actual, wanted)
 }
 
 func getBackupScheduleInfoV2(ctx context.Context, apiClient *openapiclient.APIClient, accountId string, projectId string, clusterId string) (string, string, *http.Response, error) {
@@ -2929,7 +2992,7 @@ func (r resourceCluster) Update(ctx context.Context, req resource.UpdateRequest,
 
 	scheduleId, backupDescription, r1, err = getBackupScheduleInfoV2(ctx, apiClient, accountId, projectId, clusterId)
 	if err != nil {
-		resp.Diagnostics.AddError("Unable to fetch the backup schedule for the cluster "+r1.Status, "Try again")
+		resp.Diagnostics.AddError("Unable to fetch the backup schedule for the cluster", getErrorMessage(r1, err))
 		return
 	}
 
