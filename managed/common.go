@@ -12,7 +12,13 @@ import (
 	"strings"
 	"time"
 
+	"github.com/hashicorp/terraform-plugin-framework/attr"
+	"github.com/hashicorp/terraform-plugin-framework/diag"
+	"github.com/hashicorp/terraform-plugin-framework/path"
+	"github.com/hashicorp/terraform-plugin-framework/resource"
+	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
 	"github.com/hashicorp/terraform-plugin-framework/types"
+	"github.com/hashicorp/terraform-plugin-go/tftypes"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
 	retry "github.com/sethvargo/go-retry"
 	openapiclient "github.com/yugabyte/yugabytedb-managed-go-client-internal"
@@ -257,4 +263,55 @@ func GetIntegrationByID(accountId string, projectId string, integrationId string
 	}
 
 	return nil, fmt.Errorf("Could not find integration with id: %s", integrationId)
+}
+
+// recordCreatedResource saves a resource to state as soon as the API has created it, before any
+// waiting or follow-up configuration, so that a later failure in Create does not leave an object
+// that exists but that Terraform does not track. The state is the planned values, with unknown
+// (computed) values set to null, plus the given attributes (normally the IDs Read needs). The next
+// refresh fills in the rest. If Create later returns an error, Terraform keeps the resource in
+// state marked as tainted.
+//
+// It reports whether the state was recorded. It never adds an error: if recording fails, Create
+// should still carry on and set the final state, so the failure is only reported as a warning.
+// Errors already on resp from earlier steps do not affect it.
+func recordCreatedResource(ctx context.Context, plan tfsdk.Plan, resp *resource.CreateResponse, kind string, id string, attrs map[string]attr.Value) bool {
+	raw, err := tftypes.Transform(plan.Raw, func(_ *tftypes.AttributePath, v tftypes.Value) (tftypes.Value, error) {
+		if !v.IsKnown() {
+			return tftypes.NewValue(v.Type(), nil), nil
+		}
+		return v, nil
+	})
+	var diags diag.Diagnostics
+	if err != nil {
+		diags.AddError("Unable to null the unknown planned values", err.Error())
+	}
+	// Build the state on a copy, so that resp.State is either fully recorded or left untouched.
+	state := tfsdk.State{Schema: resp.State.Schema, Raw: raw}
+	if !diags.HasError() {
+		for name, value := range attrs {
+			diags.Append(state.SetAttribute(ctx, path.Root(name), value)...)
+		}
+	}
+	if diags.HasError() {
+		tflog.Warn(ctx, fmt.Sprintf("Unable to record %s %s in state right after creation: %v", kind, id, diags))
+		resp.Diagnostics.AddWarning(fmt.Sprintf("%s %s could not be recorded in state right after creation", kind, id),
+			"If a later step of the creation fails, Terraform will not track it, and it may need to be imported or deleted manually.")
+		return false
+	}
+	resp.State = state
+	return true
+}
+
+// warnIfCreateIncomplete explains, when Create fails after recordCreatedResource, that the
+// resource exists and is tracked but tainted, and how to keep it instead of replacing it. Defer it
+// right after recordCreatedResource returns true.
+func warnIfCreateIncomplete(resp *resource.CreateResponse, kind string, id string) {
+	if !resp.Diagnostics.HasError() {
+		return
+	}
+	resp.Diagnostics.AddWarning(kind+" was created but not fully configured",
+		fmt.Sprintf("%s %s was created and is recorded in the Terraform state, but a later step failed, so "+
+			"Terraform has marked it as tainted and will replace it on the next apply. If it is healthy and you "+
+			"only want to retry the failed step, run `terraform untaint <resource address>` and then `terraform apply`.", kind, id))
 }

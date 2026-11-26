@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
+	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
@@ -294,6 +295,10 @@ func (r resourceReadReplicas) Create(ctx context.Context, req resource.CreateReq
 		}
 		resp.Diagnostics.AddError("Unable to create read replicas ", errMsg)
 		return
+	}
+
+	if recordCreatedResource(ctx, req.Plan, resp, "Read replicas of cluster", clusterId, map[string]attr.Value{"account_id": types.StringValue(accountId), "project_id": types.StringValue(projectId), "primary_cluster_id": types.StringValue(clusterId)}) {
+		defer warnIfCreateIncomplete(resp, "Read replicas of cluster", clusterId)
 	}
 
 	// read status, wait for status to be done

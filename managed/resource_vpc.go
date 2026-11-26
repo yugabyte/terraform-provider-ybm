@@ -12,6 +12,7 @@ import (
 	"sort"
 	"time"
 
+	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
@@ -233,6 +234,10 @@ func (r resourceVPC) Create(ctx context.Context, req resource.CreateRequest, res
 		return
 	}
 	vpcId := vpcResp.Data.Info.Id
+
+	if recordCreatedResource(ctx, req.Plan, resp, "VPC", vpcId, map[string]attr.Value{"account_id": types.StringValue(accountId), "project_id": types.StringValue(projectId), "vpc_id": types.StringValue(vpcId)}) {
+		defer warnIfCreateIncomplete(resp, "VPC", vpcId)
+	}
 
 	retryPolicy := retry.NewConstant(10 * time.Second)
 	retryPolicy = retry.WithMaxDuration(600*time.Second, retryPolicy)

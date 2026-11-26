@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
@@ -203,6 +204,9 @@ func (r resourceDrConfig) Create(ctx context.Context, req resource.CreateRequest
 			resp.Diagnostics.AddError("Unable to create DR configuration", msg)
 		}
 	}
+	if resp.Diagnostics.HasError() {
+		return
+	}
 
 	createDrRequest := openapiclient.NewCreateXClusterDrRequest(*openapiclient.NewXClusterDrSpec(drName, targetClusterId, databaseIds))
 
@@ -211,6 +215,11 @@ func (r resourceDrConfig) Create(ctx context.Context, req resource.CreateRequest
 		errMsg := getErrorMessage(response, err)
 		resp.Diagnostics.AddError("Unable to create DR configuration", errMsg)
 		return
+	}
+
+	drConfigId := drConfigResp.Data.Info.Id
+	if recordCreatedResource(ctx, req.Plan, resp, "DR config", drConfigId, map[string]attr.Value{"account_id": types.StringValue(accountId), "project_id": types.StringValue(projectId), "dr_config_id": types.StringValue(drConfigId)}) {
+		defer warnIfCreateIncomplete(resp, "DR config", drConfigId)
 	}
 
 	readClusterRetries := 0
@@ -246,7 +255,7 @@ func (r resourceDrConfig) Create(ctx context.Context, req resource.CreateRequest
 	// Set the computed fields
 	plan.AccountId = types.StringValue(accountId)
 	plan.ProjectId = types.StringValue(projectId)
-	plan.DrConfigId = types.StringValue(drConfigResp.Data.Info.Id)
+	plan.DrConfigId = types.StringValue(drConfigId)
 
 	diags := resp.State.Set(ctx, plan)
 	resp.Diagnostics.Append(diags...)

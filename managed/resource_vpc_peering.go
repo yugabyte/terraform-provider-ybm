@@ -9,6 +9,7 @@ import (
 	"errors"
 	"time"
 
+	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
@@ -238,6 +239,10 @@ func (r resourceVPCPeering) Create(ctx context.Context, req resource.CreateReque
 		return
 	}
 	vpcPeeringId := vpcPeeringResp.Data.Info.Id
+
+	if recordCreatedResource(ctx, req.Plan, resp, "VPC peering", vpcPeeringId, map[string]attr.Value{"account_id": types.StringValue(accountId), "project_id": types.StringValue(projectId), "vpc_peering_id": types.StringValue(vpcPeeringId)}) {
+		defer warnIfCreateIncomplete(resp, "VPC peering", vpcPeeringId)
+	}
 
 	retryPolicy := retry.NewConstant(10 * time.Second)
 	retryPolicy = retry.WithMaxDuration(600*time.Second, retryPolicy)
